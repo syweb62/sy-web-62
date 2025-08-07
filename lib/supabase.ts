@@ -1,9 +1,34 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://bncgfivqfuryyyxbvzhp.supabase.co'
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJuY3pnZml2cWZ1cnl5eGJ2emhwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ1NTI3ODYsImV4cCI6MjA3MDEyODc4Nn0.gq24PaaaO9yd7Z5MZpuwjt5Fpk-eL1UI01DYP8n_4h4'
+// Your correct Supabase credentials for the Vercel auto-connected project
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://pjoelkxkcwtzmbyswfhu.supabase.co'
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBqb2Vsa3hrY3d0em1ieXN3Zmh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ1NTMwMTksImV4cCI6MjA3MDEyOTAxOX0.xY2bVHrv_gl4iEHY79f_PC1OJxjHbHWYoqiSkrpi5n8'
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+// Validate that we have the required credentials
+if (!supabaseUrl) {
+  throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL environment variable')
+}
+
+if (!supabaseAnonKey) {
+  throw new Error('Missing NEXT_PUBLIC_SUPABASE_ANON_KEY environment variable')
+}
+
+// Create Supabase client
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: true
+  }
+})
+
+// Server-side client for admin operations (only available on server)
+export const supabaseAdmin = typeof window === 'undefined' 
+  ? createClient(
+      supabaseUrl,
+      process.env.SUPABASE_SERVICE_ROLE_KEY || supabaseAnonKey
+    )
+  : null
 
 // Types for our database tables
 export interface Profile {
@@ -81,59 +106,56 @@ export async function testSupabaseConnection(): Promise<{
   connected: boolean
   status: string
   error: string | null
+  config?: any
 }> {
-  // Check if environment variables are set
-  if (!supabaseUrl || !supabaseAnonKey) {
-    return {
-      connected: false,
-      status: 'configuration_error',
-      error: 'Supabase environment variables are not properly configured. Please check NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.'
-    }
-  }
-
-  // Check if client was created successfully
-  if (!supabase) {
-    return {
-      connected: false,
-      status: 'client_error',
-      error: 'Failed to create Supabase client. Please check your configuration.'
-    }
-  }
-
   try {
-    // Test connection by trying to access a table
+    // First check if client is properly initialized
+    if (!supabase) {
+      return {
+        connected: false,
+        status: 'client_error',
+        error: 'Supabase client not initialized'
+      }
+    }
+
+    // Test connection by trying to access a simple query
     const { data, error } = await supabase
-      .from('profiles')
+      .from('menu_items')
       .select('id')
       .limit(1)
 
     if (error) {
-      // Check if it's a table not found error (which means connection works but tables don't exist)
-      if (error.message.includes('relation "public.profiles" does not exist')) {
+      // Check if it's a table not found error
+      if (error.message.includes('relation "public.menu_items" does not exist') || 
+          error.message.includes('table "public.menu_items" does not exist')) {
         return {
           connected: true,
           status: 'connected_no_tables',
-          error: 'Connected to Supabase but database tables do not exist. Please run the setup script.'
+          error: 'Connected to Supabase but database tables do not exist. Please run the setup script in your Supabase SQL editor.',
+          config: getSupabaseConfig()
         }
       }
 
       return {
         connected: false,
         status: 'query_error',
-        error: `Database query failed: ${error.message}`
+        error: `Database query failed: ${error.message}`,
+        config: getSupabaseConfig()
       }
     }
 
     return {
       connected: true,
       status: 'connected',
-      error: null
+      error: null,
+      config: getSupabaseConfig()
     }
   } catch (error) {
     return {
       connected: false,
       status: 'connection_error',
-      error: error instanceof Error ? error.message : 'Unknown connection error'
+      error: error instanceof Error ? error.message : 'Unknown connection error occurred',
+      config: getSupabaseConfig()
     }
   }
 }
@@ -146,118 +168,166 @@ export function isSupabaseConfigured(): boolean {
 // Helper function to get environment info for debugging
 export function getSupabaseConfig() {
   return {
-    url: supabaseUrl ? `${supabaseUrl.substring(0, 20)}...` : 'Not set',
-    anonKey: supabaseAnonKey ? 'Set (hidden)' : 'Not set',
+    url: supabaseUrl || 'Not set',
+    urlPreview: supabaseUrl ? `${supabaseUrl.substring(0, 30)}...` : 'Not set',
+    hasAnonKey: !!supabaseAnonKey,
+    anonKeyPreview: supabaseAnonKey ? `${supabaseAnonKey.substring(0, 20)}...` : 'Not set',
     clientCreated: !!supabase,
-    isConfigured: isSupabaseConfigured()
+    isConfigured: isSupabaseConfigured(),
+    projectId: supabaseUrl ? supabaseUrl.split('//')[1]?.split('.')[0] : 'Unknown'
   }
 }
 
 // Helper functions for common database operations
 export const menuItemsService = {
   async getAll() {
-    const { data, error } = await supabase
-      .from('menu_items')
-      .select('*')
-      .eq('is_available', true)
-      .order('category', { ascending: true })
-    
-    if (error) throw error
-    return data as MenuItem[]
+    try {
+      const { data, error } = await supabase
+        .from('menu_items')
+        .select('*')
+        .eq('is_available', true)
+        .order('category', { ascending: true })
+      
+      if (error) throw error
+      return data as MenuItem[]
+    } catch (error) {
+      console.error('Error fetching menu items:', error)
+      throw error
+    }
   },
 
   async getByCategory(category: string) {
-    const { data, error } = await supabase
-      .from('menu_items')
-      .select('*')
-      .eq('category', category)
-      .eq('is_available', true)
-      .order('name', { ascending: true })
-    
-    if (error) throw error
-    return data as MenuItem[]
+    try {
+      const { data, error } = await supabase
+        .from('menu_items')
+        .select('*')
+        .eq('category', category)
+        .eq('is_available', true)
+        .order('name', { ascending: true })
+      
+      if (error) throw error
+      return data as MenuItem[]
+    } catch (error) {
+      console.error('Error fetching menu items by category:', error)
+      throw error
+    }
   },
 
   async getById(id: string) {
-    const { data, error } = await supabase
-      .from('menu_items')
-      .select('*')
-      .eq('id', id)
-      .single()
-    
-    if (error) throw error
-    return data as MenuItem
+    try {
+      const { data, error } = await supabase
+        .from('menu_items')
+        .select('*')
+        .eq('id', id)
+        .single()
+      
+      if (error) throw error
+      return data as MenuItem
+    } catch (error) {
+      console.error('Error fetching menu item by ID:', error)
+      throw error
+    }
   }
 }
 
 export const ordersService = {
   async create(order: Omit<Order, 'order_id' | 'created_at'>) {
-    const { data, error } = await supabase
-      .from('orders')
-      .insert(order)
-      .select()
-      .single()
-    
-    if (error) throw error
-    return data as Order
+    try {
+      const { data, error } = await supabase
+        .from('orders')
+        .insert(order)
+        .select()
+        .single()
+      
+      if (error) throw error
+      return data as Order
+    } catch (error) {
+      console.error('Error creating order:', error)
+      throw error
+    }
   },
 
   async getByUserId(userId: string) {
-    const { data, error } = await supabase
-      .from('orders')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-    
-    if (error) throw error
-    return data as Order[]
+    try {
+      const { data, error } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+      
+      if (error) throw error
+      return data as Order[]
+    } catch (error) {
+      console.error('Error fetching orders by user ID:', error)
+      throw error
+    }
   },
 
   async updateStatus(orderId: string, status: Order['status']) {
-    const { data, error } = await supabase
-      .from('orders')
-      .update({ status })
-      .eq('order_id', orderId)
-      .select()
-      .single()
-    
-    if (error) throw error
-    return data as Order
+    try {
+      const { data, error } = await supabase
+        .from('orders')
+        .update({ status })
+        .eq('order_id', orderId)
+        .select()
+        .single()
+      
+      if (error) throw error
+      return data as Order
+    } catch (error) {
+      console.error('Error updating order status:', error)
+      throw error
+    }
   }
 }
 
 export const reservationsService = {
   async create(reservation: Omit<Reservation, 'reservation_id' | 'created_at'>) {
-    const { data, error } = await supabase
-      .from('reservations')
-      .insert(reservation)
-      .select()
-      .single()
-    
-    if (error) throw error
-    return data as Reservation
+    try {
+      const { data, error } = await supabase
+        .from('reservations')
+        .insert(reservation)
+        .select()
+        .single()
+      
+      if (error) throw error
+      return data as Reservation
+    } catch (error) {
+      console.error('Error creating reservation:', error)
+      throw error
+    }
   },
 
   async getByUserId(userId: string) {
-    const { data, error } = await supabase
-      .from('reservations')
-      .select('*')
-      .eq('user_id', userId)
-      .order('date', { ascending: true })
-    
-    if (error) throw error
-    return data as Reservation[]
+    try {
+      const { data, error } = await supabase
+        .from('reservations')
+        .select('*')
+        .eq('user_id', userId)
+        .order('date', { ascending: true })
+      
+      if (error) throw error
+      return data as Reservation[]
+    } catch (error) {
+      console.error('Error fetching reservations by user ID:', error)
+      throw error
+    }
   }
 }
 
 export const socialMediaService = {
   async getAll() {
-    const { data, error } = await supabase
-      .from('social_media_links')
-      .select('*')
-      .order('display_order', { ascending: true })
-    
-    if (error) throw error
-    return data as SocialMediaLink[]
+    try {
+      const { data, error } = await supabase
+        .from('social_media_links')
+        .select('*')
+        .order('display_order', { ascending: true })
+      
+      if (error) throw error
+      return data as SocialMediaLink[]
+    } catch (error) {
+      console.error('Error fetching social media links:', error)
+      throw error
+    }
   }
 }
