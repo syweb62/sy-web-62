@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { testSupabaseConnection, getSupabaseConfig, supabase } from '@/lib/supabase'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -23,15 +22,38 @@ export default function TestSupabasePage() {
   const [config, setConfig] = useState<any>(null)
   const [hasError, setHasError] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
+  const [supabase, setSupabase] = useState<any>(null)
+  const [testSupabaseConnection, setTestSupabaseConnection] = useState<any>(null)
+  const [getSupabaseConfig, setGetSupabaseConfig] = useState<any>(null)
 
   useEffect(() => {
-    try {
-      setConfig(getSupabaseConfig())
-      runTests()
-    } catch (error) {
-      setHasError(true)
-      setErrorMessage(error instanceof Error ? error.message : 'Failed to initialize')
+    // Dynamically import Supabase functions to handle initialization errors
+    const initializeSupabase = async () => {
+      try {
+        const supabaseModule = await import('@/lib/supabase')
+        setSupabase(supabaseModule.supabase)
+        setTestSupabaseConnection(() => supabaseModule.testSupabaseConnection)
+        setGetSupabaseConfig(() => supabaseModule.getSupabaseConfig)
+        
+        if (supabaseModule.getSupabaseConfig) {
+          const configResult = supabaseModule.getSupabaseConfig()
+          setConfig(configResult)
+          
+          if (configResult.initializationError) {
+            setHasError(true)
+            setErrorMessage(configResult.initializationError)
+          } else {
+            runTests(supabaseModule.supabase, supabaseModule.testSupabaseConnection)
+          }
+        }
+      } catch (error) {
+        setHasError(true)
+        setErrorMessage(error instanceof Error ? error.message : 'Failed to load Supabase module')
+        console.error('Failed to initialize Supabase:', error)
+      }
     }
+
+    initializeSupabase()
   }, [])
 
   const addResult = (result: TestResult) => {
@@ -44,26 +66,36 @@ export default function TestSupabasePage() {
     })
   }
 
-  const runTests = async () => {
+  const runTests = async (supabaseClient?: any, testConnectionFn?: any) => {
     try {
       setIsRunning(true)
       setResults([])
       setHasError(false)
       setErrorMessage('')
 
+      const clientToUse = supabaseClient || supabase
+      const testFnToUse = testConnectionFn || testSupabaseConnection
+
+      if (!clientToUse || !testFnToUse) {
+        throw new Error('Supabase client or test function not available')
+      }
+
       // Test 1: Configuration
       addResult({ test: 'Configuration', status: 'pending', message: 'Checking configuration...' })
       
       try {
-        const configResult = getSupabaseConfig()
-        addResult({ 
-          test: 'Configuration', 
-          status: configResult.isConfigured ? 'success' : 'error', 
-          message: configResult.isConfigured 
-            ? `Project: ${configResult.projectId}, Client initialized: ${configResult.clientCreated}`
-            : 'Supabase not properly configured',
-          data: configResult
-        })
+        const configFn = getSupabaseConfig
+        if (configFn) {
+          const configResult = configFn()
+          addResult({ 
+            test: 'Configuration', 
+            status: configResult.isConfigured ? 'success' : 'error', 
+            message: configResult.isConfigured 
+              ? `Project: ${configResult.projectId}, Client initialized: ${configResult.clientCreated}`
+              : `Configuration issue: ${configResult.initializationError || 'Unknown error'}`,
+            data: configResult
+          })
+        }
       } catch (error) {
         addResult({ 
           test: 'Configuration', 
@@ -76,7 +108,7 @@ export default function TestSupabasePage() {
       // Test 2: Connection
       addResult({ test: 'Connection', status: 'pending', message: 'Testing connection...' })
       try {
-        const connectionResult = await testSupabaseConnection()
+        const connectionResult = await testFnToUse()
         addResult({ 
           test: 'Connection', 
           status: connectionResult.connected ? 'success' : 'error', 
@@ -96,7 +128,7 @@ export default function TestSupabasePage() {
       // Test 3: Menu Items
       addResult({ test: 'Menu Items', status: 'pending', message: 'Fetching menu items...' })
       try {
-        const { data, error } = await supabase
+        const { data, error } = await clientToUse
           .from('menu_items')
           .select('*')
           .limit(5)
@@ -120,7 +152,7 @@ export default function TestSupabasePage() {
       // Test 4: Social Media Links
       addResult({ test: 'Social Media', status: 'pending', message: 'Fetching social media links...' })
       try {
-        const { data, error } = await supabase
+        const { data, error } = await clientToUse
           .from('social_media_links')
           .select('*')
         
@@ -143,7 +175,7 @@ export default function TestSupabasePage() {
       // Test 5: Authentication
       addResult({ test: 'Authentication', status: 'pending', message: 'Checking auth status...' })
       try {
-        const { data: { user }, error } = await supabase.auth.getUser()
+        const { data: { user }, error } = await clientToUse.auth.getUser()
         if (error) throw error
         addResult({ 
           test: 'Authentication', 
@@ -167,7 +199,7 @@ export default function TestSupabasePage() {
         const tableChecks = await Promise.all(
           tables.map(async (table) => {
             try {
-              const { error } = await supabase.from(table).select('*').limit(1)
+              const { error } = await clientToUse.from(table).select('*').limit(1)
               return { table, exists: !error, error: error?.message }
             } catch (err) {
               return { table, exists: false, error: err instanceof Error ? err.message : 'Unknown error' }
@@ -342,13 +374,18 @@ export default function TestSupabasePage() {
               <div>
                 <strong>Client Status:</strong> {config.clientCreated ? '✅ Initialized' : '❌ Not initialized'}
               </div>
+              {config.initializationError && (
+                <div className="col-span-2">
+                  <strong>Error:</strong> <span className="text-red-600">{config.initializationError}</span>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
       )}
 
       <div className="flex gap-4 mb-6">
-        <Button onClick={runTests} disabled={isRunning} className="flex items-center gap-2">
+        <Button onClick={() => runTests()} disabled={isRunning} className="flex items-center gap-2">
           {isRunning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Database className="h-4 w-4" />}
           {isRunning ? 'Running Tests...' : 'Run Tests Again'}
         </Button>
@@ -424,7 +461,7 @@ export default function TestSupabasePage() {
               <ol className="list-decimal list-inside space-y-1 text-blue-700 text-sm">
                 <li>Go to your <a href="https://supabase.com/dashboard/project/pjoelkxkcwtzmbyswfhu" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">Supabase Dashboard</a></li>
                 <li>Navigate to the <strong>SQL Editor</strong> tab</li>
-                <li>Copy the entire content from <code>setup-supabase-database-for-vercel-project.sql</code></li>
+                <li>Copy the entire content from the SQL script above</li>
                 <li>Paste it into the SQL Editor and click <strong>Run</strong></li>
                 <li>Wait for the script to complete (you'll see success messages)</li>
                 <li>Come back here and click <strong>Run Tests Again</strong></li>

@@ -1,4 +1,5 @@
 -- Complete Supabase Database Setup for Restaurant App
+-- Project: pjoelkxkcwtzmbyswfhu
 -- Run this script in your Supabase SQL Editor
 
 -- Enable necessary extensions
@@ -80,48 +81,42 @@ CREATE TABLE IF NOT EXISTS public.social_media_links (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Insert sample menu items
-INSERT INTO public.menu_items (name, description, price, category, is_available) VALUES
--- Sushi
-('Salmon Nigiri', 'Fresh salmon over seasoned rice', 4.50, 'Sushi', true),
-('Tuna Nigiri', 'Premium tuna over seasoned rice', 5.00, 'Sushi', true),
-('California Roll', 'Crab, avocado, and cucumber roll', 8.00, 'Sushi', true),
-('Dragon Roll', 'Eel and cucumber topped with avocado', 12.00, 'Sushi', true),
-('Rainbow Roll', 'California roll topped with assorted fish', 14.00, 'Sushi', true),
+-- Insert sample menu items (only if table is empty)
+INSERT INTO public.menu_items (name, description, price, category, is_available) 
+SELECT * FROM (VALUES
+    ('Salmon Nigiri', 'Fresh salmon over seasoned rice', 4.50, 'Sushi', true),
+    ('Tuna Nigiri', 'Premium tuna over seasoned rice', 5.00, 'Sushi', true),
+    ('California Roll', 'Crab, avocado, and cucumber roll', 8.00, 'Sushi', true),
+    ('Dragon Roll', 'Eel and cucumber topped with avocado', 12.00, 'Sushi', true),
+    ('Rainbow Roll', 'California roll topped with assorted fish', 14.00, 'Sushi', true),
+    ('Chicken Teriyaki', 'Grilled chicken with teriyaki sauce', 9.50, 'Yakitori', true),
+    ('Beef Yakitori', 'Grilled beef skewers with tare sauce', 11.00, 'Yakitori', true),
+    ('Pork Belly Yakitori', 'Grilled pork belly skewers', 10.00, 'Yakitori', true),
+    ('Vegetable Yakitori', 'Grilled seasonal vegetables', 7.50, 'Yakitori', true),
+    ('Tonkotsu Ramen', 'Rich pork bone broth with chashu', 13.00, 'Ramen', true),
+    ('Miso Ramen', 'Fermented soybean paste broth', 12.00, 'Ramen', true),
+    ('Shoyu Ramen', 'Clear soy sauce based broth', 11.50, 'Ramen', true),
+    ('Spicy Miso Ramen', 'Spicy miso broth with ground pork', 13.50, 'Ramen', true),
+    ('Gyoza', 'Pan-fried pork dumplings (6 pieces)', 8.00, 'Appetizers', true),
+    ('Edamame', 'Steamed and salted young soybeans', 5.00, 'Appetizers', true),
+    ('Agedashi Tofu', 'Lightly fried tofu in savory broth', 7.00, 'Appetizers', true),
+    ('Takoyaki', 'Octopus balls with takoyaki sauce (6 pieces)', 9.00, 'Appetizers', true),
+    ('Mochi Ice Cream', 'Sweet rice cake with ice cream (3 pieces)', 6.00, 'Desserts', true),
+    ('Dorayaki', 'Pancake sandwich with sweet red bean filling', 5.50, 'Desserts', true),
+    ('Matcha Cheesecake', 'Green tea flavored cheesecake', 7.50, 'Desserts', true)
+) AS v(name, description, price, category, is_available)
+WHERE NOT EXISTS (SELECT 1 FROM public.menu_items LIMIT 1);
 
--- Yakitori
-('Chicken Teriyaki', 'Grilled chicken with teriyaki sauce', 9.50, 'Yakitori', true),
-('Beef Yakitori', 'Grilled beef skewers with tare sauce', 11.00, 'Yakitori', true),
-('Pork Belly Yakitori', 'Grilled pork belly skewers', 10.00, 'Yakitori', true),
-('Vegetable Yakitori', 'Grilled seasonal vegetables', 7.50, 'Yakitori', true),
-
--- Ramen
-('Tonkotsu Ramen', 'Rich pork bone broth with chashu', 13.00, 'Ramen', true),
-('Miso Ramen', 'Fermented soybean paste broth', 12.00, 'Ramen', true),
-('Shoyu Ramen', 'Clear soy sauce based broth', 11.50, 'Ramen', true),
-('Spicy Miso Ramen', 'Spicy miso broth with ground pork', 13.50, 'Ramen', true),
-
--- Appetizers
-('Gyoza', 'Pan-fried pork dumplings (6 pieces)', 8.00, 'Appetizers', true),
-('Edamame', 'Steamed and salted young soybeans', 5.00, 'Appetizers', true),
-('Agedashi Tofu', 'Lightly fried tofu in savory broth', 7.00, 'Appetizers', true),
-('Takoyaki', 'Octopus balls with takoyaki sauce (6 pieces)', 9.00, 'Appetizers', true),
-
--- Desserts
-('Mochi Ice Cream', 'Sweet rice cake with ice cream (3 pieces)', 6.00, 'Desserts', true),
-('Dorayaki', 'Pancake sandwich with sweet red bean filling', 5.50, 'Desserts', true),
-('Matcha Cheesecake', 'Green tea flavored cheesecake', 7.50, 'Desserts', true)
-
-ON CONFLICT (id) DO NOTHING;
-
--- Insert sample social media links
-INSERT INTO public.social_media_links (platform_name, link, button_type, display_order) VALUES
-('Instagram', 'https://instagram.com/sushiyaki', 'social', 1),
-('Facebook', 'https://facebook.com/sushiyaki', 'social', 2),
-('Twitter', 'https://twitter.com/sushiyaki', 'social', 3),
-('WhatsApp', 'https://wa.me/1234567890', 'contact', 4),
-('Phone', 'tel:+1234567890', 'contact', 5)
-ON CONFLICT (id) DO NOTHING;
+-- Insert sample social media links (only if table is empty)
+INSERT INTO public.social_media_links (platform_name, link, button_type, display_order) 
+SELECT * FROM (VALUES
+    ('Instagram', 'https://instagram.com/sushiyaki', 'social', 1),
+    ('Facebook', 'https://facebook.com/sushiyaki', 'social', 2),
+    ('Twitter', 'https://twitter.com/sushiyaki', 'social', 3),
+    ('WhatsApp', 'https://wa.me/1234567890', 'contact', 4),
+    ('Phone', 'tel:+1234567890', 'contact', 5)
+) AS v(platform_name, link, button_type, display_order)
+WHERE NOT EXISTS (SELECT 1 FROM public.social_media_links LIMIT 1);
 
 -- Enable Row Level Security (RLS)
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
@@ -131,7 +126,22 @@ ALTER TABLE public.order_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.reservations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.social_media_links ENABLE ROW LEVEL SECURITY;
 
--- Create RLS policies
+-- Create RLS policies (drop existing ones first to avoid conflicts)
+DROP POLICY IF EXISTS "Public profiles are viewable by everyone" ON public.profiles;
+DROP POLICY IF EXISTS "Users can insert their own profile" ON public.profiles;
+DROP POLICY IF EXISTS "Users can update their own profile" ON public.profiles;
+DROP POLICY IF EXISTS "Menu items are viewable by everyone" ON public.menu_items;
+DROP POLICY IF EXISTS "Only admins can insert menu items" ON public.menu_items;
+DROP POLICY IF EXISTS "Only admins can update menu items" ON public.menu_items;
+DROP POLICY IF EXISTS "Users can view their own orders" ON public.orders;
+DROP POLICY IF EXISTS "Anyone can insert orders" ON public.orders;
+DROP POLICY IF EXISTS "Users can update their own orders" ON public.orders;
+DROP POLICY IF EXISTS "Users can view order items for their orders" ON public.order_items;
+DROP POLICY IF EXISTS "Anyone can insert order items" ON public.order_items;
+DROP POLICY IF EXISTS "Users can view their own reservations" ON public.reservations;
+DROP POLICY IF EXISTS "Anyone can insert reservations" ON public.reservations;
+DROP POLICY IF EXISTS "Users can update their own reservations" ON public.reservations;
+DROP POLICY IF EXISTS "Social media links are viewable by everyone" ON public.social_media_links;
 
 -- Profiles policies
 CREATE POLICY "Public profiles are viewable by everyone" ON public.profiles
@@ -237,9 +247,11 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Create triggers for updated_at
+DROP TRIGGER IF EXISTS update_profiles_updated_at ON public.profiles;
 CREATE TRIGGER update_profiles_updated_at BEFORE UPDATE ON public.profiles
     FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_menu_items_updated_at ON public.menu_items;
 CREATE TRIGGER update_menu_items_updated_at BEFORE UPDATE ON public.menu_items
     FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
@@ -251,11 +263,12 @@ GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated;
 -- Success message
 DO $$
 BEGIN
-    RAISE NOTICE 'Database setup completed successfully!';
-    RAISE NOTICE 'Created tables: profiles, menu_items, orders, order_items, reservations, social_media_links';
-    RAISE NOTICE 'Inserted % menu items', (SELECT COUNT(*) FROM public.menu_items);
-    RAISE NOTICE 'Inserted % social media links', (SELECT COUNT(*) FROM public.social_media_links);
-    RAISE NOTICE 'Row Level Security enabled with appropriate policies';
-    RAISE NOTICE 'Performance indexes created';
-    RAISE NOTICE 'Triggers for profile creation and timestamp updates configured';
+    RAISE NOTICE '✅ Database setup completed successfully!';
+    RAISE NOTICE '📊 Created tables: profiles, menu_items, orders, order_items, reservations, social_media_links';
+    RAISE NOTICE '🍣 Inserted % menu items', (SELECT COUNT(*) FROM public.menu_items);
+    RAISE NOTICE '📱 Inserted % social media links', (SELECT COUNT(*) FROM public.social_media_links);
+    RAISE NOTICE '🔒 Row Level Security enabled with appropriate policies';
+    RAISE NOTICE '⚡ Performance indexes created';
+    RAISE NOTICE '🎯 Triggers for profile creation and timestamp updates configured';
+    RAISE NOTICE '🎉 Your restaurant database is ready to use!';
 END $$;
