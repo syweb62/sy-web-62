@@ -1,229 +1,217 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { Button } from '@/components/ui/button'
+import { useEffect, useState } from 'react'
+import { createClient } from '@supabase/supabase-js'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { CheckCircle, XCircle, AlertCircle, Loader2 } from 'lucide-react'
-import { testSupabaseConnection } from '@/lib/supabase'
+import { Button } from '@/components/ui/button'
+import { CheckCircle, XCircle, Database, Users, ShoppingCart } from 'lucide-react'
+
+const supabaseUrl = 'https://bncgfivqfuryyyxbvzhp.supabase.co'
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJuY3pnZml2cWZ1cnl5eGJ2emhwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ1NTI3ODYsImV4cCI6MjA3MDEyODc4Nn0.gq24PaaaO9yd7Z5MZpuwjt5Fpk-eL1UI01DYP8n_4h4'
+
+const supabase = createClient(supabaseUrl, supabaseKey)
+
+interface TestResult {
+  name: string
+  status: 'success' | 'error' | 'loading'
+  message: string
+  data?: any
+}
 
 export default function TestSupabasePage() {
-  const [connectionStatus, setConnectionStatus] = useState<{
-    connected: boolean
-    status: string
-    error: string | null
-  } | null>(null)
-  const [isLoading, setIsLoading] = useState(false)
-  const [envVars, setEnvVars] = useState<{
-    supabaseUrl: string
-    supabaseAnonKey: string
-  }>({
-    supabaseUrl: '',
-    supabaseAnonKey: ''
-  })
+  const [tests, setTests] = useState<TestResult[]>([
+    { name: 'Connection', status: 'loading', message: 'Testing connection...' },
+    { name: 'Menu Items', status: 'loading', message: 'Fetching menu items...' },
+    { name: 'Social Media Links', status: 'loading', message: 'Fetching social media links...' },
+    { name: 'Database Tables', status: 'loading', message: 'Checking table structure...' }
+  ])
 
-  useEffect(() => {
-    // Check environment variables on client side
-    setEnvVars({
-      supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL || 'Not set',
-      supabaseAnonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'Set (hidden)' : 'Not set'
-    })
-  }, [])
+  const updateTest = (index: number, update: Partial<TestResult>) => {
+    setTests(prev => prev.map((test, i) => i === index ? { ...test, ...update } : test))
+  }
 
-  const testConnection = async () => {
-    setIsLoading(true)
+  const runTests = async () => {
+    // Reset all tests
+    setTests([
+      { name: 'Connection', status: 'loading', message: 'Testing connection...' },
+      { name: 'Menu Items', status: 'loading', message: 'Fetching menu items...' },
+      { name: 'Social Media Links', status: 'loading', message: 'Fetching social media links...' },
+      { name: 'Database Tables', status: 'loading', message: 'Checking table structure...' }
+    ])
+
+    // Test 1: Basic Connection
     try {
-      const result = await testSupabaseConnection()
-      setConnectionStatus(result)
-    } catch (error) {
-      setConnectionStatus({
-        connected: false,
-        status: 'error',
-        error: error instanceof Error ? error.message : 'Unknown error'
+      const { data, error } = await supabase.from('menu_items').select('count', { count: 'exact', head: true })
+      if (error) throw error
+      updateTest(0, { 
+        status: 'success', 
+        message: `Connected successfully! Found ${data?.length || 0} records in menu_items table.` 
       })
-    } finally {
-      setIsLoading(false)
+    } catch (error: any) {
+      updateTest(0, { 
+        status: 'error', 
+        message: `Connection failed: ${error.message}` 
+      })
+    }
+
+    // Test 2: Menu Items
+    try {
+      const { data, error } = await supabase
+        .from('menu_items')
+        .select('*')
+        .limit(5)
+      
+      if (error) throw error
+      updateTest(1, { 
+        status: 'success', 
+        message: `Successfully fetched ${data?.length || 0} menu items`,
+        data: data 
+      })
+    } catch (error: any) {
+      updateTest(1, { 
+        status: 'error', 
+        message: `Failed to fetch menu items: ${error.message}` 
+      })
+    }
+
+    // Test 3: Social Media Links
+    try {
+      const { data, error } = await supabase
+        .from('social_media_links')
+        .select('*')
+      
+      if (error) throw error
+      updateTest(2, { 
+        status: 'success', 
+        message: `Successfully fetched ${data?.length || 0} social media links`,
+        data: data 
+      })
+    } catch (error: any) {
+      updateTest(2, { 
+        status: 'error', 
+        message: `Failed to fetch social media links: ${error.message}` 
+      })
+    }
+
+    // Test 4: Check table structure
+    try {
+      const tables = ['profiles', 'menu_items', 'orders', 'order_items', 'reservations', 'social_media_links']
+      const tableChecks = await Promise.all(
+        tables.map(async (table) => {
+          const { error } = await supabase.from(table).select('*').limit(1)
+          return { table, exists: !error }
+        })
+      )
+      
+      const existingTables = tableChecks.filter(t => t.exists).map(t => t.table)
+      const missingTables = tableChecks.filter(t => !t.exists).map(t => t.table)
+      
+      updateTest(3, { 
+        status: missingTables.length === 0 ? 'success' : 'error',
+        message: missingTables.length === 0 
+          ? `All ${existingTables.length} tables exist and are accessible`
+          : `Missing tables: ${missingTables.join(', ')}`,
+        data: { existing: existingTables, missing: missingTables }
+      })
+    } catch (error: any) {
+      updateTest(3, { 
+        status: 'error', 
+        message: `Failed to check tables: ${error.message}` 
+      })
     }
   }
 
-  const getStatusIcon = () => {
-    if (isLoading) return <Loader2 className="h-5 w-5 animate-spin" />
-    if (!connectionStatus) return <AlertCircle className="h-5 w-5 text-yellow-500" />
-    return connectionStatus.connected ? 
-      <CheckCircle className="h-5 w-5 text-green-500" /> : 
-      <XCircle className="h-5 w-5 text-red-500" />
+  useEffect(() => {
+    runTests()
+  }, [])
+
+  const getStatusIcon = (status: TestResult['status']) => {
+    switch (status) {
+      case 'success':
+        return <CheckCircle className="h-5 w-5 text-green-500" />
+      case 'error':
+        return <XCircle className="h-5 w-5 text-red-500" />
+      case 'loading':
+        return <div className="h-5 w-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+    }
   }
 
-  const getStatusBadge = () => {
-    if (isLoading) return <Badge variant="secondary">Testing...</Badge>
-    if (!connectionStatus) return <Badge variant="outline">Not tested</Badge>
-    return connectionStatus.connected ? 
-      <Badge variant="default" className="bg-green-500">Connected</Badge> : 
-      <Badge variant="destructive">Disconnected</Badge>
+  const getStatusBadge = (status: TestResult['status']) => {
+    switch (status) {
+      case 'success':
+        return <Badge variant="default" className="bg-green-500">Success</Badge>
+      case 'error':
+        return <Badge variant="destructive">Error</Badge>
+      case 'loading':
+        return <Badge variant="secondary">Loading...</Badge>
+    }
   }
 
   return (
-    <div className="container mx-auto py-8 px-4">
-      <div className="max-w-2xl mx-auto space-y-6">
-        <div className="text-center">
-          <h1 className="text-3xl font-bold mb-2">Supabase Connection Test</h1>
-          <p className="text-muted-foreground">
-            Verify that your Vercel deployment is properly connected to Supabase
-          </p>
+    <div className="container mx-auto p-6 max-w-4xl">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold mb-2">Supabase Connection Test</h1>
+        <p className="text-muted-foreground">
+          Testing connection to your Supabase database and verifying table structure.
+        </p>
+        <div className="mt-4 p-4 bg-muted rounded-lg">
+          <p className="text-sm"><strong>Supabase URL:</strong> {supabaseUrl}</p>
+          <p className="text-sm"><strong>Project ID:</strong> bncgfivqfuryyyxbvzhp</p>
         </div>
-
-        {/* Environment Variables Check */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <AlertCircle className="h-5 w-5" />
-              Environment Variables
-            </CardTitle>
-            <CardDescription>
-              Check if Supabase environment variables are properly set
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex justify-between items-center">
-              <span className="font-medium">NEXT_PUBLIC_SUPABASE_URL:</span>
-              <Badge variant={envVars.supabaseUrl !== 'Not set' ? 'default' : 'destructive'}>
-                {envVars.supabaseUrl}
-              </Badge>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="font-medium">NEXT_PUBLIC_SUPABASE_ANON_KEY:</span>
-              <Badge variant={envVars.supabaseAnonKey !== 'Not set' ? 'default' : 'destructive'}>
-                {envVars.supabaseAnonKey}
-              </Badge>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Connection Test */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              {getStatusIcon()}
-              Connection Status
-            </CardTitle>
-            <CardDescription>
-              Test the actual connection to your Supabase database
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex justify-between items-center">
-              <span className="font-medium">Status:</span>
-              {getStatusBadge()}
-            </div>
-            
-            {connectionStatus?.error && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-md">
-                <p className="text-sm text-red-700 font-medium">Error:</p>
-                <p className="text-sm text-red-600">{connectionStatus.error}</p>
-              </div>
-            )}
-
-            <Button 
-              onClick={testConnection} 
-              disabled={isLoading}
-              className="w-full"
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Testing Connection...
-                </>
-              ) : (
-                'Test Connection'
-              )}
-            </Button>
-          </CardContent>
-        </Card>
-
-        {/* Setup Instructions */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Setup Instructions</CardTitle>
-            <CardDescription>
-              Follow these steps to properly connect Vercel to Supabase
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-3">
-              <div className="flex items-start gap-3">
-                <div className="w-6 h-6 rounded-full bg-blue-500 text-white text-sm flex items-center justify-center font-bold">1</div>
-                <div>
-                  <p className="font-medium">Create a Supabase Project</p>
-                  <p className="text-sm text-muted-foreground">Go to supabase.com and create a new project</p>
-                </div>
-              </div>
-              
-              <div className="flex items-start gap-3">
-                <div className="w-6 h-6 rounded-full bg-blue-500 text-white text-sm flex items-center justify-center font-bold">2</div>
-                <div>
-                  <p className="font-medium">Get your Supabase credentials</p>
-                  <p className="text-sm text-muted-foreground">
-                    From your Supabase project settings, copy the Project URL and anon public key
-                  </p>
-                </div>
-              </div>
-              
-              <div className="flex items-start gap-3">
-                <div className="w-6 h-6 rounded-full bg-blue-500 text-white text-white text-sm flex items-center justify-center font-bold">3</div>
-                <div>
-                  <p className="font-medium">Add environment variables to Vercel</p>
-                  <p className="text-sm text-muted-foreground">
-                    In your Vercel project settings, add these environment variables:
-                  </p>
-                  <div className="mt-2 p-2 bg-gray-100 rounded text-sm font-mono">
-                    <div>NEXT_PUBLIC_SUPABASE_URL=your_supabase_url</div>
-                    <div>NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key</div>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="flex items-start gap-3">
-                <div className="w-6 h-6 rounded-full bg-blue-500 text-white text-sm flex items-center justify-center font-bold">4</div>
-                <div>
-                  <p className="font-medium">Run the database setup script</p>
-                  <p className="text-sm text-muted-foreground">
-                    Execute the SQL script in your Supabase SQL Editor to create the necessary tables
-                  </p>
-                </div>
-              </div>
-              
-              <div className="flex items-start gap-3">
-                <div className="w-6 h-6 rounded-full bg-blue-500 text-white text-sm flex items-center justify-center font-bold">5</div>
-                <div>
-                  <p className="font-medium">Redeploy your Vercel project</p>
-                  <p className="text-sm text-muted-foreground">
-                    After adding environment variables, trigger a new deployment
-                  </p>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Quick Links */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Quick Links</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <Button variant="outline" className="w-full justify-start" asChild>
-              <a href="https://supabase.com" target="_blank" rel="noopener noreferrer">
-                Open Supabase Dashboard
-              </a>
-            </Button>
-            <Button variant="outline" className="w-full justify-start" asChild>
-              <a href="https://vercel.com/dashboard" target="_blank" rel="noopener noreferrer">
-                Open Vercel Dashboard
-              </a>
-            </Button>
-          </CardContent>
-        </Card>
       </div>
+
+      <div className="flex gap-4 mb-6">
+        <Button onClick={runTests} className="flex items-center gap-2">
+          <Database className="h-4 w-4" />
+          Run Tests Again
+        </Button>
+      </div>
+
+      <div className="grid gap-6">
+        {tests.map((test, index) => (
+          <Card key={index}>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <div className="flex items-center gap-2">
+                {getStatusIcon(test.status)}
+                <CardTitle className="text-lg">{test.name}</CardTitle>
+              </div>
+              {getStatusBadge(test.status)}
+            </CardHeader>
+            <CardContent>
+              <CardDescription className="mb-4">
+                {test.message}
+              </CardDescription>
+              
+              {test.data && (
+                <div className="mt-4">
+                  <h4 className="font-semibold mb-2">Data Preview:</h4>
+                  <pre className="bg-muted p-3 rounded text-sm overflow-auto max-h-40">
+                    {JSON.stringify(test.data, null, 2)}
+                  </pre>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      <Card className="mt-8">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Users className="h-5 w-5" />
+            Next Steps
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2">
+            <p>✅ <strong>If all tests pass:</strong> Your Supabase database is ready to use!</p>
+            <p>❌ <strong>If tests fail:</strong> Make sure you've run the database setup script in your Supabase SQL editor.</p>
+            <p>🔧 <strong>Missing tables:</strong> Copy and run the <code>setup-supabase-database-v2.sql</code> script.</p>
+            <p>🚀 <strong>Ready to deploy:</strong> Add your environment variables to Vercel and deploy!</p>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }

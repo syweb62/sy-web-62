@@ -1,41 +1,53 @@
-import { createClient } from "@supabase/supabase-js"
+import { createClient } from '@supabase/supabase-js'
 
-// Ensure environment variables are loaded
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://bncgfivqfuryyyxbvzhp.supabase.co'
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJuY3pnZml2cWZ1cnl5eGJ2emhwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ1NTI3ODYsImV4cCI6MjA3MDEyODc4Nn0.gq24PaaaO9yd7Z5MZpuwjt5Fpk-eL1UI01DYP8n_4h4'
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.error('Supabase URL or Anon Key is missing. Please check your environment variables.')
-  console.error('NEXT_PUBLIC_SUPABASE_URL:', supabaseUrl ? 'Set' : 'Missing')
-  console.error('NEXT_PUBLIC_SUPABASE_ANON_KEY:', supabaseAnonKey ? 'Set' : 'Missing')
-}
+export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
-// Type definitions for your database schema
-export type Profile = {
+// Types for our database tables
+export interface Profile {
   id: string
-  full_name: string | null
+  full_name?: string
   email: string
-  avatar_url: string | null
-  phone: string | null
-  address: string | null
-  role: "user" | "admin" | null
+  avatar_url?: string
+  phone?: string
+  address?: string
+  role: 'user' | 'admin'
   created_at: string
   updated_at: string
 }
 
-export type MenuItem = {
+export interface MenuItem {
   id: string
   name: string
-  description: string | null
+  description?: string
   price: number
-  category: string | null
-  image_url: string | null
+  category?: string
+  image_url?: string
   is_available: boolean
   created_at: string
   updated_at: string
 }
 
-export type OrderItem = {
+export interface Order {
+  order_id: string
+  user_id?: string
+  customer_name?: string
+  phone?: string
+  address?: string
+  payment_method?: string
+  status: 'pending' | 'processing' | 'completed' | 'cancelled'
+  total_price: number
+  subtotal?: number
+  discount?: number
+  vat?: number
+  delivery_charge?: number
+  message?: string
+  created_at: string
+}
+
+export interface OrderItem {
   id: string
   order_id: string
   menu_item_id: string
@@ -44,26 +56,9 @@ export type OrderItem = {
   created_at: string
 }
 
-export type Order = {
-  order_id: string
-  user_id: string | null
-  customer_name: string | null
-  phone: string | null
-  address: string | null
-  payment_method: string | null
-  status: "pending" | "processing" | "completed" | "cancelled" | null
-  total_price: number
-  subtotal: number | null
-  discount: number | null
-  vat: number | null
-  delivery_charge: number | null
-  message: string | null
-  created_at: string
-}
-
-export type Reservation = {
+export interface Reservation {
   reservation_id: string
-  user_id: string | null
+  user_id?: string
   name: string
   phone: string
   date: string
@@ -72,85 +67,13 @@ export type Reservation = {
   created_at: string
 }
 
-export type SocialMediaLink = {
+export interface SocialMediaLink {
   id: string
   platform_name: string
   link: string
-  button_type: string | null
-  display_order: number | null
+  button_type?: string
+  display_order?: number
   created_at: string
-}
-
-// Define the database schema for Supabase client
-export interface Database {
-  public: {
-    Tables: {
-      profiles: {
-        Row: Profile
-        Insert: Partial<Profile>
-        Update: Partial<Profile>
-      }
-      menu_items: {
-        Row: MenuItem
-        Insert: Partial<MenuItem>
-        Update: Partial<MenuItem>
-      }
-      orders: {
-        Row: Order
-        Insert: Partial<Order>
-        Update: Partial<Order>
-      }
-      order_items: {
-        Row: OrderItem
-        Insert: Partial<OrderItem>
-        Update: Partial<OrderItem>
-      }
-      reservations: {
-        Row: Reservation
-        Insert: Partial<Reservation>
-        Update: Partial<Reservation>
-      }
-      social_media_links: {
-        Row: SocialMediaLink
-        Insert: Partial<SocialMediaLink>
-        Update: Partial<SocialMediaLink>
-      }
-    }
-    Functions: {
-      handle_new_user: {
-        Args: Record<string, never>
-        Returns: unknown
-      }
-      update_profiles_updated_at: {
-        Args: Record<string, never>
-        Returns: unknown
-      }
-    }
-  }
-}
-
-// Create Supabase client with proper error handling
-let supabaseClient: ReturnType<typeof createClient<Database>> | null = null
-
-try {
-  if (supabaseUrl && supabaseAnonKey) {
-    supabaseClient = createClient<Database>(supabaseUrl, supabaseAnonKey, {
-      auth: {
-        autoRefreshToken: true,
-        persistSession: true,
-        detectSessionInUrl: true
-      }
-    })
-  }
-} catch (error) {
-  console.error('Failed to create Supabase client:', error)
-}
-
-export const supabase = supabaseClient
-
-// Function to check if Supabase is properly configured
-export function isSupabaseConfigured(): boolean {
-  return !!(supabaseUrl && supabaseAnonKey && supabase)
 }
 
 // Function to test Supabase connection
@@ -215,6 +138,11 @@ export async function testSupabaseConnection(): Promise<{
   }
 }
 
+// Function to check if Supabase is properly configured
+export function isSupabaseConfigured(): boolean {
+  return !!(supabaseUrl && supabaseAnonKey && supabase)
+}
+
 // Helper function to get environment info for debugging
 export function getSupabaseConfig() {
   return {
@@ -222,5 +150,114 @@ export function getSupabaseConfig() {
     anonKey: supabaseAnonKey ? 'Set (hidden)' : 'Not set',
     clientCreated: !!supabase,
     isConfigured: isSupabaseConfigured()
+  }
+}
+
+// Helper functions for common database operations
+export const menuItemsService = {
+  async getAll() {
+    const { data, error } = await supabase
+      .from('menu_items')
+      .select('*')
+      .eq('is_available', true)
+      .order('category', { ascending: true })
+    
+    if (error) throw error
+    return data as MenuItem[]
+  },
+
+  async getByCategory(category: string) {
+    const { data, error } = await supabase
+      .from('menu_items')
+      .select('*')
+      .eq('category', category)
+      .eq('is_available', true)
+      .order('name', { ascending: true })
+    
+    if (error) throw error
+    return data as MenuItem[]
+  },
+
+  async getById(id: string) {
+    const { data, error } = await supabase
+      .from('menu_items')
+      .select('*')
+      .eq('id', id)
+      .single()
+    
+    if (error) throw error
+    return data as MenuItem
+  }
+}
+
+export const ordersService = {
+  async create(order: Omit<Order, 'order_id' | 'created_at'>) {
+    const { data, error } = await supabase
+      .from('orders')
+      .insert(order)
+      .select()
+      .single()
+    
+    if (error) throw error
+    return data as Order
+  },
+
+  async getByUserId(userId: string) {
+    const { data, error } = await supabase
+      .from('orders')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+    
+    if (error) throw error
+    return data as Order[]
+  },
+
+  async updateStatus(orderId: string, status: Order['status']) {
+    const { data, error } = await supabase
+      .from('orders')
+      .update({ status })
+      .eq('order_id', orderId)
+      .select()
+      .single()
+    
+    if (error) throw error
+    return data as Order
+  }
+}
+
+export const reservationsService = {
+  async create(reservation: Omit<Reservation, 'reservation_id' | 'created_at'>) {
+    const { data, error } = await supabase
+      .from('reservations')
+      .insert(reservation)
+      .select()
+      .single()
+    
+    if (error) throw error
+    return data as Reservation
+  },
+
+  async getByUserId(userId: string) {
+    const { data, error } = await supabase
+      .from('reservations')
+      .select('*')
+      .eq('user_id', userId)
+      .order('date', { ascending: true })
+    
+    if (error) throw error
+    return data as Reservation[]
+  }
+}
+
+export const socialMediaService = {
+  async getAll() {
+    const { data, error } = await supabase
+      .from('social_media_links')
+      .select('*')
+      .order('display_order', { ascending: true })
+    
+    if (error) throw error
+    return data as SocialMediaLink[]
   }
 }
