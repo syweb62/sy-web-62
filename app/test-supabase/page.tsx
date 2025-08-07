@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
-import { CheckCircle, XCircle, AlertTriangle, Database, Loader2, ExternalLink, Zap, Home } from 'lucide-react'
+import { CheckCircle, XCircle, AlertTriangle, Database, Loader2, ExternalLink, Zap, Home, RefreshCw } from 'lucide-react'
 import Link from 'next/link'
 
 interface TestResult {
@@ -14,16 +14,24 @@ interface TestResult {
   status: 'success' | 'error' | 'pending'
   message: string
   data?: any
+  error?: string
 }
 
 export default function TestSupabasePage() {
   const [results, setResults] = useState<TestResult[]>([])
   const [isRunning, setIsRunning] = useState(false)
   const [config, setConfig] = useState<any>(null)
+  const [hasError, setHasError] = useState(false)
+  const [errorMessage, setErrorMessage] = useState('')
 
   useEffect(() => {
-    setConfig(getSupabaseConfig())
-    runTests()
+    try {
+      setConfig(getSupabaseConfig())
+      runTests()
+    } catch (error) {
+      setHasError(true)
+      setErrorMessage(error instanceof Error ? error.message : 'Failed to initialize')
+    }
   }, [])
 
   const addResult = (result: TestResult) => {
@@ -37,118 +45,163 @@ export default function TestSupabasePage() {
   }
 
   const runTests = async () => {
-    setIsRunning(true)
-    setResults([])
-
-    // Test 1: Configuration
-    addResult({ test: 'Configuration', status: 'pending', message: 'Checking configuration...' })
-    const configResult = getSupabaseConfig()
-    addResult({ 
-      test: 'Configuration', 
-      status: configResult.isConfigured ? 'success' : 'error', 
-      message: configResult.isConfigured 
-        ? `Project: ${configResult.projectId}, Client initialized: ${configResult.clientCreated}`
-        : 'Supabase not properly configured',
-      data: configResult
-    })
-
-    // Test 2: Connection
-    addResult({ test: 'Connection', status: 'pending', message: 'Testing connection...' })
     try {
-      const connectionResult = await testSupabaseConnection()
-      addResult({ 
-        test: 'Connection', 
-        status: connectionResult.connected ? 'success' : 'error', 
-        message: connectionResult.error || connectionResult.status,
-        data: connectionResult.config
-      })
-    } catch (error: any) {
-      addResult({ test: 'Connection', status: 'error', message: error.message })
-    }
+      setIsRunning(true)
+      setResults([])
+      setHasError(false)
+      setErrorMessage('')
 
-    // Test 3: Menu Items
-    addResult({ test: 'Menu Items', status: 'pending', message: 'Fetching menu items...' })
-    try {
-      const { data, error } = await supabase
-        .from('menu_items')
-        .select('*')
-        .limit(5)
+      // Test 1: Configuration
+      addResult({ test: 'Configuration', status: 'pending', message: 'Checking configuration...' })
       
-      if (error) throw error
-      addResult({ 
-        test: 'Menu Items', 
-        status: 'success', 
-        message: `Found ${data?.length || 0} menu items`,
-        data: data
-      })
-    } catch (error: any) {
-      addResult({ test: 'Menu Items', status: 'error', message: error.message })
-    }
-
-    // Test 4: Social Media Links
-    addResult({ test: 'Social Media', status: 'pending', message: 'Fetching social media links...' })
-    try {
-      const { data, error } = await supabase
-        .from('social_media_links')
-        .select('*')
-      
-      if (error) throw error
-      addResult({ 
-        test: 'Social Media', 
-        status: 'success', 
-        message: `Found ${data?.length || 0} social media links`,
-        data: data
-      })
-    } catch (error: any) {
-      addResult({ test: 'Social Media', status: 'error', message: error.message })
-    }
-
-    // Test 5: Authentication
-    addResult({ test: 'Authentication', status: 'pending', message: 'Checking auth status...' })
-    try {
-      const { data: { user }, error } = await supabase.auth.getUser()
-      if (error) throw error
-      addResult({ 
-        test: 'Authentication', 
-        status: 'success', 
-        message: user ? `Logged in as ${user.email}` : 'Not logged in (this is normal)',
-        data: user ? { email: user.email, id: user.id } : null
-      })
-    } catch (error: any) {
-      addResult({ test: 'Authentication', status: 'error', message: error.message })
-    }
-
-    // Test 6: Database Tables Structure
-    addResult({ test: 'Database Tables', status: 'pending', message: 'Checking table structure...' })
-    try {
-      const tables = ['profiles', 'menu_items', 'orders', 'order_items', 'reservations', 'social_media_links']
-      const tableChecks = await Promise.all(
-        tables.map(async (table) => {
-          try {
-            const { error } = await supabase.from(table).select('*').limit(1)
-            return { table, exists: !error }
-          } catch {
-            return { table, exists: false }
-          }
+      try {
+        const configResult = getSupabaseConfig()
+        addResult({ 
+          test: 'Configuration', 
+          status: configResult.isConfigured ? 'success' : 'error', 
+          message: configResult.isConfigured 
+            ? `Project: ${configResult.projectId}, Client initialized: ${configResult.clientCreated}`
+            : 'Supabase not properly configured',
+          data: configResult
         })
-      )
-      
-      const existingTables = tableChecks.filter(t => t.exists).map(t => t.table)
-      const missingTables = tableChecks.filter(t => !t.exists).map(t => t.table)
-      
-      addResult({ 
-        test: 'Database Tables', 
-        status: missingTables.length === 0 ? 'success' : 'error',
-        message: missingTables.length === 0 
-          ? `All ${existingTables.length} tables exist and are accessible`
-          : `Missing tables: ${missingTables.join(', ')}`,
-        data: { existing: existingTables, missing: missingTables }
-      })
-    } catch (error: any) {
-      addResult({ test: 'Database Tables', status: 'error', message: error.message })
-    }
+      } catch (error) {
+        addResult({ 
+          test: 'Configuration', 
+          status: 'error', 
+          message: `Configuration error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        })
+      }
 
-    setIsRunning(false)
+      // Test 2: Connection
+      addResult({ test: 'Connection', status: 'pending', message: 'Testing connection...' })
+      try {
+        const connectionResult = await testSupabaseConnection()
+        addResult({ 
+          test: 'Connection', 
+          status: connectionResult.connected ? 'success' : 'error', 
+          message: connectionResult.error || connectionResult.status,
+          data: connectionResult.config,
+          error: connectionResult.error || undefined
+        })
+      } catch (error) {
+        addResult({ 
+          test: 'Connection', 
+          status: 'error', 
+          message: `Connection failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        })
+      }
+
+      // Test 3: Menu Items
+      addResult({ test: 'Menu Items', status: 'pending', message: 'Fetching menu items...' })
+      try {
+        const { data, error } = await supabase
+          .from('menu_items')
+          .select('*')
+          .limit(5)
+        
+        if (error) throw error
+        addResult({ 
+          test: 'Menu Items', 
+          status: 'success', 
+          message: `Found ${data?.length || 0} menu items`,
+          data: data
+        })
+      } catch (error: any) {
+        addResult({ 
+          test: 'Menu Items', 
+          status: 'error', 
+          message: `Failed to fetch menu items: ${error.message}`,
+          error: error.message
+        })
+      }
+
+      // Test 4: Social Media Links
+      addResult({ test: 'Social Media', status: 'pending', message: 'Fetching social media links...' })
+      try {
+        const { data, error } = await supabase
+          .from('social_media_links')
+          .select('*')
+        
+        if (error) throw error
+        addResult({ 
+          test: 'Social Media', 
+          status: 'success', 
+          message: `Found ${data?.length || 0} social media links`,
+          data: data
+        })
+      } catch (error: any) {
+        addResult({ 
+          test: 'Social Media', 
+          status: 'error', 
+          message: `Failed to fetch social media links: ${error.message}`,
+          error: error.message
+        })
+      }
+
+      // Test 5: Authentication
+      addResult({ test: 'Authentication', status: 'pending', message: 'Checking auth status...' })
+      try {
+        const { data: { user }, error } = await supabase.auth.getUser()
+        if (error) throw error
+        addResult({ 
+          test: 'Authentication', 
+          status: 'success', 
+          message: user ? `Logged in as ${user.email}` : 'Not logged in (this is normal)',
+          data: user ? { email: user.email, id: user.id } : null
+        })
+      } catch (error: any) {
+        addResult({ 
+          test: 'Authentication', 
+          status: 'error', 
+          message: `Auth check failed: ${error.message}`,
+          error: error.message
+        })
+      }
+
+      // Test 6: Database Tables Structure
+      addResult({ test: 'Database Tables', status: 'pending', message: 'Checking table structure...' })
+      try {
+        const tables = ['profiles', 'menu_items', 'orders', 'order_items', 'reservations', 'social_media_links']
+        const tableChecks = await Promise.all(
+          tables.map(async (table) => {
+            try {
+              const { error } = await supabase.from(table).select('*').limit(1)
+              return { table, exists: !error, error: error?.message }
+            } catch (err) {
+              return { table, exists: false, error: err instanceof Error ? err.message : 'Unknown error' }
+            }
+          })
+        )
+        
+        const existingTables = tableChecks.filter(t => t.exists).map(t => t.table)
+        const missingTables = tableChecks.filter(t => !t.exists)
+        
+        addResult({ 
+          test: 'Database Tables', 
+          status: missingTables.length === 0 ? 'success' : 'error',
+          message: missingTables.length === 0 
+            ? `All ${existingTables.length} tables exist and are accessible`
+            : `Missing tables: ${missingTables.map(t => t.table).join(', ')}`,
+          data: { existing: existingTables, missing: missingTables },
+          error: missingTables.length > 0 ? `Missing tables: ${missingTables.map(t => `${t.table} (${t.error})`).join(', ')}` : undefined
+        })
+      } catch (error: any) {
+        addResult({ 
+          test: 'Database Tables', 
+          status: 'error', 
+          message: `Table check failed: ${error.message}`,
+          error: error.message
+        })
+      }
+
+    } catch (error) {
+      setHasError(true)
+      setErrorMessage(error instanceof Error ? error.message : 'Unknown error occurred during testing')
+    } finally {
+      setIsRunning(false)
+    }
   }
 
   const getStatusIcon = (status: TestResult['status']) => {
@@ -171,6 +224,65 @@ export default function TestSupabasePage() {
       case 'pending':
         return <Badge variant="secondary">Testing...</Badge>
     }
+  }
+
+  if (hasError && !config) {
+    return (
+      <div className="container mx-auto p-6 max-w-4xl">
+        <div className="mb-8 flex justify-between items-start">
+          <div>
+            <h1 className="text-3xl font-bold mb-2">Supabase Connection Test</h1>
+            <p className="text-muted-foreground">Failed to initialize the test page.</p>
+          </div>
+          <Link href="/">
+            <Button variant="outline" size="sm">
+              <Home className="h-4 w-4 mr-2" />
+              Back to Home
+            </Button>
+          </Link>
+        </div>
+
+        <Alert className="mb-6 border-red-500 bg-red-50">
+          <XCircle className="h-4 w-4" />
+          <AlertDescription>
+            <div className="space-y-2">
+              <p className="font-semibold text-red-800">❌ Initialization Error</p>
+              <p className="text-red-700">
+                Failed to initialize the Supabase client or configuration.
+              </p>
+              <div className="bg-white p-3 rounded border text-xs font-mono text-red-600">
+                {errorMessage}
+              </div>
+            </div>
+          </AlertDescription>
+        </Alert>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5" />
+              Troubleshooting Steps
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-md">
+                <h4 className="font-semibold text-blue-800 mb-2">🔧 Check Environment Variables:</h4>
+                <ul className="list-disc list-inside space-y-1 text-blue-700 text-sm">
+                  <li>Verify NEXT_PUBLIC_SUPABASE_URL is set correctly</li>
+                  <li>Verify NEXT_PUBLIC_SUPABASE_ANON_KEY is set correctly</li>
+                  <li>Redeploy your Vercel project after updating variables</li>
+                </ul>
+              </div>
+              <Button onClick={() => window.location.reload()} className="flex items-center gap-2">
+                <RefreshCw className="h-4 w-4" />
+                Retry
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   return (
@@ -253,6 +365,18 @@ export default function TestSupabasePage() {
         </Button>
       </div>
 
+      {hasError && (
+        <Alert className="mb-6 border-red-500 bg-red-50">
+          <XCircle className="h-4 w-4" />
+          <AlertDescription>
+            <div className="space-y-2">
+              <p className="font-semibold text-red-800">❌ Test Error</p>
+              <p className="text-red-700">{errorMessage}</p>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+
       <div className="space-y-4">
         {results.map((result, index) => (
           <Card key={index}>
@@ -265,6 +389,12 @@ export default function TestSupabasePage() {
             </CardHeader>
             <CardContent>
               <p className="text-muted-foreground mb-3">{result.message}</p>
+              
+              {result.error && (
+                <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+                  <strong>Error Details:</strong> {result.error}
+                </div>
+              )}
               
               {result.data && (
                 <div className="mt-4">
@@ -305,7 +435,7 @@ export default function TestSupabasePage() {
               <h4 className="font-semibold text-green-800 mb-2">✅ What the setup script creates:</h4>
               <ul className="list-disc list-inside space-y-1 text-green-700 text-sm">
                 <li>6 database tables with proper relationships</li>
-                <li>20 sample menu items for your restaurant</li>
+                <li>20 sample menu items across 5 categories</li>
                 <li>5 social media links</li>
                 <li>Row Level Security policies</li>
                 <li>Performance indexes</li>
