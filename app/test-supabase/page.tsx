@@ -22,38 +22,40 @@ export default function TestSupabasePage() {
   const [config, setConfig] = useState<any>(null)
   const [hasError, setHasError] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
-  const [supabase, setSupabase] = useState<any>(null)
-  const [testSupabaseConnection, setTestSupabaseConnection] = useState<any>(null)
-  const [getSupabaseConfig, setGetSupabaseConfig] = useState<any>(null)
+  const [moduleLoaded, setModuleLoaded] = useState(false)
 
   useEffect(() => {
-    // Dynamically import Supabase functions to handle initialization errors
-    const initializeSupabase = async () => {
+    // Safely load the Supabase module
+    const loadSupabaseModule = async () => {
       try {
+        console.log('Loading Supabase module...')
         const supabaseModule = await import('@/lib/supabase')
-        setSupabase(supabaseModule.supabase)
-        setTestSupabaseConnection(() => supabaseModule.testSupabaseConnection)
-        setGetSupabaseConfig(() => supabaseModule.getSupabaseConfig)
+        console.log('Supabase module loaded successfully')
         
-        if (supabaseModule.getSupabaseConfig) {
-          const configResult = supabaseModule.getSupabaseConfig()
-          setConfig(configResult)
-          
-          if (configResult.initializationError) {
-            setHasError(true)
-            setErrorMessage(configResult.initializationError)
-          } else {
-            runTests(supabaseModule.supabase, supabaseModule.testSupabaseConnection)
-          }
+        // Get configuration safely
+        const configResult = supabaseModule.getSupabaseConfig()
+        console.log('Configuration:', configResult)
+        setConfig(configResult)
+        
+        setModuleLoaded(true)
+        
+        // Auto-run tests if no initialization error
+        if (!configResult.initializationError) {
+          console.log('Auto-running tests...')
+          await runTests(supabaseModule)
+        } else {
+          console.log('Initialization error detected:', configResult.initializationError)
+          setHasError(true)
+          setErrorMessage(configResult.initializationError)
         }
       } catch (error) {
+        console.error('Failed to load Supabase module:', error)
         setHasError(true)
         setErrorMessage(error instanceof Error ? error.message : 'Failed to load Supabase module')
-        console.error('Failed to initialize Supabase:', error)
       }
     }
 
-    initializeSupabase()
+    loadSupabaseModule()
   }, [])
 
   const addResult = (result: TestResult) => {
@@ -66,37 +68,35 @@ export default function TestSupabasePage() {
     })
   }
 
-  const runTests = async (supabaseClient?: any, testConnectionFn?: any) => {
+  const runTests = async (supabaseModule?: any) => {
     try {
       setIsRunning(true)
       setResults([])
       setHasError(false)
       setErrorMessage('')
 
-      const clientToUse = supabaseClient || supabase
-      const testFnToUse = testConnectionFn || testSupabaseConnection
-
-      if (!clientToUse || !testFnToUse) {
-        throw new Error('Supabase client or test function not available')
+      let module = supabaseModule
+      if (!module) {
+        console.log('Loading Supabase module for tests...')
+        module = await import('@/lib/supabase')
       }
 
       // Test 1: Configuration
       addResult({ test: 'Configuration', status: 'pending', message: 'Checking configuration...' })
       
       try {
-        const configFn = getSupabaseConfig
-        if (configFn) {
-          const configResult = configFn()
-          addResult({ 
-            test: 'Configuration', 
-            status: configResult.isConfigured ? 'success' : 'error', 
-            message: configResult.isConfigured 
-              ? `Project: ${configResult.projectId}, Client initialized: ${configResult.clientCreated}`
-              : `Configuration issue: ${configResult.initializationError || 'Unknown error'}`,
-            data: configResult
-          })
-        }
+        const configResult = module.getSupabaseConfig()
+        console.log('Configuration test result:', configResult)
+        addResult({ 
+          test: 'Configuration', 
+          status: configResult.isConfigured ? 'success' : 'error', 
+          message: configResult.isConfigured 
+            ? `Project: ${configResult.projectId}, Client initialized: ${configResult.clientCreated}`
+            : `Configuration issue: ${configResult.initializationError || 'Unknown error'}`,
+          data: configResult
+        })
       } catch (error) {
+        console.error('Configuration test error:', error)
         addResult({ 
           test: 'Configuration', 
           status: 'error', 
@@ -108,7 +108,9 @@ export default function TestSupabasePage() {
       // Test 2: Connection
       addResult({ test: 'Connection', status: 'pending', message: 'Testing connection...' })
       try {
-        const connectionResult = await testFnToUse()
+        console.log('Testing connection...')
+        const connectionResult = await module.testSupabaseConnection()
+        console.log('Connection test result:', connectionResult)
         addResult({ 
           test: 'Connection', 
           status: connectionResult.connected ? 'success' : 'error', 
@@ -117,6 +119,7 @@ export default function TestSupabasePage() {
           error: connectionResult.error || undefined
         })
       } catch (error) {
+        console.error('Connection test error:', error)
         addResult({ 
           test: 'Connection', 
           status: 'error', 
@@ -128,12 +131,14 @@ export default function TestSupabasePage() {
       // Test 3: Menu Items
       addResult({ test: 'Menu Items', status: 'pending', message: 'Fetching menu items...' })
       try {
-        const { data, error } = await clientToUse
+        console.log('Testing menu items...')
+        const { data, error } = await module.supabase
           .from('menu_items')
           .select('*')
           .limit(5)
         
         if (error) throw error
+        console.log('Menu items test result:', data)
         addResult({ 
           test: 'Menu Items', 
           status: 'success', 
@@ -141,6 +146,7 @@ export default function TestSupabasePage() {
           data: data
         })
       } catch (error: any) {
+        console.error('Menu items test error:', error)
         addResult({ 
           test: 'Menu Items', 
           status: 'error', 
@@ -152,11 +158,13 @@ export default function TestSupabasePage() {
       // Test 4: Social Media Links
       addResult({ test: 'Social Media', status: 'pending', message: 'Fetching social media links...' })
       try {
-        const { data, error } = await clientToUse
+        console.log('Testing social media links...')
+        const { data, error } = await module.supabase
           .from('social_media_links')
           .select('*')
         
         if (error) throw error
+        console.log('Social media test result:', data)
         addResult({ 
           test: 'Social Media', 
           status: 'success', 
@@ -164,6 +172,7 @@ export default function TestSupabasePage() {
           data: data
         })
       } catch (error: any) {
+        console.error('Social media test error:', error)
         addResult({ 
           test: 'Social Media', 
           status: 'error', 
@@ -175,8 +184,10 @@ export default function TestSupabasePage() {
       // Test 5: Authentication
       addResult({ test: 'Authentication', status: 'pending', message: 'Checking auth status...' })
       try {
-        const { data: { user }, error } = await clientToUse.auth.getUser()
+        console.log('Testing authentication...')
+        const { data: { user }, error } = await module.supabase.auth.getUser()
         if (error) throw error
+        console.log('Auth test result:', user)
         addResult({ 
           test: 'Authentication', 
           status: 'success', 
@@ -184,6 +195,7 @@ export default function TestSupabasePage() {
           data: user ? { email: user.email, id: user.id } : null
         })
       } catch (error: any) {
+        console.error('Auth test error:', error)
         addResult({ 
           test: 'Authentication', 
           status: 'error', 
@@ -195,11 +207,12 @@ export default function TestSupabasePage() {
       // Test 6: Database Tables Structure
       addResult({ test: 'Database Tables', status: 'pending', message: 'Checking table structure...' })
       try {
+        console.log('Testing database tables...')
         const tables = ['profiles', 'menu_items', 'orders', 'order_items', 'reservations', 'social_media_links']
         const tableChecks = await Promise.all(
           tables.map(async (table) => {
             try {
-              const { error } = await clientToUse.from(table).select('*').limit(1)
+              const { error } = await module.supabase.from(table).select('*').limit(1)
               return { table, exists: !error, error: error?.message }
             } catch (err) {
               return { table, exists: false, error: err instanceof Error ? err.message : 'Unknown error' }
@@ -209,6 +222,8 @@ export default function TestSupabasePage() {
         
         const existingTables = tableChecks.filter(t => t.exists).map(t => t.table)
         const missingTables = tableChecks.filter(t => !t.exists)
+        
+        console.log('Table check results:', { existingTables, missingTables })
         
         addResult({ 
           test: 'Database Tables', 
@@ -220,6 +235,7 @@ export default function TestSupabasePage() {
           error: missingTables.length > 0 ? `Missing tables: ${missingTables.map(t => `${t.table} (${t.error})`).join(', ')}` : undefined
         })
       } catch (error: any) {
+        console.error('Database tables test error:', error)
         addResult({ 
           test: 'Database Tables', 
           status: 'error', 
@@ -229,6 +245,7 @@ export default function TestSupabasePage() {
       }
 
     } catch (error) {
+      console.error('Test runner error:', error)
       setHasError(true)
       setErrorMessage(error instanceof Error ? error.message : 'Unknown error occurred during testing')
     } finally {
@@ -258,6 +275,36 @@ export default function TestSupabasePage() {
     }
   }
 
+  // Loading state
+  if (!moduleLoaded && !hasError) {
+    return (
+      <div className="container mx-auto p-6 max-w-4xl">
+        <div className="mb-8 flex justify-between items-start">
+          <div>
+            <h1 className="text-3xl font-bold mb-2">Supabase Connection Test</h1>
+            <p className="text-muted-foreground">Loading Supabase module...</p>
+          </div>
+          <Link href="/">
+            <Button variant="outline" size="sm">
+              <Home className="h-4 w-4 mr-2" />
+              Back to Home
+            </Button>
+          </Link>
+        </div>
+
+        <Card>
+          <CardContent className="flex items-center justify-center p-8">
+            <div className="flex items-center gap-3">
+              <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
+              <span className="text-lg">Initializing Supabase connection...</span>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  // Error state
   if (hasError && !config) {
     return (
       <div className="container mx-auto p-6 max-w-4xl">
@@ -461,7 +508,7 @@ export default function TestSupabasePage() {
               <ol className="list-decimal list-inside space-y-1 text-blue-700 text-sm">
                 <li>Go to your <a href="https://supabase.com/dashboard/project/pjoelkxkcwtzmbyswfhu" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">Supabase Dashboard</a></li>
                 <li>Navigate to the <strong>SQL Editor</strong> tab</li>
-                <li>Copy the entire content from the SQL script above</li>
+                <li>Copy the entire SQL script from the previous message</li>
                 <li>Paste it into the SQL Editor and click <strong>Run</strong></li>
                 <li>Wait for the script to complete (you'll see success messages)</li>
                 <li>Come back here and click <strong>Run Tests Again</strong></li>
