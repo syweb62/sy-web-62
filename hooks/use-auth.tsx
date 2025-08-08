@@ -48,14 +48,8 @@ const isValidEmail = (email: string): boolean => {
 }
 
 const isStrongPassword = (password: string): boolean => {
-  return (
-    password.length >= 8 &&
-    password.length <= 128 &&
-    /[A-Z]/.test(password) &&
-    /[a-z]/.test(password) &&
-    /[0-9]/.test(password) &&
-    /[!@#$%^&*(),.?":{}|<>]/.test(password)
-  )
+  // Simplified password requirement - 6+ characters
+  return password.length >= 6
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -74,61 +68,71 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const fetchUserProfile = useCallback(async (supabaseUser: SupabaseUser) => {
     if (!supabase) return null
     try {
-      // Try to fetch from profiles table without .single() initially
-      const { data, error } = await supabase.from("profiles").select("*").eq("id", supabaseUser.id)
+      console.log("Fetching user profile for:", supabaseUser.id)
+      
+      // Try to fetch from profiles table
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", supabaseUser.id)
+        .maybeSingle()
 
-      if (error) {
+      if (error && error.code !== 'PGRST116') { // PGRST116 is "not found" error
         console.error("Error fetching user profile:", error.message)
-        // If there's a database error, still try to create a fallback
-        const fallbackProfile: Profile = {
-          id: supabaseUser.id,
-          email: supabaseUser.email!,
-          full_name: supabaseUser.user_metadata?.full_name || "New User",
-          created_at: supabaseUser.created_at,
-          updated_at: supabaseUser.updated_at || supabaseUser.created_at,
-        }
-        setUser(fallbackProfile)
-        return fallbackProfile
       }
 
-      if (data && data.length > 0) {
-        // Profile found
-        setUser(data[0]) // Take the first one if multiple, though id should be unique
-        return data[0]
+      if (data) {
+        console.log("Profile found:", data)
+        // Ensure we have proper name field for navbar display
+        const profileWithName = {
+          ...data,
+          name: data.full_name || data.name || "User" // Add name field for navbar
+        }
+        setUser(profileWithName)
+        return profileWithName
       } else {
-        // No profile found, create one
-        console.log("No profile found for user, creating new profile.")
-        const newUserProfile: Partial<Profile> = {
+        console.log("No profile found, creating new profile for user:", supabaseUser.id)
+        
+        // Create new profile
+        const newUserProfile = {
           id: supabaseUser.id,
           email: supabaseUser.email!,
-          full_name: supabaseUser.user_metadata?.full_name || "", // Use metadata from signup
+          full_name: supabaseUser.user_metadata?.full_name || supabaseUser.user_metadata?.name || "New User",
           avatar_url: supabaseUser.user_metadata?.avatar_url || "",
           phone: supabaseUser.user_metadata?.phone || "",
-          created_at: supabaseUser.created_at,
-          updated_at: supabaseUser.updated_at || supabaseUser.created_at,
+          role: 'user' as const,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
         }
 
         const { data: createdProfile, error: createError } = await supabase
           .from("profiles")
           .insert([newUserProfile])
           .select()
-          .single() // Use .single() here as we expect exactly one insertion
+          .single()
 
         if (createError) {
           console.error("Error creating user profile:", createError.message)
-          // Fallback to basic user object if creation fails
+          // Use fallback profile if database insert fails
           const fallbackProfile: Profile = {
             id: supabaseUser.id,
             email: supabaseUser.email!,
             full_name: supabaseUser.user_metadata?.full_name || "New User",
+            name: supabaseUser.user_metadata?.full_name || "New User", // Add name field
+            role: 'user',
             created_at: supabaseUser.created_at,
             updated_at: supabaseUser.updated_at || supabaseUser.created_at,
           }
           setUser(fallbackProfile)
           return fallbackProfile
         } else {
-          setUser(createdProfile)
-          return createdProfile
+          console.log("Profile created successfully:", createdProfile)
+          const profileWithName = {
+            ...createdProfile,
+            name: createdProfile.full_name || "User" // Add name field for navbar
+          }
+          setUser(profileWithName)
+          return profileWithName
         }
       }
     } catch (err) {
@@ -138,6 +142,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         id: supabaseUser.id,
         email: supabaseUser.email!,
         full_name: supabaseUser.user_metadata?.full_name || "New User",
+        name: supabaseUser.user_metadata?.full_name || "New User", // Add name field
+        role: 'user',
         created_at: supabaseUser.created_at,
         updated_at: supabaseUser.updated_at || supabaseUser.created_at,
       }
@@ -148,34 +154,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const initializeAuth = async () => {
+      console.log("Initializing auth...")
+      
       const connectionResult = await testSupabaseConnection()
       setConnectionStatus(connectionResult.status)
 
-      if (!supabase || !connectionResult.connected) {
-        console.warn("Supabase not available:", connectionResult.error)
+      if (!supabase) {
+        console.warn("Supabase not available")
         setIsLoading(false)
         return
       }
 
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-      setSession(session)
-      if (session?.user) {
-        await fetchUserProfile(session.user)
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession()
+        
+        if (error) {
+          console.error("Error getting session:", error)
+        }
+        
+        console.log("Initial session:", session?.user?.email || "No session")
+        
+        setSession(session)
+        if (session?.user) {
+          await fetchUserProfile(session.user)
+        }
+      } catch (error) {
+        console.error("Error in getSession:", error)
       }
+      
       setIsLoading(false)
 
       const {
         data: { subscription },
       } = supabase.auth.onAuthStateChange(async (event, session) => {
-        console.log("Auth state changed:", event, session?.user?.email)
+        console.log("Auth state changed:", event, session?.user?.email || "No user")
+        
         setSession(session)
         if (session?.user) {
           await fetchUserProfile(session.user)
         } else {
           setUser(null)
         }
+        
+        setIsLoading(false)
       })
 
       return () => subscription.unsubscribe()
@@ -186,52 +207,125 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = useCallback(
     async (email: string, password: string) => {
-      if (!supabase) throw new Error("Supabase not initialized")
+      console.log("SignIn called with:", email)
+      
+      if (!supabase) {
+        console.error("Supabase not initialized")
+        throw new Error("Supabase not initialized")
+      }
+      
       try {
         setIsLoading(true)
         clearError()
-        if (!isValidEmail(email)) throw new Error("Invalid email format.")
-        const { error } = await supabase.auth.signInWithPassword({ email: sanitizeInput(email), password })
-        if (error) throw error
+        
+        if (!isValidEmail(email)) {
+          throw new Error("Invalid email format.")
+        }
+        
+        console.log("Attempting to sign in...")
+        
+        const { data, error } = await supabase.auth.signInWithPassword({ 
+          email: sanitizeInput(email), 
+          password 
+        })
+        
+        console.log("SignIn response:", { 
+          user: data.user?.email, 
+          session: !!data.session, 
+          error: error?.message 
+        })
+        
+        if (error) {
+          // Handle specific email confirmation error
+          if (error.message === "Email not confirmed") {
+            throw new Error("Please check your email and click the confirmation link, or contact support.")
+          }
+          
+          // If invalid credentials, suggest creating account
+          if (error.message === "Invalid login credentials") {
+            const customError = new Error("Account not found. Please create an account first or check your email and password.")
+            customError.name = "AccountNotFound"
+            throw customError
+          }
+          
+          console.error("SignIn error:", error)
+          throw error
+        }
+        
+        if (data.session && data.user) {
+          console.log("SignIn successful, setting session and user")
+          setSession(data.session)
+          await fetchUserProfile(data.user)
+        }
+        
       } catch (err) {
+        console.error("SignIn catch block:", err)
         handleError(err)
         throw err
       } finally {
         setIsLoading(false)
       }
     },
-    [clearError, handleError],
+    [clearError, handleError, fetchUserProfile],
   )
 
   const signUp = useCallback(
     async (name: string, email: string, password: string, phone?: string) => {
+      console.log("SignUp called with:", email)
+      
       if (!supabase) throw new Error("Supabase not initialized")
       try {
         setIsLoading(true)
         clearError()
         if (!isValidEmail(email)) throw new Error("Invalid email format.")
-        if (!isStrongPassword(password)) throw new Error("Password is not strong enough.")
+        if (!isStrongPassword(password)) throw new Error("Password must be at least 6 characters long.")
+
+        console.log("Attempting to sign up...")
 
         const { data, error } = await supabase.auth.signUp({
           email: sanitizeInput(email),
           password,
           options: {
+            emailRedirectTo: undefined, // Disable email confirmation redirect
             data: {
               full_name: sanitizeInput(name),
+              name: sanitizeInput(name), // Also set name for compatibility
               phone: phone ? sanitizeInput(phone) : undefined,
             },
           },
         })
-        if (error) throw error
+        
+        console.log("SignUp response:", { 
+          user: data.user?.email, 
+          session: !!data.session, 
+          error: error?.message 
+        })
+        
+        if (error) {
+          console.error("SignUp error:", error)
+          throw error
+        }
+        
+        if (data.user && data.session) {
+          console.log("SignUp successful with immediate session")
+          setSession(data.session)
+          await fetchUserProfile(data.user)
+          return { success: true, requiresSignIn: false, user: data.user }
+        } else if (data.user && !data.session) {
+          console.log("SignUp successful but no session - email confirmation may be required")
+          return { success: true, requiresSignIn: true, user: data.user }
+        }
+        
         return { success: true, requiresSignIn: !data.session, user: data.user ?? undefined }
       } catch (err) {
+        console.error("SignUp catch block:", err)
         handleError(err)
         throw err
       } finally {
         setIsLoading(false)
       }
     },
-    [clearError, handleError],
+    [clearError, handleError, fetchUserProfile],
   )
 
   const signOut = useCallback(async () => {
@@ -239,10 +333,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       setIsLoading(true)
       clearError()
+      console.log("Signing out...")
       const { error } = await supabase.auth.signOut()
       if (error) throw error
       setUser(null)
       setSession(null)
+      console.log("Signed out successfully")
     } catch (err) {
       handleError(err)
     } finally {
@@ -256,10 +352,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         setIsLoading(true)
         clearError()
-        const { data, error } = await supabase.from("profiles").update(userData).eq("id", user.id).select().single()
-        if (error) throw error
-        setUser(data)
+        
+        console.log("Updating user profile:", userData)
+        
+        const { data, error } = await supabase
+          .from("profiles")
+          .update({
+            ...userData,
+            updated_at: new Date().toISOString()
+          })
+          .eq("id", user.id)
+          .select()
+          .single()
+          
+        if (error) {
+          console.error("Profile update error:", error)
+          throw error
+        }
+        
+        console.log("Profile updated successfully:", data)
+        // Add name field for navbar display
+        const updatedProfile = {
+          ...data,
+          name: data.full_name || data.name || "User"
+        }
+        setUser(updatedProfile)
+        
+        // Force a small delay to ensure state updates propagate
+        await new Promise(resolve => setTimeout(resolve, 100))
+        
       } catch (err) {
+        console.error("Update user error:", err)
         handleError(err)
         throw err
       } finally {
@@ -292,7 +415,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!supabase) throw new Error("Supabase not initialized")
       try {
         clearError()
-        if (!isStrongPassword(newPassword)) throw new Error("New password is not strong enough.")
+        if (!isStrongPassword(newPassword)) throw new Error("New password must be at least 6 characters long.")
         const { error } = await supabase.auth.updateUser({ password: newPassword })
         if (error) throw error
       } catch (err) {
@@ -308,10 +431,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!supabase || !user) throw new Error("User not authenticated or Supabase not initialized")
       try {
         clearError()
-        if (!isStrongPassword(newPassword)) throw new Error("New password is not strong enough.")
-        // Note: Supabase doesn't have a direct changePassword method that verifies the old password.
-        // This is typically handled by re-authenticating and then updating.
-        // For simplicity, we'll just update the user's password directly.
+        if (!isStrongPassword(newPassword)) throw new Error("New password must be at least 6 characters long.")
         const { error } = await supabase.auth.updateUser({ password: newPassword })
         if (error) throw error
       } catch (err) {

@@ -1,35 +1,45 @@
 import { createClient } from '@supabase/supabase-js'
 
 // Your Supabase credentials
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://pjoelkxkcwtzmbyswfhu.supabase.co'
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBqb2Vsa3hrY3d0em1ieXN3Zmh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ1NTMwMTksImV4cCI6MjA3MDEyOTAxOX0.xY2bVHrv_gl4iEHY79f_PC1OJxjHbHWYoqiSkrpi5n8'
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
 // Create the Supabase client
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: true
-  }
-})
+export const supabase = supabaseUrl && supabaseAnonKey 
+  ? createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        autoRefreshToken: true,
+        persistSession: true,
+        detectSessionInUrl: true,
+        flowType: 'pkce'
+      }
+    })
+  : null
 
 // Server-side client for admin operations (only available on server)
 export const supabaseAdmin = typeof window === 'undefined' 
   ? createClient(
-      supabaseUrl,
-      process.env.SUPABASE_SERVICE_ROLE_KEY || supabaseAnonKey
+      supabaseUrl || '',
+      process.env.SUPABASE_SERVICE_ROLE_KEY || supabaseAnonKey || '',
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false
+        }
+      }
     )
   : null
 
 // Types for our database tables
 export interface Profile {
   id: string
-  full_name?: string
   email: string
+  full_name?: string
+  name?: string // Add name field for navbar compatibility
   avatar_url?: string
   phone?: string
-  address?: string
-  role: 'user' | 'admin'
+  address?: string // Added address field
+  role?: 'user' | 'admin'
   created_at: string
   updated_at: string
 }
@@ -93,59 +103,48 @@ export interface SocialMediaLink {
 }
 
 // Function to test Supabase connection
-export async function testSupabaseConnection(): Promise<{
-  connected: boolean
-  status: string
-  error: string | null
-  config?: any
-}> {
-  try {
-    if (!supabaseUrl || !supabaseAnonKey) {
-      return {
-        connected: false,
-        status: 'missing_credentials',
-        error: 'Missing Supabase URL or API key',
-        config: getSupabaseConfig()
-      }
+export async function testSupabaseConnection() {
+  if (!supabase) {
+    return {
+      connected: false,
+      status: 'disconnected' as const,
+      error: 'Supabase client not initialized - missing environment variables',
+      config: getSupabaseConfig()
     }
+  }
 
-    // Test connection by trying to access a simple query
+  try {
+    console.log('Testing Supabase connection...')
+    
+    // Test basic connection with a simple query
     const { data, error } = await supabase
-      .from('menu_items')
-      .select('id')
+      .from('profiles')
+      .select('count')
       .limit(1)
 
     if (error) {
-      // Check if it's a table not found error
-      if (error.message.includes('relation "public.menu_items" does not exist') || 
-          error.message.includes('table "public.menu_items" does not exist')) {
-        return {
-          connected: true,
-          status: 'connected_no_tables',
-          error: 'Connected to Supabase but database tables do not exist. Please run the setup script in your Supabase SQL editor.',
-          config: getSupabaseConfig()
-        }
-      }
-
+      console.error('Supabase connection test failed:', error.message)
       return {
         connected: false,
-        status: 'query_error',
-        error: `Database query failed: ${error.message}`,
+        status: 'disconnected' as const,
+        error: error.message,
         config: getSupabaseConfig()
       }
     }
 
+    console.log('Supabase connection successful')
     return {
       connected: true,
-      status: 'connected',
-      error: null,
+      status: 'connected' as const,
+      data,
       config: getSupabaseConfig()
     }
   } catch (error) {
+    console.error('Supabase connection test error:', error)
     return {
       connected: false,
-      status: 'connection_error',
-      error: error instanceof Error ? error.message : 'Unknown connection error occurred',
+      status: 'disconnected' as const,
+      error: error instanceof Error ? error.message : 'Unknown connection error',
       config: getSupabaseConfig()
     }
   }
@@ -166,13 +165,15 @@ export function getSupabaseConfig() {
     clientCreated: !!supabase,
     isConfigured: isSupabaseConfigured(),
     projectId: supabaseUrl ? supabaseUrl.split('//')[1]?.split('.')[0] : 'Unknown',
-    initializationError: null
+    initializationError: !supabaseUrl ? 'NEXT_PUBLIC_SUPABASE_URL not set' : 
+                        !supabaseAnonKey ? 'NEXT_PUBLIC_SUPABASE_ANON_KEY not set' : null
   }
 }
 
 // Helper functions for common database operations
 export const menuItemsService = {
   async getAll() {
+    if (!supabase) throw new Error('Supabase not initialized')
     try {
       const { data, error } = await supabase
         .from('menu_items')
@@ -189,6 +190,7 @@ export const menuItemsService = {
   },
 
   async getByCategory(category: string) {
+    if (!supabase) throw new Error('Supabase not initialized')
     try {
       const { data, error } = await supabase
         .from('menu_items')
@@ -206,6 +208,7 @@ export const menuItemsService = {
   },
 
   async getById(id: string) {
+    if (!supabase) throw new Error('Supabase not initialized')
     try {
       const { data, error } = await supabase
         .from('menu_items')
@@ -224,6 +227,7 @@ export const menuItemsService = {
 
 export const ordersService = {
   async create(order: Omit<Order, 'order_id' | 'created_at'>) {
+    if (!supabase) throw new Error('Supabase not initialized')
     try {
       const { data, error } = await supabase
         .from('orders')
@@ -240,6 +244,7 @@ export const ordersService = {
   },
 
   async getByUserId(userId: string) {
+    if (!supabase) throw new Error('Supabase not initialized')
     try {
       const { data, error } = await supabase
         .from('orders')
@@ -256,6 +261,7 @@ export const ordersService = {
   },
 
   async updateStatus(orderId: string, status: Order['status']) {
+    if (!supabase) throw new Error('Supabase not initialized')
     try {
       const { data, error } = await supabase
         .from('orders')
@@ -275,6 +281,7 @@ export const ordersService = {
 
 export const reservationsService = {
   async create(reservation: Omit<Reservation, 'reservation_id' | 'created_at'>) {
+    if (!supabase) throw new Error('Supabase not initialized')
     try {
       const { data, error } = await supabase
         .from('reservations')
@@ -291,6 +298,7 @@ export const reservationsService = {
   },
 
   async getByUserId(userId: string) {
+    if (!supabase) throw new Error('Supabase not initialized')
     try {
       const { data, error } = await supabase
         .from('reservations')
@@ -309,6 +317,7 @@ export const reservationsService = {
 
 export const socialMediaService = {
   async getAll() {
+    if (!supabase) throw new Error('Supabase not initialized')
     try {
       const { data, error } = await supabase
         .from('social_media_links')
@@ -319,6 +328,68 @@ export const socialMediaService = {
       return data as SocialMediaLink[]
     } catch (error) {
       console.error('Error fetching social media links:', error)
+      throw error
+    }
+  }
+}
+
+// Profile service for better organization
+export const profileService = {
+  async getById(userId: string) {
+    if (!supabase) throw new Error('Supabase not initialized')
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single()
+      
+      if (error) throw error
+      return data as Profile
+    } catch (error) {
+      console.error('Error fetching profile:', error)
+      throw error
+    }
+  },
+
+  async update(userId: string, updates: Partial<Profile>) {
+    if (!supabase) throw new Error('Supabase not initialized')
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .update({
+          ...updates,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', userId)
+        .select()
+        .single()
+      
+      if (error) throw error
+      return data as Profile
+    } catch (error) {
+      console.error('Error updating profile:', error)
+      throw error
+    }
+  },
+
+  async create(profile: Omit<Profile, 'created_at' | 'updated_at'>) {
+    if (!supabase) throw new Error('Supabase not initialized')
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .insert({
+          ...profile,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .select()
+        .single()
+      
+      if (error) throw error
+      return data as Profile
+    } catch (error) {
+      console.error('Error creating profile:', error)
       throw error
     }
   }

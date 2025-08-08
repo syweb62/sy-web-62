@@ -1,35 +1,29 @@
 "use client"
 
-import { Search, Filter } from "lucide-react"
+import { Search, Filter } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
-export interface OrderFilters {
-  status?: string
-  search?: string
-  sortBy: "date" | "total" | "status"
-  sortOrder: "asc" | "desc"
-}
-
 interface OrderFiltersProps {
-  filters: OrderFilters
-  onFiltersChange: (filters: Partial<OrderFilters>) => void
+  searchTerm: string
+  onSearchChange: (search: string) => void
+  statusFilter: string
+  onStatusChange: (status: string) => void
+  onClearFilters: () => void
+  hasActiveFilters: boolean
   totalOrders: number
 }
 
-export function OrderFilters({ filters, onFiltersChange, totalOrders }: OrderFiltersProps) {
-  const clearFilters = () => {
-    onFiltersChange({
-      status: undefined,
-      search: undefined,
-      sortBy: "date",
-      sortOrder: "desc",
-    })
-  }
-
-  const hasActiveFilters = filters.status || filters.search
-
+export function OrderFilters({ 
+  searchTerm, 
+  onSearchChange, 
+  statusFilter, 
+  onStatusChange, 
+  onClearFilters, 
+  hasActiveFilters, 
+  totalOrders 
+}: OrderFiltersProps) {
   return (
     <div className="space-y-4">
       {/* Search and Status Filter */}
@@ -38,27 +32,27 @@ export function OrderFilters({ filters, onFiltersChange, totalOrders }: OrderFil
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
           <Input
             placeholder="Search by order ID or item name..."
-            value={filters.search || ""}
-            onChange={(e) => onFiltersChange({ search: e.target.value || undefined })}
-            className="pl-10"
+            value={searchTerm}
+            onChange={(e) => onSearchChange(e.target.value)}
+            className="pl-10 bg-black/30 border-gray-700 text-white placeholder:text-gray-400 focus:border-gold focus:ring-gold"
           />
         </div>
 
         <Select
-          value={filters.status || "all"}
-          onValueChange={(value) => onFiltersChange({ status: value === "all" ? undefined : value })}
+          value={statusFilter || "all"}
+          onValueChange={(value) => onStatusChange(value === "all" ? "" : value)}
         >
-          <SelectTrigger className="w-full sm:w-48">
+          <SelectTrigger className="w-full sm:w-48 bg-black/30 border-gray-700 text-white focus:border-gold focus:ring-gold">
             <SelectValue placeholder="All Orders" />
           </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Orders</SelectItem>
-            <SelectItem value="delivered">Delivered</SelectItem>
-            <SelectItem value="preparing">Preparing</SelectItem>
-            <SelectItem value="ready">Ready</SelectItem>
-            <SelectItem value="confirmed">Confirmed</SelectItem>
-            <SelectItem value="pending">Pending</SelectItem>
-            <SelectItem value="cancelled">Cancelled</SelectItem>
+          <SelectContent className="bg-black border-gray-700">
+            <SelectItem value="all" className="text-white hover:bg-gray-800">All Orders</SelectItem>
+            <SelectItem value="delivered" className="text-white hover:bg-gray-800">Delivered</SelectItem>
+            <SelectItem value="preparing" className="text-white hover:bg-gray-800">Preparing</SelectItem>
+            <SelectItem value="ready" className="text-white hover:bg-gray-800">Ready</SelectItem>
+            <SelectItem value="confirmed" className="text-white hover:bg-gray-800">Confirmed</SelectItem>
+            <SelectItem value="pending" className="text-white hover:bg-gray-800">Pending</SelectItem>
+            <SelectItem value="cancelled" className="text-white hover:bg-gray-800">Cancelled</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -70,7 +64,12 @@ export function OrderFilters({ filters, onFiltersChange, totalOrders }: OrderFil
         </div>
 
         {hasActiveFilters && (
-          <Button variant="outline" size="sm" onClick={clearFilters}>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={onClearFilters}
+            className="border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white"
+          >
             <Filter size={16} className="mr-1" />
             Clear Filters
           </Button>

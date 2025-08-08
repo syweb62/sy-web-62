@@ -1,6 +1,6 @@
 "use client"
 
-import { ChevronLeft, ChevronRight } from "lucide-react"
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 
 interface OrderPaginationProps {
@@ -10,74 +10,92 @@ interface OrderPaginationProps {
 }
 
 export function OrderPagination({ currentPage, totalPages, onPageChange }: OrderPaginationProps) {
-  if (totalPages <= 1) return null
+  // Don't render if there's only one page or no pages
+  if (totalPages <= 1) {
+    return null
+  }
 
-  const getVisiblePages = () => {
+  const handlePrevious = () => {
+    if (currentPage > 1) {
+      onPageChange(currentPage - 1)
+    }
+  }
+
+  const handleNext = () => {
+    if (currentPage < totalPages) {
+      onPageChange(currentPage + 1)
+    }
+  }
+
+  const getPageNumbers = () => {
     const pages = []
-    const maxVisible = 5
-
-    if (totalPages <= maxVisible) {
+    const maxVisiblePages = 5
+    
+    if (totalPages <= maxVisiblePages) {
+      // Show all pages if total is small
       for (let i = 1; i <= totalPages; i++) {
         pages.push(i)
       }
     } else {
+      // Show smart pagination
       if (currentPage <= 3) {
-        for (let i = 1; i <= 4; i++) {
+        // Show first 5 pages
+        for (let i = 1; i <= 5; i++) {
           pages.push(i)
         }
-        pages.push("...")
-        pages.push(totalPages)
       } else if (currentPage >= totalPages - 2) {
-        pages.push(1)
-        pages.push("...")
-        for (let i = totalPages - 3; i <= totalPages; i++) {
+        // Show last 5 pages
+        for (let i = totalPages - 4; i <= totalPages; i++) {
           pages.push(i)
         }
       } else {
-        pages.push(1)
-        pages.push("...")
-        for (let i = currentPage - 1; i <= currentPage + 1; i++) {
+        // Show current page and 2 on each side
+        for (let i = currentPage - 2; i <= currentPage + 2; i++) {
           pages.push(i)
         }
-        pages.push("...")
-        pages.push(totalPages)
       }
     }
-
+    
     return pages
   }
 
   return (
-    <div className="flex items-center justify-center gap-2 mt-8">
-      <Button variant="outline" size="sm" onClick={() => onPageChange(currentPage - 1)} disabled={currentPage === 1}>
+    <div className="flex items-center justify-center gap-2">
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={handlePrevious}
+        disabled={currentPage === 1}
+        className="border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white disabled:opacity-50"
+      >
         <ChevronLeft size={16} />
         Previous
       </Button>
 
       <div className="flex items-center gap-1">
-        {getVisiblePages().map((page, index) => (
-          <div key={index}>
-            {page === "..." ? (
-              <span className="px-3 py-2 text-gray-400">...</span>
-            ) : (
-              <Button
-                variant={currentPage === page ? "default" : "outline"}
-                size="sm"
-                onClick={() => onPageChange(page as number)}
-                className="min-w-[40px]"
-              >
-                {page}
-              </Button>
-            )}
-          </div>
+        {getPageNumbers().map((page) => (
+          <Button
+            key={page}
+            variant={currentPage === page ? "default" : "outline"}
+            size="sm"
+            onClick={() => onPageChange(page)}
+            className={
+              currentPage === page
+                ? "bg-gold text-black hover:bg-gold/90"
+                : "border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white"
+            }
+          >
+            {page}
+          </Button>
         ))}
       </div>
 
       <Button
         variant="outline"
         size="sm"
-        onClick={() => onPageChange(currentPage + 1)}
+        onClick={handleNext}
         disabled={currentPage === totalPages}
+        className="border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white disabled:opacity-50"
       >
         Next
         <ChevronRight size={16} />

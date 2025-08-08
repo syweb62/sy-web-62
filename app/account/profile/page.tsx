@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { useState, useEffect } from "react"
-import { MapPin, Edit, Save, X, User, Mail, Phone, Check, AlertCircle, ArrowLeft, Shield } from "lucide-react"
+import { MapPin, Edit, Save, X, User, Mail, Phone, Check, AlertCircle, ArrowLeft, Shield } from 'lucide-react'
 import { useAuth } from "@/hooks/use-auth"
 import { useRouter } from "next/navigation"
 import { ProfilePictureUpload } from "@/components/profile-picture-upload"
@@ -27,7 +27,6 @@ const ProfilePage = () => {
 
   const [isEditing, setIsEditing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
   const [successMessage, setSuccessMessage] = useState("")
   const [profileImage, setProfileImage] = useState<string | null>(null)
   const [errors, setErrors] = useState<FormErrors>({})
@@ -40,30 +39,29 @@ const ProfilePage = () => {
     }
   }, [user, authLoading, router])
 
-  // Load user data when available
+  // Load user data when available - optimized to avoid unnecessary loading
   useEffect(() => {
-    if (user) {
+    if (user && !authLoading) {
       const userData = {
-        name: user.name || "",
+        name: user.full_name || "",
         email: user.email || "",
         phone: user.phone || "",
-        address: user.address || "",
+        address: (user as any).address || "",
       }
       setFormData(userData)
-      setProfileImage(user.avatar || null)
+      setProfileImage(user.avatar_url || null)
     }
-    setIsLoading(false)
-  }, [user])
+  }, [user, authLoading])
 
   // Track unsaved changes
   useEffect(() => {
     if (user && isEditing) {
       const hasChanges =
-        formData.name !== (user.name || "") ||
+        formData.name !== (user.full_name || "") ||
         formData.email !== (user.email || "") ||
         formData.phone !== (user.phone || "") ||
-        formData.address !== (user.address || "") ||
-        profileImage !== (user.avatar || null)
+        formData.address !== ((user as any).address || "") ||
+        profileImage !== (user.avatar_url || null)
       setHasUnsavedChanges(hasChanges)
     } else {
       setHasUnsavedChanges(false)
@@ -130,58 +128,39 @@ const ProfilePage = () => {
 
     setIsSaving(true)
     setSuccessMessage("")
-    setErrors({}) // Clear any existing errors
+    setErrors({})
 
     try {
       const updateData = {
-        name: formData.name.trim(),
+        full_name: formData.name.trim(),
         email: formData.email.trim().toLowerCase(),
         phone: formData.phone.trim() || undefined,
+        avatar_url: profileImage || undefined,
         address: formData.address.trim() || undefined,
-        avatar: profileImage || undefined,
       }
 
       console.log("Updating profile with data:", updateData)
 
-      // Direct API call instead of using the auth hook to avoid context issues
-      const response = await fetch("/api/auth/update", {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(updateData),
-      })
+      // Use the auth hook to update user
+      await updateUser(updateData)
 
-      console.log("Update response status:", response.status)
-      console.log("Update response headers:", Object.fromEntries(response.headers.entries()))
+      // Update local state immediately to reflect changes
+      setFormData(prev => ({
+        ...prev,
+        name: updateData.full_name,
+        email: updateData.email,
+        phone: updateData.phone || "",
+        address: updateData.address || "",
+      }))
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({
-          success: false,
-          error: "Failed to parse error response",
-        }))
-        console.error("Update failed:", errorData)
-        throw new Error(errorData.error || `Request failed with status ${response.status}`)
-      }
+      setIsEditing(false)
+      setSuccessMessage("Profile updated successfully!")
+      setHasUnsavedChanges(false)
 
-      const result = await response.json()
-      console.log("Update result:", result)
-
-      if (result.success && result.user) {
-        // Update the user in the auth context
-        await updateUser(result.user)
-
-        setIsEditing(false)
-        setSuccessMessage("Profile updated successfully!")
-        setHasUnsavedChanges(false)
-
-        // Clear success message after 5 seconds
-        setTimeout(() => {
-          setSuccessMessage("")
-        }, 5000)
-      } else {
-        throw new Error(result.error || "Failed to update profile")
-      }
+      // Clear success message after 3 seconds
+      setTimeout(() => {
+        setSuccessMessage("")
+      }, 3000)
     } catch (error) {
       console.error("Profile update failed:", error)
 
@@ -191,6 +170,7 @@ const ProfilePage = () => {
       if (error instanceof Error) {
         if (error.message.includes("email")) {
           setErrors({ email: "Email address is already in use or invalid" })
+          return
         } else if (error.message.includes("network") || error.message.includes("fetch")) {
           errorMessage = "Network error. Please check your connection and try again."
         } else if (error.message.includes("validation")) {
@@ -200,10 +180,7 @@ const ProfilePage = () => {
         }
       }
 
-      // If no specific field error, show general error
-      if (!Object.keys(errors).length) {
-        setErrors({ name: errorMessage })
-      }
+      setErrors({ name: errorMessage })
     } finally {
       setIsSaving(false)
     }
@@ -212,12 +189,12 @@ const ProfilePage = () => {
   const handleCancel = () => {
     if (user) {
       setFormData({
-        name: user.name || "",
+        name: user.full_name || "",
         email: user.email || "",
         phone: user.phone || "",
-        address: user.address || "",
+        address: (user as any).address || "",
       })
-      setProfileImage(user.avatar || null)
+      setProfileImage(user.avatar_url || null)
     }
     setErrors({})
     setIsEditing(false)
@@ -225,18 +202,17 @@ const ProfilePage = () => {
   }
 
   const handleImageUpdate = (imageUrl: string) => {
-    if (!isEditing) {
-      console.log("Profile picture update blocked - not in edit mode")
-      return
-    }
-
+    console.log("Image update called with:", imageUrl, "Edit mode:", isEditing)
+    
     setProfileImage(imageUrl)
     // Mark as having unsaved changes when image is updated
-    setHasUnsavedChanges(true)
+    if (isEditing) {
+      setHasUnsavedChanges(true)
+    }
   }
 
-  // Show loading state while checking authentication
-  if (authLoading || isLoading) {
+  // Show minimal loading only when auth is loading and no user data
+  if (authLoading && !user) {
     return (
       <div className="bg-gray-900 min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -296,13 +272,29 @@ const ProfilePage = () => {
                   className="mb-4"
                   isEditable={isEditing}
                 />
-                <h2 className="text-xl font-semibold text-white">{user.name || "User"}</h2>
-                <p className="text-gray-400">{user.email}</p>
+                <h2 className="text-xl font-semibold text-white">{formData.name || user.full_name || "User"}</h2>
+                <p className="text-gray-400">{formData.email || user.email}</p>
+                {formData.phone && (
+                  <p className="text-gray-400 text-sm">{formData.phone}</p>
+                )}
                 <div className="flex items-center justify-center gap-2 mt-2">
                   <Shield size={16} className="text-green-400" />
                   <span className="text-sm text-green-400">Verified Account</span>
                 </div>
               </div>
+
+              {/* Address Display */}
+              {formData.address && (
+                <div className="bg-gray-700/50 rounded-lg p-4">
+                  <div className="flex items-start gap-2">
+                    <MapPin size={16} className="text-gold mt-1 flex-shrink-0" />
+                    <div>
+                      <h4 className="text-white font-medium text-sm mb-1">Delivery Address</h4>
+                      <p className="text-gray-300 text-sm leading-relaxed">{formData.address}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Tips Card */}
               <div className="mt-6 bg-blue-900/10 rounded-xl p-6 border border-blue-500/20">
@@ -474,11 +466,18 @@ const ProfilePage = () => {
                 <div className="flex flex-col sm:flex-row gap-3 pt-6 border-t border-gray-700">
                   <button
                     type="submit"
-                    disabled={isSaving}
+                    disabled={isSaving || !hasUnsavedChanges}
                     className="flex items-center justify-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium flex-1"
                   >
                     <Save size={18} />
-                    {isSaving ? "Saving..." : "Save Changes"}
+                    {isSaving ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        Saving...
+                      </>
+                    ) : (
+                      "Save Changes"
+                    )}
                   </button>
                   <button
                     type="button"

@@ -4,7 +4,7 @@ import type React from "react"
 
 import { useState, useCallback, useMemo } from "react"
 import Link from "next/link"
-import { ChevronDown, Search, Menu } from "lucide-react"
+import { ChevronDown, Search, Menu } from 'lucide-react'
 import { OptimizedImage } from "@/components/optimized-image"
 import Image from "next/image"
 import { OrderButton } from "@/components/ui/order-button"
@@ -83,7 +83,7 @@ const GALLERY_IMAGES: GalleryImage[] = [
   },
   {
     src: "https://images.unsplash.com/photo-1562158078-ef0fc409efce?q=80&w=300&h=300&auto=format&fit=crop&fm=webp",
-    alt: "Crispy tempura vegetables and shrimp",
+  alt: "Crispy tempura vegetables and shrimp",
   },
   {
     src: "https://images.unsplash.com/photo-1554502078-ef0fc409efce?q=80&w=300&h=300&auto=format&fit=crop&fm=webp",
@@ -193,20 +193,46 @@ export default function Home() {
   const galleryImages = useMemo(
     () =>
       GALLERY_IMAGES.map((item, index) => (
-        <div key={`gallery-${index}`} className="gallery-image rounded-lg overflow-hidden">
+        <div key={`gallery-${index}`} className="gallery-image rounded-lg overflow-hidden relative group cursor-pointer transform transition-all duration-300 hover:scale-105 hover:shadow-2xl hover:shadow-gold/20 active:scale-102 active:shadow-xl active:shadow-gold/30">
           <OptimizedImage
             src={item.src}
             alt={item.alt}
             width={300}
             height={300}
-            className="w-full h-64 object-cover transition-transform duration-300 hover:scale-105 animate-fade-in"
+            className="w-full h-64 object-cover transition-all duration-500 ease-in-out group-hover:scale-110 group-hover:brightness-110 animate-fade-in"
             priority={index < 4}
             sizes="(max-width: 768px) 50vw, (max-width: 1200px) 25vw, 300px"
           />
+        
+        {/* Subtle glow highlight effect */}
+        <div className="absolute inset-0 bg-gradient-to-r from-gold/10 via-gold/5 to-gold/10 opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity duration-300 rounded-lg"></div>
+        {/* Smooth overlay with animation */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-500 ease-in-out transform translate-y-full group-hover:translate-y-0">
+          <div className="absolute bottom-0 left-0 right-0 p-4 text-white transform translate-y-4 group-hover:translate-y-0 transition-all duration-500 delay-100">
+            <h3 className="font-serif text-lg mb-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 delay-200">
+              {item.alt.split(' ').slice(0, 3).join(' ')}
+            </h3>
+            <p className="text-sm text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity duration-300 delay-300">
+              {item.alt}
+            </p>
+          </div>
         </div>
-      )),
-    [],
-  )
+
+        {/* Mobile touch overlay */}
+        <div className="md:hidden absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 active:opacity-100 transition-all duration-300">
+          <div className="absolute bottom-0 left-0 right-0 p-4 text-white">
+            <h3 className="font-serif text-lg mb-2">
+              {item.alt.split(' ').slice(0, 3).join(' ')}
+            </h3>
+            <p className="text-sm text-gray-300">
+              {item.alt}
+            </p>
+          </div>
+        </div>
+      </div>
+    )),
+  [],
+)
 
   const testimonialCards = useMemo(
     () =>
@@ -702,54 +728,6 @@ export default function Home() {
                 </div>
               )}
             </form>
-          </div>
-        </div>
-      </section>
-
-      {/* About Section */}
-      <section className="py-20 bg-darkBg" aria-labelledby="about-heading">
-        <div className="container mx-auto px-4">
-          <header className="text-center mb-16">
-            <h2 id="about-heading" className="text-3xl md:text-4xl font-serif mb-2">
-              About Us
-            </h2>
-            <div className="h-1 w-24 red-accent mx-auto" aria-hidden="true"></div>
-            <p className="text-gray-300 max-w-2xl mx-auto mt-6">
-              Learn more about our restaurant and our commitment to providing the best Japanese dining experience.
-            </p>
-          </header>
-        </div>
-      </section>
-
-      {/* Popular Menu Section */}
-      <section className="py-20 bg-gradient-to-b from-darkBg to-black" aria-labelledby="menu-heading">
-        <div className="container mx-auto px-4">
-          <header className="text-center mb-16">
-            <h2 id="menu-heading" className="text-3xl md:text-4xl font-serif mb-2">
-              Our Popular Menu
-            </h2>
-            <div className="h-1 w-24 red-accent mx-auto" aria-hidden="true"></div>
-            <p className="text-gray-300 max-w-2xl mx-auto mt-6">
-              Discover our chef's selection of the most beloved dishes that have captivated our guests' palates.
-            </p>
-          </header>
-
-          <div
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"
-            role="list"
-            aria-label="Popular menu items"
-          >
-            {menuItems}
-          </div>
-
-          <div className="text-center mt-12">
-            <Link
-              href="/menu"
-              className="inline-block book-table-btn px-8 py-3 text-gold uppercase tracking-wider focus:outline-none focus:ring-2 focus:ring-gold"
-              aria-label="View our complete menu"
-            >
-              View Full Menu
-            </Link>
           </div>
         </div>
       </section>

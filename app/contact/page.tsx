@@ -1,6 +1,6 @@
 "use client"
 
-import { MapPin, Phone, Clock } from "lucide-react"
+import { MapPin, Phone, Clock } from 'lucide-react'
 
 export default function Contact() {
   const handleLocationClick = () => {
@@ -8,15 +8,15 @@ export default function Contact() {
   }
 
   const handleWhatsAppClick = () => {
-    window.open("https://wa.me/8801234567890", "_blank")
+    window.open("https://wa.me/message/J5JFSMILYBTQG1", "_blank")
   }
 
   const handleFacebookClick = () => {
-    window.open("https://facebook.com/sushiyakibd", "_blank")
+    window.open("https://www.facebook.com/yaki24sushipur", "_blank")
   }
 
   const handleInstagramClick = () => {
-    window.open("https://instagram.com/sushiyakibd", "_blank")
+    window.open("https://www.instagram.com/sushi_yaki_mohammadpur", "_blank")
   }
 
   const handlePhoneClick = () => {

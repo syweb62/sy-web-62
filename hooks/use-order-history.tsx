@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from "react"
 import { useAuth } from "@/hooks/use-auth"
 import { useCart } from "@/hooks/use-cart"
 import { toast } from "@/hooks/use-toast"
-import type { OrderFilters } from "@/components/order-filters"
+import { supabase } from "@/lib/supabase"
 
 interface OrderItem {
   id: string
@@ -26,6 +26,9 @@ interface Order {
   deliveryType: "pickup" | "delivery"
 }
 
+const ORDERS_PER_PAGE = 5
+
+// Mock data for fallback
 const MOCK_ORDERS: Order[] = [
   {
     id: "ORD-001",
@@ -73,130 +76,135 @@ const MOCK_ORDERS: Order[] = [
         price: 4.99,
         image: "/placeholder.svg?height=100&width=100&text=Miso+Soup",
       },
-      {
-        id: "5",
-        name: "Edamame",
-        quantity: 1,
-        price: 5.99,
-        image: "/placeholder.svg?height=100&width=100&text=Edamame",
-      },
     ],
-    subtotal: 42.95,
-    tax: 3.87,
+    subtotal: 36.95,
+    tax: 3.33,
     delivery: 0.0,
-    total: 46.82,
-  },
-  {
-    id: "ORD-003",
-    date: "2024-01-10T20:00:00Z",
-    status: "confirmed",
-    deliveryType: "delivery",
-    items: [
-      {
-        id: "6",
-        name: "Spicy Tuna Roll",
-        quantity: 1,
-        price: 12.99,
-        image: "/placeholder.svg?height=100&width=100&text=Spicy+Tuna",
-      },
-      {
-        id: "7",
-        name: "Chicken Teriyaki",
-        quantity: 1,
-        price: 16.99,
-        image: "/placeholder.svg?height=100&width=100&text=Chicken+Teriyaki",
-      },
-    ],
-    subtotal: 29.98,
-    tax: 2.7,
-    delivery: 3.99,
-    total: 36.67,
-  },
-  {
-    id: "ORD-004",
-    date: "2024-01-08T17:45:00Z",
-    status: "cancelled",
-    deliveryType: "pickup",
-    items: [
-      {
-        id: "8",
-        name: "Rainbow Roll",
-        quantity: 1,
-        price: 15.99,
-        image: "/placeholder.svg?height=100&width=100&text=Rainbow+Roll",
-      },
-    ],
-    subtotal: 15.99,
-    tax: 1.44,
-    delivery: 0.0,
-    total: 17.43,
-  },
-  {
-    id: "ORD-005",
-    date: "2024-01-05T19:30:00Z",
-    status: "delivered",
-    deliveryType: "delivery",
-    items: [
-      {
-        id: "9",
-        name: "Salmon Roll",
-        quantity: 2,
-        price: 10.99,
-        image: "/placeholder.svg?height=100&width=100&text=Salmon+Roll",
-      },
-      {
-        id: "10",
-        name: "Tuna Sashimi",
-        quantity: 1,
-        price: 19.99,
-        image: "/placeholder.svg?height=100&width=100&text=Tuna+Sashimi",
-      },
-      {
-        id: "11",
-        name: "Green Tea",
-        quantity: 2,
-        price: 2.99,
-        image: "/placeholder.svg?height=100&width=100&text=Green+Tea",
-      },
-    ],
-    subtotal: 47.96,
-    tax: 4.32,
-    delivery: 3.99,
-    total: 56.27,
-  },
+    total: 40.28,
+  }
 ]
-
-const ORDERS_PER_PAGE = 5
 
 export function useOrderHistory() {
   const { user } = useAuth()
-  const { addToCart } = useCart()
+  const { addItem } = useCart()
   const [orders, setOrders] = useState<Order[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [searchTerm, setSearchTerm] = useState("")
+  const [statusFilter, setStatusFilter] = useState<string>("")
   const [currentPage, setCurrentPage] = useState(1)
-  const [filters, setFilters] = useState<OrderFilters>({
-    sortBy: "date",
-    sortOrder: "desc",
-  })
 
-  // Simulate API call
+  // Fetch orders from Supabase
   useEffect(() => {
     const fetchOrders = async () => {
       setIsLoading(true)
       setError(null)
 
       try {
-        // Simulate network delay
-        await new Promise((resolve) => setTimeout(resolve, 600))
-
+        console.log('Fetching orders for user:', user?.id)
+        
         if (!user) {
-          throw new Error("User not authenticated")
+          console.log('No user found, clearing orders')
+          setOrders([])
+          return
         }
 
-        setOrders(MOCK_ORDERS)
+        if (!supabase) {
+          console.log('Supabase not available, using mock data')
+          setOrders(MOCK_ORDERS)
+          return
+        }
+
+        // Fetch orders from Supabase
+        const { data: ordersData, error: ordersError } = await supabase
+          .from('orders')
+          .select(`
+            order_id,
+            created_at,
+            status,
+            total_price,
+            subtotal,
+            vat,
+            delivery_charge,
+            payment_method,
+            customer_name,
+            phone,
+            address
+          `)
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+
+        if (ordersError) {
+          console.error('Error fetching orders:', ordersError)
+          // Fallback to mock data on error
+          console.log('Using mock data due to error')
+          setOrders(MOCK_ORDERS)
+          return
+        }
+
+        console.log('Fetched orders from Supabase:', ordersData)
+
+        if (!ordersData || ordersData.length === 0) {
+          console.log('No orders found, using mock data for demo')
+          setOrders(MOCK_ORDERS)
+          return
+        }
+
+        // Transform Supabase data to match our Order interface
+        const transformedOrders: Order[] = await Promise.all(
+          ordersData.map(async (order) => {
+            // Fetch order items for each order
+            const { data: itemsData, error: itemsError } = await supabase
+              .from('order_items')
+              .select(`
+                quantity,
+                price_at_purchase,
+                item_name,
+                item_image
+              `)
+              .eq('order_id', order.order_id)
+
+            if (itemsError) {
+              console.error('Error fetching order items:', itemsError)
+            }
+
+            const items: OrderItem[] = (itemsData || []).map((item: any, index: number) => ({
+              id: `${order.order_id}-${index}`,
+              name: item.item_name || 'Unknown Item',
+              quantity: item.quantity || 1,
+              price: item.price_at_purchase || 0,
+              image: item.item_image || "/placeholder.svg?height=100&width=100&text=Item",
+            }))
+
+            // Map status from database to our interface
+            const statusMap: Record<string, Order['status']> = {
+              'pending': 'pending',
+              'processing': 'preparing',
+              'completed': 'delivered',
+              'cancelled': 'cancelled'
+            }
+
+            return {
+              id: order.order_id,
+              date: order.created_at,
+              status: statusMap[order.status] || 'confirmed',
+              items,
+              subtotal: order.subtotal || 0,
+              tax: order.vat || 0,
+              delivery: order.delivery_charge || 0,
+              total: order.total_price || 0,
+              deliveryType: order.payment_method === 'delivery' ? 'delivery' : 'pickup',
+            }
+          })
+        )
+
+        console.log('Transformed orders:', transformedOrders)
+        setOrders(transformedOrders)
       } catch (err) {
+        console.error('Error fetching orders:', err)
         setError(err instanceof Error ? err.message : "Failed to fetch orders")
+        // Fallback to mock data on error
+        setOrders(MOCK_ORDERS)
       } finally {
         setIsLoading(false)
       }
@@ -207,68 +215,75 @@ export function useOrderHistory() {
 
   // Filter and sort orders
   const filteredOrders = useMemo(() => {
+    if (!Array.isArray(orders)) {
+      return []
+    }
+
     let filtered = [...orders]
 
     // Apply search filter
-    if (filters.search) {
-      const searchTerm = filters.search.toLowerCase()
+    if (searchTerm && searchTerm.trim()) {
+      const searchLower = searchTerm.toLowerCase().trim()
       filtered = filtered.filter(
         (order) =>
-          order.id.toLowerCase().includes(searchTerm) ||
-          order.items.some((item) => item.name.toLowerCase().includes(searchTerm)),
+          order.id.toLowerCase().includes(searchLower) ||
+          (order.items && Array.isArray(order.items) && order.items.some((item) => 
+            item.name && item.name.toLowerCase().includes(searchLower)
+          ))
       )
     }
 
     // Apply status filter
-    if (filters.status) {
-      filtered = filtered.filter((order) => order.status === filters.status)
+    if (statusFilter && statusFilter !== "all") {
+      filtered = filtered.filter((order) => order.status === statusFilter)
     }
 
-    // Apply sorting
+    // Sort by date (newest first)
     filtered.sort((a, b) => {
-      let comparison = 0
-
-      switch (filters.sortBy) {
-        case "date":
-          comparison = new Date(a.date).getTime() - new Date(b.date).getTime()
-          break
-        case "total":
-          comparison = a.total - b.total
-          break
-        case "status":
-          comparison = a.status.localeCompare(b.status)
-          break
-      }
-
-      return filters.sortOrder === "asc" ? comparison : -comparison
+      const dateA = new Date(a.date).getTime()
+      const dateB = new Date(b.date).getTime()
+      return dateB - dateA
     })
 
     return filtered
-  }, [orders, filters])
+  }, [orders, searchTerm, statusFilter])
 
   // Pagination
-  const totalPages = Math.ceil(filteredOrders.length / ORDERS_PER_PAGE)
-  const paginatedOrders = filteredOrders.slice((currentPage - 1) * ORDERS_PER_PAGE, currentPage * ORDERS_PER_PAGE)
+  const safeFilteredOrders = Array.isArray(filteredOrders) ? filteredOrders : []
+  const totalPages = Math.ceil(safeFilteredOrders.length / ORDERS_PER_PAGE)
+  const paginatedOrders = safeFilteredOrders.slice(
+    (currentPage - 1) * ORDERS_PER_PAGE, 
+    currentPage * ORDERS_PER_PAGE
+  )
 
-  const updateFilters = (newFilters: Partial<OrderFilters>) => {
-    setFilters((prev) => ({ ...prev, ...newFilters }))
-    setCurrentPage(1) // Reset to first page when filters change
+  const clearFilters = () => {
+    setSearchTerm("")
+    setStatusFilter("")
+    setCurrentPage(1)
   }
+
+  const hasActiveFilters = (searchTerm && searchTerm.trim() !== "") || (statusFilter && statusFilter !== "all")
 
   const reorderItems = async (items: OrderItem[]) => {
     try {
+      console.log('Reordering items:', items)
+      
+      if (!Array.isArray(items) || items.length === 0) {
+        throw new Error('No items to reorder')
+      }
+      
       for (const item of items) {
-        addToCart(
-          {
-            id: item.id,
-            name: item.name,
-            price: item.price,
-            image: item.image,
-            category: "sushi",
-            description: "",
-          },
-          item.quantity,
-        )
+        if (item && item.id && item.name && typeof item.price === 'number' && typeof item.quantity === 'number') {
+          addItem(
+            {
+              id: item.id,
+              name: item.name,
+              price: item.price,
+              image: item.image || "/placeholder.svg?height=100&width=100",
+            },
+            item.quantity
+          )
+        }
       }
 
       toast({
@@ -276,6 +291,7 @@ export function useOrderHistory() {
         description: `${items.length} item${items.length !== 1 ? "s" : ""} added to your cart`,
       })
     } catch (err) {
+      console.error('Error reordering items:', err)
       toast({
         title: "Error",
         description: "Failed to add items to cart",
@@ -284,16 +300,25 @@ export function useOrderHistory() {
     }
   }
 
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchTerm, statusFilter])
+
   return {
-    orders: paginatedOrders,
+    orders: paginatedOrders || [],
+    filteredOrders: safeFilteredOrders,
     isLoading,
     error,
-    filters,
-    updateFilters,
+    searchTerm,
+    setSearchTerm,
+    statusFilter,
+    setStatusFilter,
     currentPage,
-    totalPages,
     setCurrentPage,
-    totalOrders: filteredOrders.length,
+    totalPages,
+    clearFilters,
+    hasActiveFilters,
     reorderItems,
   }
 }

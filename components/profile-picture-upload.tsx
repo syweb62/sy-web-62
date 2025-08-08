@@ -2,11 +2,12 @@
 
 import type React from "react"
 
-import { useState, useRef } from "react"
-import { Camera, Upload, X, Check, User, Lock } from "lucide-react"
+import { useState, useRef, useEffect } from "react"
+import { Camera, Upload, X, Check, User, Lock } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 import Image from "next/image"
 import { IconButton } from "@/components/ui/icon-button"
+import { supabase } from "@/lib/supabase"
 
 interface ProfilePictureUploadProps {
   currentImage?: string | null
@@ -27,7 +28,7 @@ export function ProfilePictureUpload({
   const [imageError, setImageError] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file) return
 
@@ -46,40 +47,57 @@ export function ProfilePictureUpload({
     setIsUploading(true)
     setImageError(false)
 
-    // Create preview
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      const imageUrl = e.target?.result as string
-      setPreviewImage(imageUrl)
+    try {
+      // Create preview immediately
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        const imageUrl = e.target?.result as string
+        setPreviewImage(imageUrl)
+      }
+      reader.readAsDataURL(file)
 
-      // Simulate upload process
-      setTimeout(() => {
-        try {
-          // Call the callback to update parent component
-          onImageUpdate(imageUrl)
-          setIsUploading(false)
-          setUploadSuccess(true)
+      // For now, we'll use the data URL as the image source
+      // In a real implementation, you would upload to Supabase Storage
+      const reader2 = new FileReader()
+      reader2.onload = async (e) => {
+        const imageUrl = e.target?.result as string
+        
+        // Simulate upload delay
+        setTimeout(() => {
+          try {
+            onImageUpdate(imageUrl)
+            setIsUploading(false)
+            setUploadSuccess(true)
 
-          // Hide success message after 3 seconds
-          setTimeout(() => setUploadSuccess(false), 3000)
-        } catch (error) {
-          console.error("Failed to update image:", error)
-          setIsUploading(false)
-          alert("Failed to update image. Please try again.")
-        }
-      }, 1500)
-    }
+            // Hide success message after 2 seconds
+            setTimeout(() => setUploadSuccess(false), 2000)
+          } catch (error) {
+            console.error("Failed to update image:", error)
+            setIsUploading(false)
+            alert("Failed to update image. Please try again.")
+          }
+        }, 500)
+      }
+      reader2.readAsDataURL(file)
 
-    reader.onerror = () => {
+    } catch (error) {
+      console.error("Upload error:", error)
       setIsUploading(false)
       setImageError(true)
-      alert("Failed to read the image file. Please try again.")
+      alert("Failed to upload image. Please try again.")
     }
-
-    reader.readAsDataURL(file)
   }
 
+  useEffect(() => {
+    if (currentImage !== previewImage) {
+      setPreviewImage(currentImage)
+      setImageError(false)
+    }
+  }, [currentImage])
+
   const handleRemoveImage = () => {
+    if (!isEditable) return
+    
     setPreviewImage(null)
     setImageError(false)
     onImageUpdate("")
@@ -89,6 +107,7 @@ export function ProfilePictureUpload({
   }
 
   const triggerFileInput = () => {
+    if (!isEditable) return
     fileInputRef.current?.click()
   }
 
@@ -188,6 +207,7 @@ export function ProfilePictureUpload({
         accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
         onChange={handleFileSelect}
         className="hidden"
+        disabled={!isEditable}
       />
 
       {/* Upload button - only show when editable */}
@@ -228,8 +248,6 @@ export function ProfilePictureUpload({
       {imageError && (
         <p className="text-center text-sm text-red-400 mt-2">⚠️ Failed to load image. Please try uploading again.</p>
       )}
-
-      {/* File requirements */}
     </div>
   )
 }

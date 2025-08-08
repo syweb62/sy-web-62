@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import Image from "next/image"
-import { ChevronDown, ChevronUp, Package, Clock, CheckCircle, XCircle, Truck } from "lucide-react"
+import { ChevronDown, ChevronUp, Package, Clock, CheckCircle, XCircle, Truck } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 
@@ -46,14 +46,30 @@ export function OrderCard({ order, onReorder }: OrderCardProps) {
   const StatusIcon = statusInfo.icon
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    })
+    try {
+      return new Date(dateString).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    } catch (error) {
+      return "Invalid Date"
+    }
   }
+
+  // Safe number formatting with fallbacks
+  const safeToFixed = (value: number | undefined | null, decimals: number = 2): string => {
+    const num = typeof value === 'number' && !isNaN(value) ? value : 0
+    return num.toFixed(decimals)
+  }
+
+  const safeItems = Array.isArray(order.items) ? order.items : []
+  const safeSubtotal = typeof order.subtotal === 'number' ? order.subtotal : 0
+  const safeTax = typeof order.tax === 'number' ? order.tax : 0
+  const safeDelivery = typeof order.delivery === 'number' ? order.delivery : 0
+  const safeTotal = typeof order.total === 'number' ? order.total : 0
 
   return (
     <div className="bg-black/30 rounded-lg border border-gray-800 p-6">
@@ -72,12 +88,12 @@ export function OrderCard({ order, onReorder }: OrderCardProps) {
 
         <div className="flex items-center gap-4">
           <div className="text-right">
-            <p className="text-2xl font-bold text-yellow-400">${order.total.toFixed(2)}</p>
+            <p className="text-2xl font-bold text-yellow-400">৳{safeToFixed(safeTotal)}</p>
             <p className="text-gray-400 text-sm">
-              {order.items.length} item{order.items.length !== 1 ? "s" : ""}
+              {safeItems.length} item{safeItems.length !== 1 ? "s" : ""}
             </p>
           </div>
-          <Button onClick={() => onReorder(order.items)} size="sm">
+          <Button onClick={() => onReorder(safeItems)} size="sm">
             Reorder
           </Button>
         </div>
@@ -85,25 +101,25 @@ export function OrderCard({ order, onReorder }: OrderCardProps) {
 
       {/* Items Preview */}
       <div className="space-y-3">
-        {order.items.slice(0, 2).map((item) => (
-          <div key={item.id} className="flex items-center gap-3">
+        {safeItems.slice(0, 2).map((item, index) => (
+          <div key={item.id || index} className="flex items-center gap-3">
             <div className="relative w-12 h-12 rounded-lg overflow-hidden">
               <Image
                 src={item.image || "/placeholder.svg?height=48&width=48"}
-                alt={item.name}
+                alt={item.name || "Item"}
                 fill
                 className="object-cover"
               />
             </div>
             <div className="flex-1">
-              <p className="font-medium">{item.name}</p>
-              <p className="text-gray-400 text-sm">Qty: {item.quantity}</p>
+              <p className="font-medium">{item.name || "Unknown Item"}</p>
+              <p className="text-gray-400 text-sm">Qty: {item.quantity || 1}</p>
             </div>
-            <p className="font-medium">${(item.price * item.quantity).toFixed(2)}</p>
+            <p className="font-medium">৳{safeToFixed((item.price || 0) * (item.quantity || 1))}</p>
           </div>
         ))}
 
-        {order.items.length > 2 && (
+        {safeItems.length > 2 && (
           <Button
             variant="ghost"
             onClick={() => setIsExpanded(!isExpanded)}
@@ -115,30 +131,30 @@ export function OrderCard({ order, onReorder }: OrderCardProps) {
               </>
             ) : (
               <>
-                View All Items ({order.items.length - 2} more) <ChevronDown size={16} className="ml-1" />
+                View All Items ({safeItems.length - 2} more) <ChevronDown size={16} className="ml-1" />
               </>
             )}
           </Button>
         )}
 
         {/* Expanded Items */}
-        {isExpanded && order.items.length > 2 && (
+        {isExpanded && safeItems.length > 2 && (
           <div className="space-y-3 pt-3 border-t border-gray-700">
-            {order.items.slice(2).map((item) => (
-              <div key={item.id} className="flex items-center gap-3">
+            {safeItems.slice(2).map((item, index) => (
+              <div key={item.id || `expanded-${index}`} className="flex items-center gap-3">
                 <div className="relative w-12 h-12 rounded-lg overflow-hidden">
                   <Image
                     src={item.image || "/placeholder.svg?height=48&width=48"}
-                    alt={item.name}
+                    alt={item.name || "Item"}
                     fill
                     className="object-cover"
                   />
                 </div>
                 <div className="flex-1">
-                  <p className="font-medium">{item.name}</p>
-                  <p className="text-gray-400 text-sm">Qty: {item.quantity}</p>
+                  <p className="font-medium">{item.name || "Unknown Item"}</p>
+                  <p className="text-gray-400 text-sm">Qty: {item.quantity || 1}</p>
                 </div>
-                <p className="font-medium">${(item.price * item.quantity).toFixed(2)}</p>
+                <p className="font-medium">৳{safeToFixed((item.price || 0) * (item.quantity || 1))}</p>
               </div>
             ))}
           </div>
@@ -149,19 +165,19 @@ export function OrderCard({ order, onReorder }: OrderCardProps) {
           <div className="pt-4 border-t border-gray-700 space-y-2">
             <div className="flex justify-between text-sm">
               <span className="text-gray-400">Subtotal</span>
-              <span>${order.subtotal.toFixed(2)}</span>
+              <span>৳{safeToFixed(safeSubtotal)}</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-gray-400">Tax</span>
-              <span>${order.tax.toFixed(2)}</span>
+              <span className="text-gray-400">VAT</span>
+              <span>৳{safeToFixed(safeTax)}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-400">{order.deliveryType === "delivery" ? "Delivery" : "Service Fee"}</span>
-              <span>${order.delivery.toFixed(2)}</span>
+              <span>৳{safeToFixed(safeDelivery)}</span>
             </div>
             <div className="flex justify-between font-bold text-lg pt-2 border-t border-gray-700">
               <span>Total</span>
-              <span className="text-yellow-400">${order.total.toFixed(2)}</span>
+              <span className="text-yellow-400">৳{safeToFixed(safeTotal)}</span>
             </div>
           </div>
         )}

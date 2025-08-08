@@ -1,14 +1,16 @@
 "use client"
-import { useAuth } from "@/hooks/use-auth"
+
+import { useState } from "react"
 import { useOrderHistory } from "@/hooks/use-order-history"
-import { OrderFilters } from "@/components/order-filters"
 import { OrderCard } from "@/components/order-card"
+import { OrderFilters } from "@/components/order-filters"
 import { OrderPagination } from "@/components/order-pagination"
 import { LoadingSpinner } from "@/components/loading-spinner"
-import { Card, CardContent } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { ShoppingBag, RefreshCw } from 'lucide-react'
+import Link from "next/link"
 
 export default function OrdersPage() {
-  const { user } = useAuth()
   const {
     orders,
     filteredOrders,
@@ -26,12 +28,46 @@ export default function OrdersPage() {
     reorderItems,
   } = useOrderHistory()
 
-  if (!user) {
+  const [isRefreshing, setIsRefreshing] = useState(false)
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true)
+    // Force a page reload to refresh data
+    window.location.reload()
+  }
+
+  if (isLoading) {
     return (
-      <div className="min-h-screen bg-darkBg text-white flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold mb-4">Please sign in to view your orders</h1>
-          <p className="text-gray-400">You need to be logged in to access your order history.</p>
+      <div className="min-h-screen bg-darkBg text-white py-8">
+        <div className="container mx-auto px-4">
+          <div className="max-w-4xl mx-auto">
+            <h1 className="text-3xl font-bold mb-8 text-gold">Order History</h1>
+            <div className="flex justify-center items-center py-20">
+              <LoadingSpinner />
+              <span className="ml-3 text-gray-400">Loading your orders...</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-darkBg text-white py-8">
+        <div className="container mx-auto px-4">
+          <div className="max-w-4xl mx-auto">
+            <h1 className="text-3xl font-bold mb-8 text-gold">Order History</h1>
+            <div className="text-center py-20">
+              <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-6 mb-6">
+                <p className="text-red-400 mb-4">Failed to load orders: {error}</p>
+                <Button onClick={handleRefresh} disabled={isRefreshing}>
+                  {isRefreshing ? <LoadingSpinner /> : <RefreshCw size={16} />}
+                  <span className="ml-2">Try Again</span>
+                </Button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     )
@@ -40,66 +76,80 @@ export default function OrdersPage() {
   return (
     <div className="min-h-screen bg-darkBg text-white py-8">
       <div className="container mx-auto px-4">
-        <div className="max-w-6xl mx-auto">
+        <div className="max-w-4xl mx-auto">
           {/* Header */}
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gold mb-2">Order History</h1>
-            <p className="text-gray-400">Track and manage your past orders</p>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
+            <h1 className="text-3xl font-bold text-gold">Order History</h1>
+            <div className="flex gap-2">
+              <Button onClick={handleRefresh} variant="outline" size="sm" disabled={isRefreshing}>
+                {isRefreshing ? <LoadingSpinner /> : <RefreshCw size={16} />}
+                <span className="ml-2">Refresh</span>
+              </Button>
+              <Link href="/menu">
+                <Button size="sm">
+                  <ShoppingBag size={16} />
+                  <span className="ml-2">Order Now</span>
+                </Button>
+              </Link>
+            </div>
           </div>
 
-          {/* Main Content */}
-          <div className="space-y-6">
-            {/* Filters */}
-            <OrderFilters
-              searchTerm={searchTerm}
-              onSearchChange={setSearchTerm}
-              statusFilter={statusFilter}
-              onStatusChange={setStatusFilter}
-              onClearFilters={clearFilters}
-              hasActiveFilters={hasActiveFilters}
-              totalOrders={filteredOrders.length}
-            />
+          {/* Filters */}
+          <OrderFilters
+            searchTerm={searchTerm}
+            setSearchTerm={setSearchTerm}
+            statusFilter={statusFilter}
+            setStatusFilter={setStatusFilter}
+            clearFilters={clearFilters}
+            hasActiveFilters={hasActiveFilters}
+            totalOrders={filteredOrders.length}
+          />
 
-            {/* Orders List */}
-            {isLoading ? (
-              <div className="flex justify-center py-12">
-                <LoadingSpinner />
-              </div>
-            ) : error ? (
-              <Card className="bg-red-900/20 border-red-800">
-                <CardContent className="p-6 text-center">
-                  <p className="text-red-400">Error loading orders: {error}</p>
-                </CardContent>
-              </Card>
-            ) : filteredOrders.length === 0 ? (
-              <Card className="bg-black/30 border-gray-800">
-                <CardContent className="p-8 text-center">
-                  <h3 className="text-xl font-semibold mb-2">No orders found</h3>
-                  <p className="text-gray-400 mb-4">
-                    {hasActiveFilters
-                      ? "Try adjusting your search or filter criteria."
-                      : "You haven't placed any orders yet."}
-                  </p>
-                  {hasActiveFilters && (
-                    <button onClick={clearFilters} className="text-gold hover:text-gold/80 transition-colors">
-                      Clear all filters
-                    </button>
-                  )}
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="space-y-4">
-                {filteredOrders.map((order) => (
-                  <OrderCard key={order.id} order={order} onReorder={reorderItems} />
+          {/* Orders List */}
+          {orders.length === 0 ? (
+            <div className="text-center py-20">
+              <ShoppingBag size={80} className="mx-auto text-gray-500 mb-6" />
+              <h2 className="text-2xl font-semibold mb-4">No orders found</h2>
+              <p className="text-gray-400 mb-8">
+                {hasActiveFilters
+                  ? "No orders match your current filters. Try adjusting your search criteria."
+                  : "You haven't placed any orders yet. Start by browsing our menu!"}
+              </p>
+              {hasActiveFilters ? (
+                <Button onClick={clearFilters} variant="outline">
+                  Clear Filters
+                </Button>
+              ) : (
+                <Link href="/menu">
+                  <Button>
+                    Browse Menu <ShoppingBag size={16} className="ml-2" />
+                  </Button>
+                </Link>
+              )}
+            </div>
+          ) : (
+            <>
+              {/* Orders */}
+              <div className="space-y-6 mb-8">
+                {orders.map((order) => (
+                  <OrderCard
+                    key={order.id}
+                    order={order}
+                    onReorder={reorderItems}
+                  />
                 ))}
               </div>
-            )}
 
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <OrderPagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
-            )}
-          </div>
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <OrderPagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  onPageChange={setCurrentPage}
+                />
+              )}
+            </>
+          )}
         </div>
       </div>
     </div>
