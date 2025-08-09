@@ -173,7 +173,7 @@ export default function WhatsAppChat() {
           />
           
           {/* Single Live Dot Indicator */}
-          <div className="absolute top-1 right-1">
+          <div className="absolute -top-1 -right-1">
             <div className="relative">
               {/* Outer pulsing ring */}
               <div className="absolute w-4 h-4 bg-green-400 rounded-full animate-ping opacity-75"></div>

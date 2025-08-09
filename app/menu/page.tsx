@@ -1,13 +1,13 @@
 "use client"
 
 import { useState } from "react"
-import { Search, ShoppingBag } from 'lucide-react'
+import { Search, ShoppingBag } from "lucide-react"
 import ImageWithFallback from "@/components/image-fallback"
 import { useCart } from "@/hooks/use-cart"
 import { Button } from "@/components/ui/button"
 import { OrderButton } from "@/components/ui/order-button"
 
-// Mock menu data with availability status
+// Mock menu data
 const menuItems = [
   {
     id: "item-1",
@@ -16,7 +16,6 @@ const menuItems = [
     price: 24.99,
     description: "Assortment of fresh nigiri and maki rolls with wasabi, ginger, and soy sauce.",
     image: "https://images.unsplash.com/photo-1579584425555-c3ce17fd4351?q=80&w=600&h=400&auto=format&fit=crop",
-    is_available: true, // Available
   },
   {
     id: "item-2",
@@ -25,7 +24,6 @@ const menuItems = [
     price: 22.99,
     description: "Grilled salmon glazed with our signature teriyaki sauce, served with steamed rice.",
     image: "https://images.unsplash.com/photo-1569050467447-ce54b3bbc37d?q=80&w=600&h=400&auto=format&fit=crop",
-    is_available: false, // Unavailable
   },
   {
     id: "item-3",
@@ -34,7 +32,6 @@ const menuItems = [
     price: 18.99,
     description: "Rich pork broth with ramen noodles, soft-boiled egg, chashu pork, and fresh vegetables.",
     image: "https://images.unsplash.com/photo-1557872943-16a5ac26437e?q=80&w=600&h=400&auto=format&fit=crop",
-    is_available: true, // Available
   },
   {
     id: "item-4",
@@ -43,7 +40,6 @@ const menuItems = [
     price: 8.99,
     description: "Pan-fried dumplings filled with seasoned ground pork and vegetables.",
     image: "https://images.unsplash.com/photo-1541696432-82c6da8ce7bf?q=80&w=600&h=400&auto=format&fit=crop",
-    is_available: true, // Available
   },
   {
     id: "item-5",
@@ -52,7 +48,6 @@ const menuItems = [
     price: 16.99,
     description: "Eel and cucumber inside, avocado and tobiko on top, drizzled with eel sauce.",
     image: "https://images.unsplash.com/photo-1617196034183-421b4917c92d?q=80&w=600&h=400&auto=format&fit=crop",
-    is_available: false, // Unavailable
   },
   {
     id: "item-6",
@@ -61,7 +56,6 @@ const menuItems = [
     price: 4.99,
     description: "Traditional Japanese soup with tofu, seaweed, and green onions.",
     image: "https://images.unsplash.com/photo-1607301406259-dfb186e15de8?q=80&w=600&h=400&auto=format&fit=crop",
-    is_available: true, // Available
   },
   {
     id: "item-7",
@@ -70,7 +64,6 @@ const menuItems = [
     price: 19.99,
     description: "Crispy breaded chicken cutlet served with rice, salad, and miso soup.",
     image: "https://images.unsplash.com/photo-1631709497146-a239ef373cf1?q=80&w=600&h=400&auto=format&fit=crop",
-    is_available: true, // Available
   },
   {
     id: "item-8",
@@ -79,7 +72,6 @@ const menuItems = [
     price: 6.99,
     description: "Creamy ice cream infused with premium matcha green tea.",
     image: "https://images.unsplash.com/photo-1561845730-208ad5910553?q=80&w=600&h=400&auto=format&fit=crop",
-    is_available: false, // Unavailable
   },
   {
     id: "item-9",
@@ -88,7 +80,6 @@ const menuItems = [
     price: 12.99,
     description: "Traditional Japanese rice wine, served warm or cold.",
     image: "https://images.unsplash.com/photo-1627042633145-b780d842ba0a?q=80&w=600&h=400&auto=format&fit=crop",
-    is_available: true, // Available
   },
   {
     id: "item-10",
@@ -97,7 +88,6 @@ const menuItems = [
     price: 7.99,
     description: "Sweet rice dough filled with ice cream in various flavors.",
     image: "https://images.unsplash.com/photo-1563805042-7684c019e1cb?q=80&w=600&h=400&auto=format&fit=crop",
-    is_available: true, // Available
   },
   {
     id: "item-11",
@@ -106,7 +96,6 @@ const menuItems = [
     price: 14.99,
     description: "Fresh tuna mixed with spicy mayo and cucumber, wrapped in seaweed and rice.",
     image: "https://images.unsplash.com/photo-1611143669185-af224c5e3252?q=80&w=600&h=400&auto=format&fit=crop",
-    is_available: true, // Available
   },
   {
     id: "item-12",
@@ -115,7 +104,6 @@ const menuItems = [
     price: 3.99,
     description: "Traditional Japanese green tea, served hot.",
     image: "https://images.unsplash.com/photo-1564890369478-c89ca6d9cde9?q=80&w=600&h=400&auto=format&fit=crop",
-    is_available: true, // Available
   },
 ]
 
@@ -132,7 +120,6 @@ const categories = [
 export default function Menu() {
   const [activeCategory, setActiveCategory] = useState("all")
   const [searchQuery, setSearchQuery] = useState("")
-  const [showUnavailable, setShowUnavailable] = useState(false) // Default to hide unavailable items
   const { addItem, totalItems } = useCart()
   const [addedItems, setAddedItems] = useState<Record<string, boolean>>({})
 
@@ -141,11 +128,7 @@ export default function Menu() {
     const matchesSearch =
       item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       item.description.toLowerCase().includes(searchQuery.toLowerCase())
-    
-    // Hide unavailable items by default, show them only when checkbox is unchecked
-    const matchesAvailability = showUnavailable || item.is_available
-    
-    return matchesCategory && matchesSearch && matchesAvailability
+    return matchesCategory && matchesSearch
   })
 
   const handleAddToCart = (item: (typeof menuItems)[0]) => {
@@ -207,19 +190,6 @@ export default function Menu() {
               ))}
             </div>
 
-            {/* Availability Toggle */}
-            <div className="flex items-center gap-2">
-              <label className="flex items-center gap-2 text-white text-sm">
-                <input
-                  type="checkbox"
-                  checked={!showUnavailable}
-                  onChange={(e) => setShowUnavailable(!e.target.checked)}
-                  className="rounded"
-                />
-                Hide Unavailable
-              </label>
-            </div>
-
             {/* Cart Button */}
             <div className="md:hidden">
               <Button onClick={() => (window.location.href = "/cart")} className="flex items-center gap-2">
@@ -235,9 +205,7 @@ export default function Menu() {
               filteredItems.map((item) => (
                 <div
                   key={item.id}
-                  className={`menu-item bg-darkBg/80 rounded-lg overflow-hidden shadow-lg border border-gray-800 group relative ${
-                    !item.is_available ? 'opacity-60' : ''
-                  }`}
+                  className="menu-item bg-darkBg/80 rounded-lg overflow-hidden shadow-lg border border-gray-800 group relative"
                 >
                   <div className="h-64 relative overflow-hidden group">
                     <ImageWithFallback
@@ -245,65 +213,41 @@ export default function Menu() {
                       alt={item.name}
                       width={600}
                       height={400}
-                      className={`object-cover transition-transform duration-300 group-hover:scale-105 ${
-                        !item.is_available ? 'grayscale' : ''
-                      }`}
+                      className="object-cover transition-transform duration-300 group-hover:scale-105"
                       fill
                     />
                     {/* Category Badge */}
                     <div className="absolute top-3 right-3 bg-gold/90 backdrop-blur-sm text-black text-sm font-medium px-3 py-1 rounded-full border border-gold z-20 shadow-lg">
                       {item.category}
                     </div>
-                    
-                    {/* Unavailable Badge */}
-                    {!item.is_available && (
-                      <div className="absolute top-3 left-3 bg-red-600/90 backdrop-blur-sm text-white text-sm font-medium px-3 py-1 rounded-full border border-red-600 z-20 shadow-lg">
-                        Unavailable
-                      </div>
-                    )}
                   </div>
 
                   <div className="p-6">
                     <div className="flex justify-between items-start mb-3">
-                      <h3 className={`text-xl font-serif ${item.is_available ? 'text-white' : 'text-gray-400'}`}>
-                        {item.name}
-                      </h3>
-                      <span className={`font-medium text-lg ${item.is_available ? 'text-gold' : 'text-gray-500'}`}>
-                        BDT {item.price.toFixed(2)}
-                      </span>
+                      <h3 className="text-xl font-serif text-white">{item.name}</h3>
+                      <span className="text-gold font-medium text-lg">BDT {item.price.toFixed(2)}</span>
                     </div>
-                    <p className={`text-sm mb-4 line-clamp-2 ${item.is_available ? 'text-gray-300' : 'text-gray-500'}`}>
-                      {item.description}
-                    </p>
+                    <p className="text-gray-300 text-sm mb-4 line-clamp-2">{item.description}</p>
 
-                    {/* Order Button - Disabled if unavailable */}
-                    {item.is_available ? (
-                      <OrderButton
-                        item={{
-                          id: item.id,
-                          name: item.name,
-                          price: item.price,
-                          image: item.image,
-                          description: item.description,
-                          category: item.category,
-                        }}
-                        fullWidth
-                        className="shadow-lg"
-                        onOrderComplete={(orderId) => {
-                          setAddedItems((prev) => ({ ...prev, [item.id]: true }))
-                          setTimeout(() => {
-                            setAddedItems((prev) => ({ ...prev, [item.id]: false }))
-                          }, 3000)
-                        }}
-                      />
-                    ) : (
-                      <Button 
-                        disabled 
-                        className="w-full bg-gray-600 text-gray-400 cursor-not-allowed"
-                      >
-                        Currently Unavailable
-                      </Button>
-                    )}
+                    {/* Main Add to Cart Button */}
+                    <OrderButton
+                      item={{
+                        id: item.id,
+                        name: item.name,
+                        price: item.price,
+                        image: item.image,
+                        description: item.description,
+                        category: item.category,
+                      }}
+                      fullWidth
+                      className="shadow-lg"
+                      onOrderComplete={(orderId) => {
+                        setAddedItems((prev) => ({ ...prev, [item.id]: true }))
+                        setTimeout(() => {
+                          setAddedItems((prev) => ({ ...prev, [item.id]: false }))
+                        }, 3000)
+                      }}
+                    />
                   </div>
                 </div>
               ))
@@ -312,6 +256,69 @@ export default function Menu() {
                 <p className="text-xl text-gray-400">No menu items found. Please try a different search.</p>
               </div>
             )}
+          </div>
+        </div>
+      </section>
+
+      {/* Special Offers Section */}
+      <section className="py-20 bg-black">
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-serif mb-2">Special Offers</h2>
+            <div className="h-1 w-24 red-accent mx-auto"></div>
+            <p className="text-gray-300 max-w-2xl mx-auto mt-6">
+              Enjoy our limited-time promotions and seasonal specialties.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {/* Special Offer 1 */}
+            <div className="bg-darkBg/50 rounded-lg overflow-hidden border border-gray-800">
+              <div className="grid grid-cols-1 md:grid-cols-2">
+                <div className="h-full relative min-h-[200px]">
+                  <ImageWithFallback
+                    src="https://images.unsplash.com/photo-1617196034183-421b4917c92d?q=80&w=600&h=400&auto=format&fit=crop"
+                    alt="Lunch Special"
+                    width={600}
+                    height={400}
+                    className="object-cover"
+                    fill
+                  />
+                </div>
+                <div className="p-6">
+                  <h3 className="text-xl font-serif mb-2">Lunch Special</h3>
+                  <p className="text-gold font-medium mb-4">BDT 16.99 | Monday-Friday, 11am-3pm</p>
+                  <p className="text-gray-300 text-sm mb-4">
+                    Choose any main dish with miso soup, salad, and a soft drink.
+                  </p>
+                  <Button>Add to Cart</Button>
+                </div>
+              </div>
+            </div>
+
+            {/* Special Offer 2 */}
+            <div className="bg-darkBg/50 rounded-lg overflow-hidden border border-gray-800">
+              <div className="grid grid-cols-1 md:grid-cols-2">
+                <div className="h-full relative min-h-[200px]">
+                  <ImageWithFallback
+                    src="https://images.unsplash.com/photo-1579584425555-c3ce17fd4351?q=80&w=600&h=400&auto=format&fit=crop"
+                    alt="Sushi Platter for Two"
+                    width={600}
+                    height={400}
+                    className="object-cover"
+                    fill
+                  />
+                </div>
+                <div className="p-6">
+                  <h3 className="text-xl font-serif mb-2">Sushi Platter for Two</h3>
+                  <p className="text-gold font-medium mb-4">BDT 49.99 | Every Day</p>
+                  <p className="text-gray-300 text-sm mb-4">
+                    Deluxe sushi platter with 24 pieces of assorted sushi and two miso soups.
+                  </p>
+                  <Button>Add to Cart</Button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>

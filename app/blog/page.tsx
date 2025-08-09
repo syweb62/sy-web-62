@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { Calendar, User, ArrowRight } from 'lucide-react'
+import { Calendar, User, ArrowRight } from "lucide-react"
 import ImageWithFallback from "@/components/image-fallback"
 
 export default function Blog() {
@@ -143,6 +143,33 @@ export default function Blog() {
                 <ArrowRight size={16} />
               </button>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Newsletter Section */}
+      <section className="py-20 bg-black">
+        <div className="container mx-auto px-4">
+          <div className="max-w-3xl mx-auto text-center">
+            <h2 className="text-3xl md:text-4xl font-serif mb-6">Subscribe to Our Newsletter</h2>
+            <p className="text-gray-300 mb-8">Stay updated with our latest articles, recipes, and special offers.</p>
+
+            <form className="flex flex-col sm:flex-row gap-4 max-w-xl mx-auto">
+              <input
+                type="email"
+                placeholder="Your email address"
+                className="flex-1 py-3 px-4 bg-darkBg border border-gray-700 rounded-md text-white focus:outline-none focus:border-gold"
+                required
+              />
+              <button
+                type="submit"
+                className="px-6 py-3 bg-gold text-black font-medium rounded-md hover:bg-gold/80 transition-colors whitespace-nowrap"
+              >
+                Subscribe
+              </button>
+            </form>
+
+            <p className="text-gray-400 text-sm mt-4">We respect your privacy. Unsubscribe at any time.</p>
           </div>
         </div>
       </section>
