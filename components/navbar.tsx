@@ -75,11 +75,11 @@ const Navbar = () => {
   const logoConfig = useMemo(() => {
     const { width, height } = screenDimensions
 
-    // Default config - adjusted for the new logo aspect ratio
+    // Default config - smaller dimensions
     let config = {
-      navbar: { width: 120, height: 48 },
-      mobile: { width: 100, height: 40 },
-      skeleton: { width: 120, height: 48 },
+      navbar: { width: 90, height: 36 },
+      mobile: { width: 80, height: 32 },
+      skeleton: { width: 90, height: 36 },
     }
 
     if (width === 0) return config // Initial state
@@ -87,32 +87,32 @@ const Navbar = () => {
     // Portrait orientation adjustments
     if (orientation === "portrait") {
       if (width <= 320) {
-        // Very small phones (iPhone SE, etc.)
+        // Very small phones
         config = {
-          navbar: { width: 90, height: 36 },
-          mobile: { width: 80, height: 32 },
-          skeleton: { width: 90, height: 36 },
+          navbar: { width: 70, height: 28 },
+          mobile: { width: 60, height: 24 },
+          skeleton: { width: 70, height: 28 },
         }
       } else if (width <= 375) {
         // Small phones
         config = {
-          navbar: { width: 100, height: 40 },
-          mobile: { width: 90, height: 36 },
-          skeleton: { width: 100, height: 40 },
+          navbar: { width: 80, height: 32 },
+          mobile: { width: 70, height: 28 },
+          skeleton: { width: 80, height: 32 },
         }
       } else if (width <= 414) {
         // Medium phones
         config = {
-          navbar: { width: 110, height: 44 },
-          mobile: { width: 100, height: 40 },
-          skeleton: { width: 110, height: 44 },
+          navbar: { width: 85, height: 34 },
+          mobile: { width: 75, height: 30 },
+          skeleton: { width: 85, height: 34 },
         }
       } else if (width <= 768) {
         // Large phones and small tablets
         config = {
-          navbar: { width: 120, height: 48 },
-          mobile: { width: 110, height: 44 },
-          skeleton: { width: 120, height: 48 },
+          navbar: { width: 90, height: 36 },
+          mobile: { width: 80, height: 32 },
+          skeleton: { width: 90, height: 36 },
         }
       }
     } else {
@@ -120,23 +120,23 @@ const Navbar = () => {
       if (width <= 667) {
         // Small phones in landscape
         config = {
-          navbar: { width: 80, height: 32 },
-          mobile: { width: 70, height: 28 },
-          skeleton: { width: 80, height: 32 },
+          navbar: { width: 60, height: 24 },
+          mobile: { width: 50, height: 20 },
+          skeleton: { width: 60, height: 24 },
         }
       } else if (width <= 736) {
         // Medium phones in landscape
         config = {
-          navbar: { width: 90, height: 36 },
-          mobile: { width: 80, height: 32 },
-          skeleton: { width: 90, height: 36 },
+          navbar: { width: 70, height: 28 },
+          mobile: { width: 60, height: 24 },
+          skeleton: { width: 70, height: 28 },
         }
       } else if (width <= 1024) {
         // Large phones and tablets in landscape
         config = {
-          navbar: { width: 110, height: 44 },
-          mobile: { width: 100, height: 40 },
-          skeleton: { width: 110, height: 44 },
+          navbar: { width: 85, height: 34 },
+          mobile: { width: 75, height: 30 },
+          skeleton: { width: 85, height: 34 },
         }
       }
     }
@@ -413,9 +413,9 @@ const Navbar = () => {
     return user?.name || user?.full_name?.split(" ")[0] || "User"
   }, [user?.name, user?.full_name])
 
-  // Dynamic navbar height based on orientation
-  const navbarHeight = orientation === "landscape" && screenDimensions.width <= 736 ? 60 : 80
-  const contentHeight = navbarHeight - 24 // Accounting for padding
+  // Dynamic navbar height based on orientation - more compact
+  const navbarHeight = orientation === "landscape" && screenDimensions.width <= 736 ? 50 : 60
+  const contentHeight = navbarHeight - 16 // Reduced padding
 
   // Optimized loading skeleton
   if (isLoading) {
@@ -425,7 +425,7 @@ const Navbar = () => {
         style={{
           height: `${navbarHeight}px`,
           minHeight: `${navbarHeight}px`,
-          padding: "12px 16px",
+          padding: "8px 12px", // Reduced padding
         }}
       >
         <div className="section-container flex justify-between items-center h-full">
@@ -436,10 +436,10 @@ const Navbar = () => {
               width: `${logoConfig.skeleton.width}px`,
             }}
           />
-          <div className="flex gap-3">
-            <div className="bg-gray-700/50 animate-pulse rounded-full" style={{ height: "48px", width: "48px" }} />
-            <div className="bg-gray-700/50 animate-pulse rounded-full" style={{ height: "48px", width: "48px" }} />
-            <div className="bg-gray-700/50 animate-pulse rounded-full" style={{ height: "48px", width: "48px" }} />
+          <div className="flex gap-2"> {/* Reduced gap */}
+            <div className="bg-gray-700/50 animate-pulse rounded-full" style={{ height: "36px", width: "36px" }} /> {/* Smaller buttons */}
+            <div className="bg-gray-700/50 animate-pulse rounded-full" style={{ height: "36px", width: "36px" }} />
+            <div className="bg-gray-700/50 animate-pulse rounded-full" style={{ height: "36px", width: "36px" }} />
           </div>
         </div>
       </header>
@@ -455,7 +455,7 @@ const Navbar = () => {
         height: `${navbarHeight}px`,
         minHeight: `${navbarHeight}px`,
         maxHeight: `${navbarHeight}px`,
-        padding: "12px 16px",
+        padding: "8px 12px", // Reduced padding
       }}
       role="banner"
     >
@@ -508,14 +508,14 @@ const Navbar = () => {
         </Link>
 
         {/* Desktop Navigation */}
-        <nav className="hidden lg:flex items-center gap-6 xl:gap-8" role="navigation" aria-label="Main navigation">
+        <nav className="hidden lg:flex items-center gap-4 xl:gap-6" role="navigation" aria-label="Main navigation"> {/* Reduced gaps */}
           {navigationItems.map(({ href, label }) => {
             const isActive = pathname === href || (href !== "/" && pathname.startsWith(href))
             return (
               <Link
                 key={href}
                 href={href}
-                className={`nav-link relative transition-all duration-300 py-2 px-3 rounded-md ${
+                className={`nav-link relative transition-all duration-300 py-1.5 px-2.5 rounded-md text-sm ${  // Smaller padding and text
                   isActive
                     ? "text-gold bg-gold/10 shadow-lg shadow-gold/20 border border-gold/30"
                     : "text-white hover:text-gold hover:bg-white/5 hover:shadow-md"
@@ -531,53 +531,53 @@ const Navbar = () => {
             )
           })}
 
-          <div className="h-6 w-px bg-white/30 mx-2" aria-hidden="true"></div>
+          <div className="h-4 w-px bg-white/30 mx-1" aria-hidden="true"></div> {/* Smaller divider */}
 
-          {/* Cart Icon with Counter */}
+          {/* Cart Icon with Counter - smaller */}
           <Link
             href="/cart"
-            className="relative group p-2 touch-manipulation"
+            className="relative group p-1.5 touch-manipulation" // Reduced padding
             aria-label={`Shopping cart with ${totalItems} items`}
             onClick={(e) => {
               e.preventDefault()
               handleNavigation("/cart")
             }}
           >
-            <ShoppingCart className="text-white group-hover:text-gold transition-colors duration-200" size={22} />
+            <ShoppingCart className="text-white group-hover:text-gold transition-colors duration-200" size={20} /> {/* Smaller icon */}
             {totalItems > 0 && (
-              <span className="absolute -top-1 -right-1 bg-gold text-black text-xs font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center px-1 z-10">
+              <span className="absolute -top-1 -right-1 bg-gold text-black text-xs font-bold rounded-full min-w-[18px] h-4 flex items-center justify-center px-1 z-10"> {/* Smaller counter */}
                 {totalItems > 99 ? "99+" : totalItems}
               </span>
             )}
           </Link>
 
-          {/* User Account */}
+          {/* User Account - more compact */}
           {user ? (
             <div className="relative" ref={userMenuRef}>
               <button
                 onClick={toggleUserMenu}
-                className="flex items-center gap-2 text-white hover:text-gold transition-colors duration-200 p-2 touch-manipulation"
+                className="flex items-center gap-1.5 text-white hover:text-gold transition-colors duration-200 p-1.5 touch-manipulation" // Reduced gaps and padding
                 aria-expanded={isUserMenuOpen}
                 aria-haspopup="true"
                 aria-label={`User menu for ${user.name}`}
               >
-                <span className="hidden xl:inline-block text-sm">{userDisplayName}</span>
-                <div className="w-8 h-8 rounded-full overflow-hidden border-2 border-transparent hover:border-gold transition-colors">
+                <span className="hidden xl:inline-block text-xs">{userDisplayName}</span> {/* Smaller text */}
+                <div className="w-6 h-6 rounded-full overflow-hidden border-2 border-transparent hover:border-gold transition-colors"> {/* Smaller avatar */}
                   <ImageFallback
                     src={user?.avatar_url || user?.avatar || "/placeholder.svg"}
                     alt={`${user.name || user.full_name || 'User'} profile picture`}
-                    width={32}
-                    height={32}
+                    width={24}
+                    height={24}
                     className="rounded-full object-cover"
-                    fallbackIcon={<User size={20} />}
+                    fallbackIcon={<User size={16} />}
                   />
                 </div>
               </button>
               {isUserMenuOpen && (
-                <div className="absolute right-0 mt-2 w-48 bg-darkBg/95 backdrop-blur-sm border border-gray-700 rounded-lg shadow-xl py-2 z-50">
+                <div className="absolute right-0 mt-1 w-44 bg-darkBg/95 backdrop-blur-sm border border-gray-700 rounded-lg shadow-xl py-1 z-50"> {/* Smaller menu */}
                   <Link
                     href="/account/profile"
-                    className="block px-4 py-3 text-sm text-white hover:bg-black/30 hover:text-gold transition-colors"
+                    className="block px-3 py-2 text-xs text-white hover:bg-black/30 hover:text-gold transition-colors" // Smaller text and padding
                     onClick={(e) => {
                       e.preventDefault()
                       setIsUserMenuOpen(false)
@@ -588,7 +588,7 @@ const Navbar = () => {
                   </Link>
                   <Link
                     href="/account/orders"
-                    className="block px-4 py-3 text-sm text-white hover:bg-black/30 hover:text-gold transition-colors"
+                    className="block px-3 py-2 text-xs text-white hover:bg-black/30 hover:text-gold transition-colors"
                     onClick={(e) => {
                       e.preventDefault()
                       setIsUserMenuOpen(false)
@@ -602,9 +602,9 @@ const Navbar = () => {
                       signOut()
                       setIsUserMenuOpen(false)
                     }}
-                    className="flex items-center gap-2 w-full text-left px-4 py-3 text-sm text-white hover:bg-black/30 hover:text-gold transition-colors"
+                    className="flex items-center gap-1.5 w-full text-left px-3 py-2 text-xs text-white hover:bg-black/30 hover:text-gold transition-colors"
                   >
-                    <LogOut size={16} />
+                    <LogOut size={14} />
                     Sign Out
                   </button>
                 </div>
@@ -613,21 +613,21 @@ const Navbar = () => {
           ) : (
             <Link
               href="/signin"
-              className="text-white hover:text-gold flex items-center gap-2 p-2 touch-manipulation transition-colors duration-200"
+              className="text-white hover:text-gold flex items-center gap-1.5 p-1.5 touch-manipulation transition-colors duration-200" // Reduced gaps and padding
               aria-label="Sign in to your account"
               onClick={(e) => {
                 e.preventDefault()
                 handleNavigation("/signin")
               }}
             >
-              <User size={18} />
-              <span className="hidden xl:inline">SIGN IN</span>
+              <User size={16} /> {/* Smaller icon */}
+              <span className="hidden xl:inline text-xs">SIGN IN</span> {/* Smaller text */}
             </Link>
           )}
 
           <Link
             href="/book"
-            className="book-table-btn px-4 py-2 text-gold uppercase tracking-wider border-2 border-gold hover:bg-gold hover:text-black transition-all duration-200 rounded touch-manipulation"
+            className="book-table-btn px-3 py-1.5 text-gold text-xs uppercase tracking-wider border-2 border-gold hover:bg-gold hover:text-black transition-all duration-200 rounded touch-manipulation" // Smaller padding and text
             aria-label="Book a table at Sushi Yaki"
             onClick={(e) => {
               e.preventDefault()
@@ -638,21 +638,21 @@ const Navbar = () => {
           </Link>
         </nav>
 
-        {/* Mobile Navigation Icons */}
-        <div className="flex items-center gap-3 lg:hidden">
+        {/* Mobile Navigation Icons - more compact */}
+        <div className="flex items-center gap-2 lg:hidden"> {/* Reduced gap */}
           {/* Cart Icon with Counter */}
           <Link
             href="/cart"
-            className="relative p-3 touch-manipulation"
+            className="relative p-2 touch-manipulation" // Reduced padding
             aria-label={`Shopping cart with ${totalItems} items`}
             onClick={(e) => {
               e.preventDefault()
               handleNavigation("/cart")
             }}
           >
-            <ShoppingCart className="text-white hover:text-gold transition-colors duration-200" size={24} />
+            <ShoppingCart className="text-white hover:text-gold transition-colors duration-200" size={20} /> {/* Smaller icon */}
             {totalItems > 0 && (
-              <span className="absolute -top-1 -right-1 bg-gold text-black text-xs font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center px-1">
+              <span className="absolute -top-1 -right-1 bg-gold text-black text-xs font-bold rounded-full min-w-[18px] h-4 flex items-center justify-center px-1"> {/* Smaller counter */}
                 {totalItems > 99 ? "99+" : totalItems}
               </span>
             )}
@@ -661,20 +661,20 @@ const Navbar = () => {
           {/* User Account */}
           <Link
             href={user ? "/account/profile" : "/signin"}
-            className="text-white hover:text-gold p-3 touch-manipulation transition-colors duration-200"
+            className="text-white hover:text-gold p-2 touch-manipulation transition-colors duration-200" // Reduced padding
             aria-label={user ? `Go to ${user.name}'s profile` : "Sign in to your account"}
             onClick={(e) => {
               e.preventDefault()
               handleNavigation(user ? "/account/profile" : "/signin")
             }}
           >
-            <User size={24} />
+            <User size={20} /> {/* Smaller icon */}
           </Link>
 
           {/* Mobile Menu Button */}
           <button
             ref={mobileMenuButtonRef}
-            className="text-white z-20 p-3 touch-manipulation transition-colors duration-200 hover:text-gold"
+            className="text-white z-20 p-2 touch-manipulation transition-colors duration-200 hover:text-gold" // Reduced padding
             onClick={toggleMenu}
             aria-label={isMenuOpen ? "Close menu" : "Open menu"}
             aria-expanded={isMenuOpen}
@@ -682,11 +682,11 @@ const Navbar = () => {
             aria-haspopup="true"
             disabled={isNavigating}
           >
-            {isMenuOpen ? <X size={28} /> : <Menu size={28} />}
+            {isMenuOpen ? <X size={24} /> : <Menu size={24} />} {/* Smaller icons */}
           </button>
         </div>
 
-        {/* Mobile Navigation Menu with responsive logo */}
+        {/* Mobile Navigation Menu with responsive logo - MEDIUM SIZED */}
         {isMenuOpen && (
           <div
             className="fixed top-0 left-0 w-full h-full bg-black/95 backdrop-blur-md z-[9999] lg:hidden"
@@ -711,7 +711,7 @@ const Navbar = () => {
           >
             {/* Menu Content Container */}
             <div
-              className="flex flex-col items-center justify-center w-full h-full px-6"
+              className="flex flex-col items-center justify-center w-full h-full px-4" // Reduced horizontal padding
               onClick={(e) => e.stopPropagation()}
               ref={menuRef}
               style={{
@@ -722,16 +722,16 @@ const Navbar = () => {
               {/* Close Button */}
               <button
                 onClick={closeMenu}
-                className="absolute top-6 right-6 text-white hover:text-gold z-[10000] p-2 transition-colors duration-200"
+                className="absolute top-4 right-4 text-white hover:text-gold z-[10000] p-2 transition-colors duration-200" // Reduced top/right positioning
                 aria-label="Close menu"
                 disabled={isNavigating}
               >
-                <X size={28} />
+                <X size={24} /> {/* Smaller close icon */}
               </button>
 
               {/* Responsive Logo in Mobile Menu */}
               <div
-                className="absolute top-6 left-6 z-[10000] flex items-center justify-center"
+                className="absolute top-4 left-4 z-[10000] flex items-center justify-center" // Reduced top/left positioning
                 style={{
                   height: `${logoConfig.mobile.height}px`,
                   width: `${logoConfig.mobile.width}px`,
@@ -751,9 +751,9 @@ const Navbar = () => {
                 />
               </div>
 
-              {/* Navigation Links - Reduced text size */}
+              {/* Navigation Links - MEDIUM SIZED */}
               <nav
-                className="flex flex-col items-center gap-4 w-full max-w-sm"
+                className="flex flex-col items-center gap-2.5 w-full max-w-xs" // Reduced gap and max-width
                 role="navigation"
                 aria-label="Mobile navigation"
               >
@@ -763,7 +763,7 @@ const Navbar = () => {
                     <button
                       key={id}
                       onClick={() => handleNavigation(href)}
-                      className={`text-lg font-medium transition-all duration-300 py-4 px-6 w-full text-center border rounded-lg touch-manipulation disabled:opacity-50 relative ${
+                      className={`text-sm font-medium transition-all duration-300 py-2.5 px-4 w-full text-center border rounded-lg touch-manipulation disabled:opacity-50 relative ${  // Reduced padding
                         isActive
                           ? "text-gold bg-gold/15 border-gold/40 shadow-lg shadow-gold/25"
                           : "text-white hover:text-gold hover:bg-white/5 border-white/10 hover:border-white/20"
@@ -778,7 +778,7 @@ const Navbar = () => {
                       {isNavigating ? (
                         <span className="flex items-center justify-center gap-2">
                           <span
-                            className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"
+                            className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" // Smaller spinner
                             aria-hidden="true"
                           ></span>
                           {label}
@@ -789,10 +789,10 @@ const Navbar = () => {
                     </button>
                   )
                 })}
-                {/* Order History Button - Mobile Only */}
+                {/* Order History Button - Mobile Only - MEDIUM SIZED */}
                 <button
                   onClick={() => handleNavigation("/account/orders")}
-                  className="text-lg font-medium transition-all duration-300 py-4 px-6 w-full text-center border rounded-lg touch-manipulation disabled:opacity-50 relative text-white hover:text-gold hover:bg-white/5 border-white/10 hover:border-white/20"
+                  className="text-sm font-medium transition-all duration-300 py-2.5 px-4 w-full text-center border rounded-lg touch-manipulation disabled:opacity-50 relative text-white hover:text-gold hover:bg-white/5 border-white/10 hover:border-white/20" // Reduced padding
                   disabled={isNavigating}
                   style={{
                     animationDelay: `${navigationItems.length * 50}ms`,
@@ -802,7 +802,7 @@ const Navbar = () => {
                   {isNavigating ? (
                     <span className="flex items-center justify-center gap-2">
                       <span
-                        className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"
+                        className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" // Smaller spinner
                         aria-hidden="true"
                       ></span>
                       ORDER HISTORY
@@ -813,11 +813,11 @@ const Navbar = () => {
                 </button>
               </nav>
 
-              {/* Action Buttons - Reduced text size */}
-              <div className="flex flex-col items-center gap-4 mt-8">
+              {/* Action Buttons - MEDIUM SIZED */}
+              <div className="flex flex-col items-center gap-3 mt-6"> {/* Reduced gap and margin */}
                 <button
                   onClick={() => handleNavigation("/book")}
-                  className="px-6 py-3 text-gold text-lg uppercase tracking-wider border-2 border-gold hover:bg-gold hover:text-black transition-all duration-200 rounded touch-manipulation disabled:opacity-50"
+                  className="px-5 py-2 text-gold text-sm uppercase tracking-wider border-2 border-gold hover:bg-gold hover:text-black transition-all duration-200 rounded touch-manipulation disabled:opacity-50" // Reduced padding
                   disabled={isNavigating}
                   style={{
                     animationDelay: "300ms",
@@ -828,7 +828,7 @@ const Navbar = () => {
                   {isNavigating ? (
                     <span className="flex items-center gap-2">
                       <span
-                        className="w-4 h-4 border-2 border-gold/30 border-t-gold rounded-full animate-spin"
+                        className="w-3 h-3 border-2 border-gold/30 border-t-gold rounded-full animate-spin" // Smaller spinner
                         aria-hidden="true"
                       ></span>
                       Book a Table
@@ -837,50 +837,31 @@ const Navbar = () => {
                     "Book a Table"
                   )}
                 </button>
-
-                {user && (
-                  <button
-                    onClick={() => {
-                      signOut()
-                      closeMenu()
-                    }}
-                    className="flex items-center gap-3 text-white hover:text-gold text-base touch-manipulation transition-colors duration-200 disabled:opacity-50"
-                    disabled={isNavigating}
-                    style={{
-                      animationDelay: "350ms",
-                      animation: "slideInUp 0.3s ease-out both",
-                    }}
-                    aria-label="Sign out of your account"
-                  >
-                    <LogOut size={18} />
-                    <span>Sign Out</span>
-                  </button>
-                )}
               </div>
 
-              {/* Colorful Social Media Icons */}
-              <div className="flex items-center gap-4 mt-8">
+              {/* Colorful Social Media Icons - MEDIUM SIZED */}
+              <div className="flex items-center gap-3 mt-6"> {/* Reduced gap and margin */}
                 {socialMediaLinks.map(({ name, url, icon: Icon, bgColor, hoverColor, shadowColor }, index) => (
                   <a
                     key={name}
                     href={url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className={`${bgColor} ${hoverColor} text-white p-3 rounded-full shadow-lg ${shadowColor} transition-all duration-300 transform hover:scale-110 hover:shadow-xl touch-manipulation`}
+                    className={`${bgColor} ${hoverColor} text-white p-2.5 rounded-full shadow-lg ${shadowColor} transition-all duration-300 transform hover:scale-110 hover:shadow-xl touch-manipulation`} // Reduced padding
                     aria-label={`Follow us on ${name}`}
                     style={{
                       animationDelay: `${400 + index * 50}ms`,
                       animation: "slideInUp 0.3s ease-out both",
                     }}
                   >
-                    <Icon size={20} />
+                    <Icon size={18} /> {/* Smaller icons */}
                   </a>
                 ))}
               </div>
 
               {/* Social Media Text */}
               <p
-                className="text-white/70 text-sm mt-3 font-medium"
+                className="text-white/70 text-xs mt-2 font-medium" // Smaller text and margin
                 style={{
                   animationDelay: "550ms",
                   animation: "slideInUp 0.3s ease-out both",
@@ -888,6 +869,26 @@ const Navbar = () => {
               >
                 Follow us on social media
               </p>
+
+              {/* Sign Out Button - Moved below social media */}
+              {user && (
+                <button
+                  onClick={() => {
+                    signOut()
+                    closeMenu()
+                  }}
+                  className="flex items-center gap-2 text-white hover:text-gold text-xs touch-manipulation transition-colors duration-200 disabled:opacity-50 mt-4"
+                  disabled={isNavigating}
+                  style={{
+                    animationDelay: "600ms",
+                    animation: "slideInUp 0.3s ease-out both",
+                  }}
+                  aria-label="Sign out of your account"
+                >
+                  <LogOut size={16} />
+                  <span>Sign Out</span>
+                </button>
+              )}
             </div>
           </div>
         )}
