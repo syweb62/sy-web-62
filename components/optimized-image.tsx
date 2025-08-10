@@ -143,6 +143,8 @@ export function OptimizedImage({
           className,
         )}
         priority={priority}
+        // elevate only when explicitly marked priority
+        fetchPriority={priority ? "high" : undefined}
         quality={quality}
         sizes={sizes}
         placeholder={placeholder}

@@ -130,6 +130,11 @@ export function GalleryCarousel({
               src={images[currentIndex].src || "/placeholder.svg"}
               alt={images[currentIndex].alt}
               className="w-full h-full object-cover"
+              loading="lazy"
+              decoding="async"
+              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 70vw, 1200px"
+              // @ts-ignore - browser attribute in lowercase
+              fetchpriority="low"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-60"></div>
             <div className="absolute bottom-0 left-0 right-0 p-4 text-white">

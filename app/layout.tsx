@@ -1,6 +1,7 @@
 import type React from "react"
 import type { Metadata, Viewport } from "next"
 import ClientComponent from "./client"
+import ResourceHints from "@/components/perf/resource-hints"
 
 // Helper function to get a valid base URL
 function getBaseUrl(): string {
@@ -100,8 +101,12 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode
 }>) {
-  return <ClientComponent children={children} />
+  return (
+    <>
+      <ResourceHints />
+      <ClientComponent children={children} />
+    </>
+  )
 }
 
-
-import './globals.css'
+import "./globals.css"

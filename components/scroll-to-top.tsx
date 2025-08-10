@@ -37,7 +37,7 @@ export function ScrollToTop({ className = "", threshold = 300 }: ScrollToTopProp
   return (
     <button
       onClick={handleScrollToTop}
-      className={`fixed bottom-8 left-8 z-50 p-3 bg-gold text-black rounded-full shadow-lg hover:bg-gold/90 transition-all duration-300 hover:scale-110 focus:outline-none focus:ring-2 focus:ring-gold focus:ring-offset-2 py-1.5 px-3.5 ${className}`}
+      className={`fixed bottom-8 left-8 z-50 p-3 bg-gold text-black rounded-full shadow-lg hover:bg-gold/90 transition-all duration-300 hover:scale-110 focus:outline-none focus:ring-2 focus:ring-gold focus:ring-offset-2 ${className}`}
       aria-label="Scroll to top"
       type="button"
     >

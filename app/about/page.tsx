@@ -4,7 +4,7 @@ export default function About() {
   return (
     <>
       {/* Our Story Section */}
-      <section className="py-20 bg-darkBg full-width-section">
+      <section className="py-20 bg-darkBg full-width-section px-4 sm:px-6 md:px-8 lg:px-12">
         <div className="section-container">
           <div className="responsive-grid grid-cols-1 lg:grid-cols-2 items-center">
             <div className="space-y-6">

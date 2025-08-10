@@ -1,30 +1,26 @@
-import Image from "next/image"
-
-export default function Loading() {
+export default function RootLoading() {
+  // Full-screen route-level loader; shown by Next.js App Router
+  // during route transitions and segment-level data fetching.
   return (
-    <div className="fixed inset-0 bg-darkBg flex items-center justify-center z-50">
-      <div className="text-center">
-        <div className="mb-4">
+    <main className="min-h-screen w-full bg-black flex items-center justify-center">
+      {/* Reuse the shared spinner */}
+      {/* Note: import is not needed in this file since Next.js inlines components; 
+          we render the component via dynamic import pattern below. */}
+      {/* We’ll keep this simple and inline to avoid bundling issues */}
+      <div className="flex flex-col items-center justify-center gap-3 text-white">
+        <div className="relative" style={{ width: 128, height: 128 }}>
           <video
+            className="w-full h-full rounded-full object-contain"
+            src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Sushi-7EnDgi4AZlDTFOrpwt6HOp3oC83HAn.webm"
             autoPlay
             loop
             muted
             playsInline
-            className="h-auto w-auto max-w-[200px]"
-            aria-label="Loading animation"
-          >
-            <source src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Sushi-HxnXJNGysz6oO66rH7dYCdfUjUidS9.webm" type="video/webm" />
-            <Image
-              src="/images/logo.png"
-              alt="Sushi Yaki"
-              width={200}
-              height={120}
-              className="h-auto w-auto max-w-[200px] animate-pulse"
-            />
-          </video>
+          />
         </div>
-        <div className="text-[#30c8d6] text-lg">Loading...</div>
+        <p className="text-sm text-gray-300">Loading...</p>
+        <span className="sr-only">Loading</span>
       </div>
-    </div>
+    </main>
   )
 }

@@ -1,0 +1,179 @@
+// components/loading-spinner.tsx
+'use client'
+
+import { useState } from 'react'
+import { cn } from '@/lib/utils'
+
+interface LoadingSpinnerProps {
+  size?: 'sm' | 'md' | 'lg'
+  className?: string
+  text?: string
+}
+
+export function LoadingSpinner({ size = 'md', className, text }: LoadingSpinnerProps) {
+  const [fallback, setFallback] = useState(false)
+
+  const dim = size === 'sm' ? 56 : size === 'lg' ? 128 : 96
+
+  return (
+    <div className={cn('flex flex-col items-center justify-center gap-3', className)}>
+      {!fallback ? (
+        <video
+          src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Sushi-7EnDgi4AZlDTFOrpwt6HOp3oC83HAn.webm"
+          width={dim}
+          height={dim}
+          className="rounded-lg shadow-lg shadow-black/30"
+          autoPlay
+          loop
+          muted
+          playsInline
+          preload="auto"
+          onError={() => setFallback(true)}
+          aria-hidden="true"
+        />
+      ) : (
+        <div
+          className={cn(
+            'animate-spin rounded-full border-2 border-gray-600 border-t-gold',
+            size === 'sm' ? 'h-6 w-6' : size === 'lg' ? 'h-16 w-16' : 'h-10 w-10'
+          )}
+          role="status"
+          aria-label="Loading"
+        />
+      )}
+      {text && (
+        <p className="text-sm text-gray-400" aria-live="polite">
+          {text}
+        </p>
+      )}
+      <span className="sr-only">Loading animation</span>
+    </div>
+  )
+}
+
+export default LoadingSpinner
+
+// components/global-loading-indicator.tsx
+'use client'
+
+import { useState, useEffect } from 'react'
+import { usePathname, useSearchParams } from 'next/navigation'
+import LoadingSpinner from '@/components/loading-spinner'
+
+export function GlobalLoadingIndicator() {
+  const [isLoading, setIsLoading] = useState(false)
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+
+  useEffect(() => {
+    // Reset loading state when route changes
+    setIsLoading(false)
+  }, [pathname, searchParams])
+
+  // Expose a global method to trigger loading state
+  useEffect(() => {
+    // Create a global navigation state manager
+    window.startNavigation = () => {
+      setIsLoading(true)
+      return () => setIsLoading(false)
+    }
+
+    return () => {
+      // Clean up
+      delete window.startNavigation
+    }
+  }, [])
+
+  if (!isLoading) return null
+
+  return (
+    <div className="fixed inset-0 bg-darkBg/90 backdrop-blur-sm flex items-center justify-center z-[9999] transition-opacity duration-300">
+      <div className="text-center">
+        <LoadingSpinner size="lg" text="Loading..." />
+      </div>
+    </div>
+  )
+}
+
+// Add TypeScript global type definition
+declare global {
+  interface Window {
+    startNavigation?: () => () => void
+  }
+}
+
+// app/loading.tsx
+'use client'
+
+import LoadingSpinner from '@/components/loading-spinner'
+
+export default function Loading() {
+  return (
+    <div className="fixed inset-0 bg-darkBg flex items-center justify-center z-50">
+      <LoadingSpinner size="lg" text="Loading..." />
+    </div>
+  )
+}
+
+// app/account/orders/page.tsx
+// No changes needed as it already uses LoadingSpinner
+
+// app/menu/loading.tsx
+'use client'
+import LoadingSpinner from '@/components/loading-spinner'
+
+export default function Loading() {
+  return (
+    <div className="min-h-[60vh] bg-darkBg text-white flex items-center justify-center">
+      <LoadingSpinner text="Loading menu..." />
+    </div>
+  )
+}
+
+// app/signin/loading.tsx
+'use client'
+import LoadingSpinner from '@/components/loading-spinner'
+
+export default function Loading() {
+  return (
+    <div className="min-h-[50vh] bg-darkBg text-white flex items-center justify-center">
+      <LoadingSpinner text="Loading sign in..." />
+    </div>
+  )
+}
+
+// app/dashboard/menu/loading.tsx
+'use client'
+import LoadingSpinner from '@/components/loading-spinner'
+
+export default function Loading() {
+  return (
+    <div className="min-h-[50vh] bg-darkBg text-white flex items-center justify-center">
+      <LoadingSpinner text="Loading menu management..." />
+    </div>
+  )
+}
+
+// app/dashboard/orders/loading.tsx
+'use client'
+import LoadingSpinner from '@/components/loading-spinner'
+
+export default function Loading() {
+  return (
+    <div className="min-h-[50vh] bg-darkBg text-white flex items-center justify-center">
+      <LoadingSpinner text="Loading orders..." />
+    </div>
+  )
+}
+
+// app/dashboard/reservations/loading.tsx
+'use client'
+import LoadingSpinner from '@/components/loading-spinner'
+
+export default function Loading() {
+  return (
+    <div className="min-h-[50vh] bg-darkBg text-white flex items-center justify-center">
+      <LoadingSpinner text="Loading reservations..." />
+    </div>
+  )
+}

@@ -79,6 +79,7 @@ export function PerformanceOptimizedImage({
         fill={fill}
         className={cn("transition-opacity duration-300", isLoading ? "opacity-0" : "opacity-100", className)}
         priority={priority}
+        fetchPriority={priority ? "high" : undefined}
         quality={quality}
         sizes={sizes}
         placeholder={placeholder}
@@ -86,6 +87,7 @@ export function PerformanceOptimizedImage({
         onLoad={handleLoad}
         onError={handleError}
         loading={priority ? "eager" : "lazy"}
+        decoding="async"
       />
     </div>
   )

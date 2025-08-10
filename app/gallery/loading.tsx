@@ -6,19 +6,6 @@ export default function GalleryLoading() {
       {/* Hero Section Skeleton */}
       <div className="relative h-[40vh] min-h-[300px] bg-gray-200 dark:bg-gray-800 animate-pulse">
         <div className="container mx-auto h-full flex flex-col justify-center items-center text-center px-4">
-          <div className="mb-4">
-            <video
-              autoPlay
-              loop
-              muted
-              playsInline
-              className="h-16 w-16 mx-auto"
-              aria-label="Loading animation"
-            >
-              <source src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Sushi-HxnXJNGysz6oO66rH7dYCdfUjUidS9.webm" type="video/webm" />
-              <Skeleton className="h-16 w-16 rounded-full" />
-            </video>
-          </div>
           <Skeleton className="h-12 w-64 mb-4" />
           <Skeleton className="h-6 w-96 max-w-full" />
         </div>

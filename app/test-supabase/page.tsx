@@ -1,344 +1,212 @@
 "use client"
 
-import { useState, useEffect } from 'react'
-import { testSupabaseConnection, menuItemsService, ordersService, profileService } from '@/lib/supabase'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { CheckCircle, XCircle, AlertCircle, Database, Users, ShoppingCart, MenuIcon } from 'lucide-react'
+import { useCallback, useState } from "react"
+import { getSupabaseBrowserClient, testSupabaseConnection, getCurrentUser } from "@/lib/supabase"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
-interface TestResult {
-  name: string
-  status: 'success' | 'error' | 'warning' | 'pending'
-  message: string
-  details?: any
+type OrderRow = {
+  id: string
+  status: string
+  total_amount: number
+  created_at: string
 }
 
 export default function TestSupabasePage() {
-  const [testResults, setTestResults] = useState<TestResult[]>([])
-  const [isRunning, setIsRunning] = useState(false)
-  const [overallStatus, setOverallStatus] = useState<'success' | 'error' | 'warning' | 'pending'>('pending')
+  const [connMsg, setConnMsg] = useState<string>("")
+  const [authMsg, setAuthMsg] = useState<string>("")
+  const [orderMsg, setOrderMsg] = useState<string>("")
+  const [myOrders, setMyOrders] = useState<OrderRow[] | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
 
-  const addTestResult = (result: TestResult) => {
-    setTestResults(prev => [...prev, result])
-  }
+  const handleCheckConnection = useCallback(async () => {
+    setConnMsg("চেক করা হচ্ছে...")
+    const res = await testSupabaseConnection()
+    setConnMsg(res.ok ? `✅ ${res.message}` : `⚠️ ${res.message}`)
+  }, [])
 
-  const runComprehensiveTests = async () => {
-    setIsRunning(true)
-    setTestResults([])
-    
+  const handleShowAuth = useCallback(async () => {
+    setAuthMsg("লোড হচ্ছে...")
+    const { user, error } = await getCurrentUser()
+    if (error) {
+      setAuthMsg(`⚠️ ${error.message}`)
+    } else if (user) {
+      setAuthMsg(`✅ সাইন-ইন আছেন: ${user.email || user.id}`)
+    } else {
+      setAuthMsg("ℹ️ আপনি সাইন-ইন করেননি (Guest)")
+    }
+  }, [])
+
+  const handleCreateGuestOrder = useCallback(async () => {
+    setIsLoading(true)
+    setOrderMsg("গেস্ট অর্ডার তৈরি করা হচ্ছে...")
     try {
-      // Test 1: Basic Connection
-      addTestResult({ name: 'Basic Connection', status: 'pending', message: 'Testing Supabase connection...' })
-      const connectionTest = await testSupabaseConnection()
-      
-      if (connectionTest.connected) {
-        addTestResult({ 
-          name: 'Basic Connection', 
-          status: 'success', 
-          message: 'Successfully connected to Supabase',
-          details: connectionTest.config
+      const supabase = getSupabaseBrowserClient()
+
+      // 1) অর্ডার তৈরি
+      const { data: order, error: orderErr } = await supabase
+        .from("orders")
+        .insert({
+          // guest checkout — user_id null
+          user_id: null,
+          status: "pending",
+          payment_method: "cash",
+          total_amount: 12.5,
         })
-      } else {
-        addTestResult({ 
-          name: 'Basic Connection', 
-          status: 'error', 
-          message: connectionTest.error || 'Connection failed',
-          details: connectionTest.config
-        })
-        setOverallStatus('error')
-        setIsRunning(false)
+        .select("id")
+        .single()
+
+      if (orderErr || !order) {
+        setOrderMsg(`⚠️ অর্ডার তৈরি ব্যর্থ: ${orderErr?.message || "unknown"}`)
+        setIsLoading(false)
         return
       }
 
-      // Test 2: Menu Items Service
-      addTestResult({ name: 'Menu Items', status: 'pending', message: 'Testing menu items service...' })
-      try {
-        const menuItems = await menuItemsService.getAll()
-        addTestResult({ 
-          name: 'Menu Items', 
-          status: 'success', 
-          message: `Found ${menuItems.length} menu items`,
-          details: menuItems.slice(0, 3)
-        })
-      } catch (error) {
-        addTestResult({ 
-          name: 'Menu Items', 
-          status: 'error', 
-          message: `Menu items test failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
-          details: error
-        })
-      }
-
-      // Test 3: Database Tables Structure
-      addTestResult({ name: 'Database Tables', status: 'pending', message: 'Checking database structure...' })
-      try {
-        const { supabase } = await import('@/lib/supabase')
-        if (!supabase) throw new Error('Supabase client not available')
-        
-        const tables = ['profiles', 'menu_items', 'orders', 'order_items', 'reservations', 'social_media_links']
-        const tableResults = []
-        
-        for (const table of tables) {
-          try {
-            const { data, error } = await supabase.from(table).select('*').limit(1)
-            if (error) throw error
-            tableResults.push({ table, status: 'exists', count: data?.length || 0 })
-          } catch (error) {
-            tableResults.push({ table, status: 'error', error: error instanceof Error ? error.message : 'Unknown error' })
-          }
-        }
-        
-        const successfulTables = tableResults.filter(t => t.status === 'exists').length
-        addTestResult({ 
-          name: 'Database Tables', 
-          status: successfulTables === tables.length ? 'success' : 'warning', 
-          message: `${successfulTables}/${tables.length} tables accessible`,
-          details: tableResults
-        })
-      } catch (error) {
-        addTestResult({ 
-          name: 'Database Tables', 
-          status: 'error', 
-          message: `Database structure test failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
-          details: error
-        })
-      }
-
-      // Test 4: Environment Variables
-      addTestResult({ name: 'Environment Variables', status: 'pending', message: 'Checking environment setup...' })
-      const envVars = {
-        NEXT_PUBLIC_SUPABASE_URL: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
-        NEXT_PUBLIC_SUPABASE_ANON_KEY: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-        SUPABASE_SERVICE_ROLE_KEY: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
-      }
-      
-      const missingVars = Object.entries(envVars).filter(([_, exists]) => !exists).map(([name]) => name)
-      
-      addTestResult({ 
-        name: 'Environment Variables', 
-        status: missingVars.length === 0 ? 'success' : 'warning', 
-        message: missingVars.length === 0 ? 'All environment variables set' : `Missing: ${missingVars.join(', ')}`,
-        details: envVars
+      // 2) অর্ডার আইটেম যোগ
+      const { error: itemErr } = await supabase.from("order_items").insert({
+        order_id: order.id,
+        quantity: 1,
+        price_at_purchase: 12.5,
+        item_name: "Test Roll",
+        item_description: "স্বল্প-পরীক্ষার জন্য আইটেম",
+        item_image: "/test-roll.png",
+        menu_item_id: null, // nullable — FK কনফ্লিক্ট এড়াতে
       })
 
-      // Test 5: Sample Data Insertion (if possible)
-      addTestResult({ name: 'Data Operations', status: 'pending', message: 'Testing data operations...' })
-      try {
-        const { supabase } = await import('@/lib/supabase')
-        if (!supabase) throw new Error('Supabase client not available')
-        
-        // Test read operation
-        const { data: testRead, error: readError } = await supabase
-          .from('menu_items')
-          .select('id, name, price')
-          .limit(1)
-        
-        if (readError) throw readError
-        
-        addTestResult({ 
-          name: 'Data Operations', 
-          status: 'success', 
-          message: 'Read operations working correctly',
-          details: { sampleData: testRead }
-        })
-      } catch (error) {
-        addTestResult({ 
-          name: 'Data Operations', 
-          status: 'error', 
-          message: `Data operations test failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
-          details: error
-        })
+      if (itemErr) {
+        setOrderMsg(`⚠️ অর্ডার আইটেম ব্যর্থ: ${itemErr.message}`)
+        setIsLoading(false)
+        return
       }
 
-      // Determine overall status
-      const errorCount = testResults.filter(r => r.status === 'error').length
-      const warningCount = testResults.filter(r => r.status === 'warning').length
-      
-      if (errorCount > 0) {
-        setOverallStatus('error')
-      } else if (warningCount > 0) {
-        setOverallStatus('warning')
-      } else {
-        setOverallStatus('success')
-      }
-
-    } catch (error) {
-      addTestResult({ 
-        name: 'Test Suite', 
-        status: 'error', 
-        message: `Test suite failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        details: error
-      })
-      setOverallStatus('error')
+      setOrderMsg(`✅ গেস্ট অর্ডার তৈরি হয়েছে (ID: ${order.id})`)
+    } catch (e: any) {
+      setOrderMsg(`⚠️ ত্রুটি: ${e?.message || String(e)}`)
     } finally {
-      setIsRunning(false)
+      setIsLoading(false)
     }
-  }
+  }, [])
 
-  const getStatusIcon = (status: TestResult['status']) => {
-    switch (status) {
-      case 'success': return <CheckCircle className="text-green-500" size={20} />
-      case 'error': return <XCircle className="text-red-500" size={20} />
-      case 'warning': return <AlertCircle className="text-yellow-500" size={20} />
-      case 'pending': return <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500" />
-    }
-  }
+  const handleFetchMyOrders = useCallback(async () => {
+    setIsLoading(true)
+    setOrderMsg("আপনার অর্ডারগুলো আনা হচ্ছে...")
+    setMyOrders(null)
+    try {
+      const supabase = getSupabaseBrowserClient()
+      const { user } = await getCurrentUser()
+      if (!user) {
+        setOrderMsg("ℹ️ সাইন-ইন না থাকলে অর্ডার দেখা যাবে না।")
+        setIsLoading(false)
+        return
+      }
 
-  const getStatusColor = (status: TestResult['status']) => {
-    switch (status) {
-      case 'success': return 'border-green-500 bg-green-50'
-      case 'error': return 'border-red-500 bg-red-50'
-      case 'warning': return 'border-yellow-500 bg-yellow-50'
-      case 'pending': return 'border-blue-500 bg-blue-50'
+      const { data, error } = await supabase
+        .from("orders")
+        .select("id,status,total_amount,created_at")
+        .order("created_at", { ascending: false })
+
+      if (error) {
+        setOrderMsg(`⚠️ RLS/কোয়েরি ত্রুটি: ${error.message}`)
+        setIsLoading(false)
+        return
+      }
+
+      setMyOrders((data as OrderRow[]) || [])
+      setOrderMsg(`✅ মোট ${data?.length || 0}টি অর্ডার পাওয়া গেছে`)
+    } catch (e: any) {
+      setOrderMsg(`⚠️ ত্রুটি: ${e?.message || String(e)}`)
+    } finally {
+      setIsLoading(false)
     }
-  }
+  }, [])
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-8">
-      <div className="max-w-6xl mx-auto">
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold mb-4">Comprehensive System Test</h1>
-          <p className="text-gray-400 mb-6">
-            Testing all Supabase connections, database operations, and system functionality
-          </p>
-          
-          <Button 
-            onClick={runComprehensiveTests} 
-            disabled={isRunning}
-            className="bg-gold text-black hover:bg-gold/90"
-          >
-            {isRunning ? 'Running Tests...' : 'Run Full System Test'}
-          </Button>
-        </div>
+    <main className="mx-auto max-w-3xl p-4 sm:p-6">
+      <h1 className="text-2xl font-semibold mb-4">Supabase টেস্ট ও হেলথ-চেক</h1>
 
-        {testResults.length > 0 && (
-          <div className="mb-8">
-            <Card className="bg-gray-800 border-gray-700">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  {getStatusIcon(overallStatus)}
-                  Overall Status: {overallStatus.toUpperCase()}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {testResults.map((result, index) => (
-                    <div 
-                      key={index} 
-                      className={`p-4 rounded-lg border-2 ${getStatusColor(result.status)}`}
-                    >
-                      <div className="flex items-center gap-2 mb-2">
-                        {getStatusIcon(result.status)}
-                        <h3 className="font-semibold text-gray-900">{result.name}</h3>
-                      </div>
-                      <p className="text-sm text-gray-700 mb-2">{result.message}</p>
-                      {result.details && (
-                        <details className="text-xs">
-                          <summary className="cursor-pointer text-gray-600">Details</summary>
-                          <pre className="mt-2 p-2 bg-gray-100 rounded overflow-auto">
-                            {JSON.stringify(result.details, null, 2)}
-                          </pre>
-                        </details>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>কানেকশন টেস্ট</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Button onClick={handleCheckConnection} disabled={isLoading}>
+              কানেকশন চেক করুন
+            </Button>
+            <p className="text-sm text-muted-foreground" aria-live="polite">
+              {connMsg}
+            </p>
+          </CardContent>
+        </Card>
 
-        {/* Quick Action Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <Card className="bg-gray-800 border-gray-700">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Database className="text-blue-500" size={24} />
-                Database
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-gray-400 text-sm mb-4">
-                Test database connectivity and table structure
-              </p>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => window.open('/test-supabase', '_blank')}
-                className="w-full"
-              >
-                Test Database
+        <Card>
+          <CardHeader>
+            <CardTitle>অথেনটিকেশন স্টেটাস</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Button onClick={handleShowAuth} disabled={isLoading}>
+              বর্তমান ইউজার দেখুন
+            </Button>
+            <p className="text-sm text-muted-foreground" aria-live="polite">
+              {authMsg}
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="md:col-span-2">
+          <CardHeader>
+            <CardTitle>অর্ডার টেস্ট</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex flex-wrap gap-2">
+              <Button variant="secondary" onClick={handleCreateGuestOrder} disabled={isLoading}>
+                গেস্ট অর্ডার তৈরি করুন
               </Button>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gray-800 border-gray-700">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <MenuIcon className="text-green-500" size={24} />
-                Menu System
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-gray-400 text-sm mb-4">
-                Test menu items, categories, and availability
-              </p>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => window.open('/menu', '_blank')}
-                className="w-full"
-              >
-                Test Menu
+              <Button onClick={handleFetchMyOrders} disabled={isLoading}>
+                আমার অর্ডারগুলো দেখুন
               </Button>
-            </CardContent>
-          </Card>
+            </div>
+            <p className="text-sm text-muted-foreground" aria-live="polite">
+              {orderMsg}
+            </p>
 
-          <Card className="bg-gray-800 border-gray-700">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <ShoppingCart className="text-purple-500" size={24} />
-                Cart & Orders
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-gray-400 text-sm mb-4">
-                Test cart functionality and order processing
-              </p>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => window.open('/cart', '_blank')}
-                className="w-full"
-              >
-                Test Cart
-              </Button>
-            </CardContent>
-          </Card>
+            {myOrders && (
+              <div className="mt-2 space-y-2">
+                {myOrders.length === 0 ? (
+                  <p className="text-sm">কোনো অর্ডার পাওয়া যায়নি।</p>
+                ) : (
+                  <ul className="space-y-2">
+                    {myOrders.map((o) => (
+                      <li key={o.id} className="rounded border p-2">
+                        <div className="flex justify-between">
+                          <span className="font-medium">#{o.id}</span>
+                          <span className="text-xs">{new Date(o.created_at).toLocaleString()}</span>
+                        </div>
+                        <div className="text-sm">
+                          স্ট্যাটাস: {o.status} • মোট: ${o.total_amount}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
-          <Card className="bg-gray-800 border-gray-700">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Users className="text-orange-500" size={24} />
-                Authentication
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-gray-400 text-sm mb-4">
-                Test user authentication and profiles
-              </p>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => window.open('/signin', '_blank')}
-                className="w-full"
-              >
-                Test Auth
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
+        <Card className="md:col-span-2">
+          <CardHeader>
+            <CardTitle>টেস্ট ইমেজ</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <img
+              src="/test-roll.png"
+              alt="টেস্ট সুশি রোল"
+              className="h-24 w-24 rounded object-cover ring-1 ring-slate-200"
+            />
+          </CardContent>
+        </Card>
       </div>
-    </div>
+    </main>
   )
 }

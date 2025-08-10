@@ -28,29 +28,47 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-// Validation utilities
+// Utilities
 const sanitizeInput = (input: string): string => {
   return input.trim().replace(/[<>"'&]/g, (match) => {
-    const escapeMap: Record<string, string> = {
+    const map: Record<string, string> = {
       "<": "&lt;",
       ">": "&gt;",
       '"': "&quot;",
       "'": "&#x27;",
       "&": "&amp;",
     }
-    return escapeMap[match]
+    return map[match]
   })
 }
-
 const isValidEmail = (email: string): boolean => {
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-  return emailRegex.test(email) && email.length <= 254
+  const rx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  return rx.test(email) && email.length <= 254
 }
-
-const isStrongPassword = (password: string): boolean => {
-  // Simplified password requirement - 6+ characters
-  return password.length >= 6
+const isStrongPassword = (password: string): boolean => password.length >= 6
+const withTimeout = async <T,>(p: Promise<T>, ms = 8000): Promise<T> => {
+  return Promise.race<T>([
+    p,
+    new Promise<T>((_, reject) => {
+      const id = setTimeout(() => {
+        clearTimeout(id)
+        reject(new Error("request-timeout"))
+      }, ms)
+    }),
+  ])
 }
+const toFallbackProfile = (u: SupabaseUser): Profile => ({
+  id: u.id,
+  email: u.email ?? "",
+  full_name: (u.user_metadata?.full_name || u.user_metadata?.name || "User") as string,
+  name: (u.user_metadata?.full_name || u.user_metadata?.name || "User") as string,
+  avatar_url: u.user_metadata?.avatar_url || "",
+  phone: u.user_metadata?.phone || "",
+  address: "",
+  role: "user",
+  created_at: u.created_at,
+  updated_at: u.updated_at || u.created_at,
+})
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<Profile | null>(null)
@@ -60,386 +78,379 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [connectionStatus, setConnectionStatus] = useState<"connected" | "disconnected" | "testing">("testing")
 
   const clearError = useCallback(() => setError(null), [])
-  const handleError = useCallback((error: unknown) => {
-    console.error("Auth error:", error)
-    setError(error as AuthError)
+  const handleError = useCallback((err: unknown) => {
+    console.error("Auth error:", err)
+    setError(err as AuthError)
   }, [])
 
-  const fetchUserProfile = useCallback(async (supabaseUser: SupabaseUser) => {
-    if (!supabase) return null
-    try {
-      console.log("Fetching user profile for:", supabaseUser.id)
-      
-      // Try to fetch from profiles table
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", supabaseUser.id)
-        .maybeSingle()
-
-      if (error && error.code !== 'PGRST116') { // PGRST116 is "not found" error
-        console.error("Error fetching user profile:", error.message)
-      }
-
-      if (data) {
-        console.log("Profile found:", data)
-        // Ensure we have proper name field for navbar display
-        const profileWithName = {
-          ...data,
-          name: data.full_name || data.name || "User" // Add name field for navbar
+  const fetchUserProfile = useCallback(
+    async (supabaseUser: SupabaseUser) => {
+      // Never throw from here; always resolve with a profile
+      try {
+        // If Supabase client not ready or connection is down, return a fallback
+        if (!supabase || connectionStatus !== "connected") {
+          const fallback = toFallbackProfile(supabaseUser)
+          setUser(fallback)
+          return fallback
         }
-        setUser(profileWithName)
-        return profileWithName
-      } else {
-        console.log("No profile found, creating new profile for user:", supabaseUser.id)
-        
-        // Create new profile
+
+        // Try to fetch existing profile
+        const { data, error } = await withTimeout(
+          supabase.from("profiles").select("*").eq("id", supabaseUser.id).maybeSingle(),
+          8000,
+        )
+
+        if (error && (error as any).code !== "PGRST116") {
+          console.warn("Error fetching user profile; using fallback:", (error as any).message || error)
+          const fallback = toFallbackProfile(supabaseUser)
+          setUser(fallback)
+          return fallback
+        }
+
+        if (data) {
+          const profileWithName = {
+            ...data,
+            name: data.full_name || data.name || "User",
+          }
+          setUser(profileWithName)
+          return profileWithName
+        }
+
+        // Create a new profile if not found
         const newUserProfile = {
           id: supabaseUser.id,
           email: supabaseUser.email!,
           full_name: supabaseUser.user_metadata?.full_name || supabaseUser.user_metadata?.name || "New User",
           avatar_url: supabaseUser.user_metadata?.avatar_url || "",
           phone: supabaseUser.user_metadata?.phone || "",
-          role: 'user' as const,
+          role: "user" as const,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         }
 
-        const { data: createdProfile, error: createError } = await supabase
-          .from("profiles")
-          .insert([newUserProfile])
-          .select()
-          .single()
+        const { data: created, error: createError } = await withTimeout(
+          supabase.from("profiles").insert([newUserProfile]).select().single(),
+          8000,
+        )
 
         if (createError) {
-          console.error("Error creating user profile:", createError.message)
-          // Use fallback profile if database insert fails
-          const fallbackProfile: Profile = {
-            id: supabaseUser.id,
-            email: supabaseUser.email!,
-            full_name: supabaseUser.user_metadata?.full_name || "New User",
-            name: supabaseUser.user_metadata?.full_name || "New User", // Add name field
-            role: 'user',
-            created_at: supabaseUser.created_at,
-            updated_at: supabaseUser.updated_at || supabaseUser.created_at,
-          }
-          setUser(fallbackProfile)
-          return fallbackProfile
-        } else {
-          console.log("Profile created successfully:", createdProfile)
-          const profileWithName = {
-            ...createdProfile,
-            name: createdProfile.full_name || "User" // Add name field for navbar
-          }
-          setUser(profileWithName)
-          return profileWithName
+          console.warn("Error creating profile; using fallback:", createError.message)
+          const fallback = toFallbackProfile(supabaseUser)
+          setUser(fallback)
+          return fallback
         }
+
+        const profileWithName = {
+          ...created,
+          name: created.full_name || "User",
+        }
+        setUser(profileWithName)
+        return profileWithName
+      } catch (err) {
+        // Network errors, timeouts, etc.
+        console.warn("fetchUserProfile fallback due to error:", err instanceof Error ? err.message : err)
+        const fallback = toFallbackProfile(supabaseUser)
+        setUser(fallback)
+        return fallback
       }
-    } catch (err) {
-      console.error("Unexpected error in fetchUserProfile:", err)
-      // Generic fallback for any unexpected errors
-      const fallbackProfile: Profile = {
-        id: supabaseUser.id,
-        email: supabaseUser.email!,
-        full_name: supabaseUser.user_metadata?.full_name || "New User",
-        name: supabaseUser.user_metadata?.full_name || "New User", // Add name field
-        role: 'user',
-        created_at: supabaseUser.created_at,
-        updated_at: supabaseUser.updated_at || supabaseUser.created_at,
-      }
-      setUser(fallbackProfile)
-      return fallbackProfile
-    }
-  }, [])
+    },
+    [connectionStatus],
+  )
 
   useEffect(() => {
+    let unsubscribe: (() => void) | undefined
+
     const initializeAuth = async () => {
-      console.log("Initializing auth...")
-      
-      const connectionResult = await testSupabaseConnection()
-      setConnectionStatus(connectionResult.status)
-
-      if (!supabase) {
-        console.warn("Supabase not available")
-        setIsLoading(false)
-        return
-      }
-
       try {
-        const { data: { session }, error } = await supabase.auth.getSession()
-        
-        if (error) {
-          console.error("Error getting session:", error)
-        }
-        
-        console.log("Initial session:", session?.user?.email || "No session")
-        
-        setSession(session)
-        if (session?.user) {
-          await fetchUserProfile(session.user)
-        }
-      } catch (error) {
-        console.error("Error in getSession:", error)
-      }
-      
-      setIsLoading(false)
+        setIsLoading(true)
 
-      const {
-        data: { subscription },
-      } = supabase.auth.onAuthStateChange(async (event, session) => {
-        console.log("Auth state changed:", event, session?.user?.email || "No user")
-        
-        setSession(session)
-        if (session?.user) {
-          await fetchUserProfile(session.user)
-        } else {
-          setUser(null)
+        // 1) Probe connectivity once up front
+        const connectionResult = await testSupabaseConnection().catch((e) => {
+          console.warn("testSupabaseConnection failed:", e)
+          return { status: "disconnected" as const }
+        })
+        setConnectionStatus(connectionResult.status as "connected" | "disconnected" | "testing")
+
+        // If client missing or no connectivity, stop here gracefully
+        if (!supabase || connectionResult.status !== "connected") {
+          console.warn("Supabase not reachable; running in disconnected mode.")
+          setIsLoading(false)
+          return
         }
-        
+
+        // 2) Get session with a timeout guard
+        try {
+          const { data: sessionData, error: sessionError } = await withTimeout(supabase.auth.getSession(), 8000)
+
+          if (sessionError) {
+            console.warn("getSession error:", sessionError.message)
+          }
+
+          const current = sessionData?.session ?? null
+          setSession(current)
+
+          if (current?.user) {
+            await fetchUserProfile(current.user)
+          }
+        } catch (sessErr) {
+          console.warn(
+            "getSession failed (network/timeout); skipping profile fetch:",
+            sessErr instanceof Error ? sessErr.message : sessErr,
+          )
+        }
+
+        // 3) Subscribe to auth state changes only when connected
+        const { data } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
+          setSession(nextSession)
+          if (nextSession?.user) {
+            await fetchUserProfile(nextSession.user)
+          } else {
+            setUser(null)
+          }
+          setIsLoading(false)
+        })
+
+        unsubscribe = () => data.subscription.unsubscribe()
+      } finally {
         setIsLoading(false)
-      })
-
-      return () => subscription.unsubscribe()
+      }
     }
 
     initializeAuth()
+    return () => {
+      if (unsubscribe) unsubscribe()
+    }
   }, [fetchUserProfile])
 
   const signIn = useCallback(
     async (email: string, password: string) => {
-      console.log("SignIn called with:", email)
-      
-      if (!supabase) {
-        console.error("Supabase not initialized")
-        throw new Error("Supabase not initialized")
+      if (!supabase || connectionStatus !== "connected") {
+        throw new Error("Authentication service unavailable. Please try again later.")
       }
-      
+
       try {
         setIsLoading(true)
         clearError()
-        
+
         if (!isValidEmail(email)) {
           throw new Error("Invalid email format.")
         }
-        
-        console.log("Attempting to sign in...")
-        
-        const { data, error } = await supabase.auth.signInWithPassword({ 
-          email: sanitizeInput(email), 
-          password 
-        })
-        
-        console.log("SignIn response:", { 
-          user: data.user?.email, 
-          session: !!data.session, 
-          error: error?.message 
-        })
-        
+
+        const { data, error } = await withTimeout(
+          supabase.auth.signInWithPassword({
+            email: sanitizeInput(email),
+            password,
+          }),
+          10000,
+        )
+
         if (error) {
-          // Handle specific email confirmation error
           if (error.message === "Email not confirmed") {
-            throw new Error("Please check your email and click the confirmation link, or contact support.")
+            throw new Error("Please confirm your email (check inbox) or contact support.")
           }
-          
-          // If invalid credentials, suggest creating account
           if (error.message === "Invalid login credentials") {
-            const customError = new Error("Account not found. Please create an account first or check your email and password.")
+            const customError = new Error("Account not found. Please create an account first or verify your password.")
             customError.name = "AccountNotFound"
             throw customError
           }
-          
-          console.error("SignIn error:", error)
           throw error
         }
-        
+
         if (data.session && data.user) {
-          console.log("SignIn successful, setting session and user")
           setSession(data.session)
           await fetchUserProfile(data.user)
         }
-        
       } catch (err) {
-        console.error("SignIn catch block:", err)
         handleError(err)
         throw err
       } finally {
         setIsLoading(false)
       }
     },
-    [clearError, handleError, fetchUserProfile],
+    [clearError, handleError, fetchUserProfile, connectionStatus],
   )
 
   const signUp = useCallback(
     async (name: string, email: string, password: string, phone?: string) => {
-      console.log("SignUp called with:", email)
-      
-      if (!supabase) throw new Error("Supabase not initialized")
+      if (!supabase || connectionStatus !== "connected") {
+        throw new Error("Signup service unavailable. Please try again later.")
+      }
       try {
         setIsLoading(true)
         clearError()
+
         if (!isValidEmail(email)) throw new Error("Invalid email format.")
         if (!isStrongPassword(password)) throw new Error("Password must be at least 6 characters long.")
 
-        console.log("Attempting to sign up...")
+        // Instant signup path (kept as-is, wrapped with timeout)
+        const controller = new AbortController()
+        const timeout = setTimeout(() => controller.abort(), 15000)
 
-        const { data, error } = await supabase.auth.signUp({
-          email: sanitizeInput(email),
-          password,
-          options: {
-            emailRedirectTo: undefined, // Disable email confirmation redirect
-            data: {
-              full_name: sanitizeInput(name),
-              name: sanitizeInput(name), // Also set name for compatibility
-              phone: phone ? sanitizeInput(phone) : undefined,
-            },
-          },
+        const resp = await fetch("/api/auth/instant-signup", {
+          method: "POST",
+          signal: controller.signal,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: sanitizeInput(name),
+            email: sanitizeInput(email.toLowerCase()),
+            password,
+            phone: phone ? sanitizeInput(phone) : undefined,
+          }),
         })
-        
-        console.log("SignUp response:", { 
-          user: data.user?.email, 
-          session: !!data.session, 
-          error: error?.message 
-        })
-        
-        if (error) {
-          console.error("SignUp error:", error)
-          throw error
+          .catch((e) => {
+            console.error("instant-signup fetch error:", e)
+            throw new Error("Network issue during signup. Please try again.")
+          })
+          .finally(() => clearTimeout(timeout))
+
+        if (!resp.ok) {
+          const data = await resp.json().catch(() => ({}))
+          if (resp.status !== 409 && !data?.error?.includes?.("already")) {
+            throw new Error(data?.error || "Failed to create account.")
+          }
         }
-        
-        if (data.user && data.session) {
-          console.log("SignUp successful with immediate session")
+
+        const { data, error } = await withTimeout(
+          supabase.auth.signInWithPassword({
+            email: sanitizeInput(email.toLowerCase()),
+            password,
+          }),
+          10000,
+        )
+
+        if (error) {
+          throw new Error(error.message || "Sign-in failed after signup.")
+        }
+
+        if (data.session && data.user) {
           setSession(data.session)
           await fetchUserProfile(data.user)
           return { success: true, requiresSignIn: false, user: data.user }
-        } else if (data.user && !data.session) {
-          console.log("SignUp successful but no session - email confirmation may be required")
-          return { success: true, requiresSignIn: true, user: data.user }
         }
-        
+
         return { success: true, requiresSignIn: !data.session, user: data.user ?? undefined }
       } catch (err) {
-        console.error("SignUp catch block:", err)
         handleError(err)
         throw err
       } finally {
         setIsLoading(false)
       }
     },
-    [clearError, handleError, fetchUserProfile],
+    [clearError, handleError, fetchUserProfile, connectionStatus],
   )
 
   const signOut = useCallback(async () => {
-    if (!supabase) throw new Error("Supabase not initialized")
+    if (!supabase || connectionStatus !== "connected") {
+      // Already "signed out" in a disconnected state
+      setUser(null)
+      setSession(null)
+      return
+    }
     try {
       setIsLoading(true)
       clearError()
-      console.log("Signing out...")
-      const { error } = await supabase.auth.signOut()
+      const { error } = await withTimeout(supabase.auth.signOut(), 8000)
       if (error) throw error
       setUser(null)
       setSession(null)
-      console.log("Signed out successfully")
     } catch (err) {
       handleError(err)
     } finally {
       setIsLoading(false)
     }
-  }, [clearError, handleError])
+  }, [clearError, handleError, connectionStatus])
 
   const updateUser = useCallback(
     async (userData: Partial<Profile>) => {
-      if (!supabase || !user) throw new Error("User not authenticated or Supabase not initialized")
+      if (!supabase || !user || connectionStatus !== "connected") {
+        throw new Error("Profile service unavailable or not authenticated.")
+      }
       try {
         setIsLoading(true)
         clearError()
-        
-        console.log("Updating user profile:", userData)
-        
-        const { data, error } = await supabase
-          .from("profiles")
-          .update({
-            ...userData,
-            updated_at: new Date().toISOString()
-          })
-          .eq("id", user.id)
-          .select()
-          .single()
-          
-        if (error) {
-          console.error("Profile update error:", error)
-          throw error
-        }
-        
-        console.log("Profile updated successfully:", data)
-        // Add name field for navbar display
-        const updatedProfile = {
-          ...data,
-          name: data.full_name || data.name || "User"
-        }
+        const { data, error } = await withTimeout(
+          supabase
+            .from("profiles")
+            .update({
+              ...userData,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", user.id)
+            .select()
+            .single(),
+          10000,
+        )
+        if (error) throw error
+        const updatedProfile = { ...data, name: data.full_name || data.name || "User" }
         setUser(updatedProfile)
-        
-        // Force a small delay to ensure state updates propagate
-        await new Promise(resolve => setTimeout(resolve, 100))
-        
+        await new Promise((resolve) => setTimeout(resolve, 100))
       } catch (err) {
-        console.error("Update user error:", err)
         handleError(err)
         throw err
       } finally {
         setIsLoading(false)
       }
     },
-    [user, clearError, handleError],
+    [user, clearError, handleError, connectionStatus],
   )
 
   const resetPassword = useCallback(
     async (email: string) => {
-      if (!supabase) throw new Error("Supabase not initialized")
+      if (!supabase || connectionStatus !== "connected") {
+        throw new Error("Password reset service unavailable. Please try again later.")
+      }
       try {
         clearError()
         if (!isValidEmail(email)) throw new Error("Invalid email format.")
-        const { error } = await supabase.auth.resetPasswordForEmail(sanitizeInput(email), {
-          redirectTo: `${window.location.origin}/reset-password`,
-        })
+        const { error } = await withTimeout(
+          supabase.auth.resetPasswordForEmail(sanitizeInput(email), {
+            redirectTo: `${window.location.origin}/reset-password`,
+          }),
+          10000,
+        )
         if (error) throw error
       } catch (err) {
         handleError(err)
         throw err
       }
     },
-    [clearError, handleError],
+    [clearError, handleError, connectionStatus],
   )
 
   const resetPasswordWithToken = useCallback(
     async (token: string, newPassword: string) => {
-      if (!supabase) throw new Error("Supabase not initialized")
+      if (!supabase || connectionStatus !== "connected") {
+        throw new Error("Password update service unavailable. Please try again later.")
+      }
       try {
         clearError()
         if (!isStrongPassword(newPassword)) throw new Error("New password must be at least 6 characters long.")
-        const { error } = await supabase.auth.updateUser({ password: newPassword })
+        const { error } = await withTimeout(supabase.auth.updateUser({ password: newPassword }), 10000)
         if (error) throw error
       } catch (err) {
         handleError(err)
         throw err
       }
     },
-    [clearError, handleError],
+    [clearError, handleError, connectionStatus],
   )
 
   const changePassword = useCallback(
-    async (currentPassword: string, newPassword: string) => {
-      if (!supabase || !user) throw new Error("User not authenticated or Supabase not initialized")
+    async (_currentPassword: string, newPassword: string) => {
+      if (!supabase || !user || connectionStatus !== "connected") {
+        throw new Error("Password change unavailable or not authenticated.")
+      }
       try {
         clearError()
         if (!isStrongPassword(newPassword)) throw new Error("New password must be at least 6 characters long.")
-        const { error } = await supabase.auth.updateUser({ password: newPassword })
+        const { error } = await withTimeout(supabase.auth.updateUser({ password: newPassword }), 10000)
         if (error) throw error
       } catch (err) {
         handleError(err)
         throw err
       }
     },
-    [user, clearError, handleError],
+    [user, clearError, handleError, connectionStatus],
   )
 
   const value: AuthContextType = {

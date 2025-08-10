@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { Calendar, User, ArrowRight } from 'lucide-react'
+import { Calendar, User, ArrowRight } from "lucide-react"
 import ImageWithFallback from "@/components/image-fallback"
 
 export default function Blog() {

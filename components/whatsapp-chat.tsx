@@ -1,14 +1,39 @@
-'use client'
+"use client"
 
-import { useState, useEffect } from 'react'
-import { MessageCircle, X, Send, Facebook, Instagram } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import Image from 'next/image'
+import { useState, useEffect } from "react"
+import { MessageCircle, X, Send, Facebook, Instagram } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import Image from "next/image"
+
+const RAW_PHONE = process.env.NEXT_PUBLIC_WHATSAPP_PHONE || ""
+const PHONE = RAW_PHONE.replace(/\D/g, "") // keep digits only: supports +880, spaces, etc.
+const WHATSAPP_MESSAGE_CODE = "J5JFSMILYBTQG1"
+
+// Build a base link for opening your business chat
+function getWhatsAppBaseLink() {
+  if (PHONE) {
+    // Direct chat without text; avoids "Forward to"
+    return `https://api.whatsapp.com/send?phone=${PHONE}`
+  }
+  // Fallback to your short link if phone not set
+  return `https://wa.me/message/${WHATSAPP_MESSAGE_CODE}`
+}
+
+// Build a message link that reliably supports prefilled text
+function buildWhatsAppUrl(text: string) {
+  const encoded = encodeURIComponent(text)
+  if (PHONE) {
+    // Direct chat with prefilled text; avoids "Forward to"
+    return `https://api.whatsapp.com/send?phone=${PHONE}&text=${encoded}`
+  }
+  // Fallback (may show "Forward to" on some devices)
+  return `https://api.whatsapp.com/send?text=${encoded}`
+}
 
 export default function WhatsAppChat() {
   const [isOpen, setIsOpen] = useState(false)
   const [isVisible, setIsVisible] = useState(false)
-  const [message, setMessage] = useState('')
+  const [message, setMessage] = useState("")
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -21,40 +46,39 @@ export default function WhatsAppChat() {
   if (!isVisible) return null
 
   // Official Sushi yAki social media links
-  const whatsappLink = "https://wa.me/message/J5JFSMILYBTQG1"
   const facebookLink = "https://www.facebook.com/yaki24sushipur"
   const instagramLink = "https://www.instagram.com/sushi_yaki_mohammadpur"
 
   const handleQuickMessage = (quickMsg: string) => {
-    const url = `${whatsappLink}?text=${encodeURIComponent(quickMsg)}`
-    window.open(url, '_blank')
+    const url = buildWhatsAppUrl(quickMsg)
+    window.open(url, "_blank")
     setIsOpen(false)
   }
 
   const handleCustomMessage = () => {
     if (message.trim()) {
-      const url = `${whatsappLink}?text=${encodeURIComponent(message)}`
-      window.open(url, '_blank')
-      setMessage('')
+      const url = buildWhatsAppUrl(message)
+      window.open(url, "_blank")
+      setMessage("")
       setIsOpen(false)
     }
   }
 
   const handleSocialLink = (platform: string) => {
-    let url = ''
+    let url = ""
     switch (platform) {
-      case 'facebook':
+      case "facebook":
         url = facebookLink
         break
-      case 'instagram':
+      case "instagram":
         url = instagramLink
         break
-      case 'whatsapp':
-        url = whatsappLink
+      case "whatsapp":
+        url = getWhatsAppBaseLink()
         break
     }
     if (url) {
-      window.open(url, '_blank')
+      window.open(url, "_blank")
     }
   }
 
@@ -91,9 +115,7 @@ export default function WhatsAppChat() {
             {/* Welcome Message */}
             <div className="mb-3">
               <div className="bg-gray-100 rounded-lg p-2 max-w-[90%]">
-                <p className="text-xs text-gray-800">
-                  👋 Welcome to Sushi yAki Mohammadpur! How can we help?
-                </p>
+                <p className="text-xs text-gray-800">👋 Welcome to Sushi yAki Mohammadpur! How can we help?</p>
               </div>
             </div>
 
@@ -102,21 +124,21 @@ export default function WhatsAppChat() {
               <p className="text-xs text-gray-500 font-semibold mb-2 uppercase tracking-wide">Follow Us</p>
               <div className="flex space-x-2">
                 <button
-                  onClick={() => handleSocialLink('facebook')}
+                  onClick={() => handleSocialLink("facebook")}
                   className="flex-1 flex items-center justify-center p-2 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors duration-200 group"
                   title="Follow us on Facebook"
                 >
                   <Facebook className="h-4 w-4 text-blue-600 group-hover:text-blue-700" />
                 </button>
                 <button
-                  onClick={() => handleSocialLink('instagram')}
+                  onClick={() => handleSocialLink("instagram")}
                   className="flex-1 flex items-center justify-center p-2 bg-pink-50 hover:bg-pink-100 rounded-lg transition-colors duration-200 group"
                   title="Follow us on Instagram"
                 >
                   <Instagram className="h-4 w-4 text-pink-600 group-hover:text-pink-700" />
                 </button>
                 <button
-                  onClick={() => handleSocialLink('whatsapp')}
+                  onClick={() => handleSocialLink("whatsapp")}
                   className="flex-1 flex items-center justify-center p-2 bg-green-50 hover:bg-green-100 rounded-lg transition-colors duration-200 group"
                   title="Chat on WhatsApp"
                 >
@@ -134,8 +156,8 @@ export default function WhatsAppChat() {
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 placeholder="Type your message..."
-                className="flex-1 px-2 py-1.5 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-gray-400 bg-white"
-                onKeyPress={(e) => e.key === 'Enter' && handleCustomMessage()}
+                className="flex-1 px-2 py-1.5 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-gray-400 bg-stone-800"
+                onKeyPress={(e) => e.key === "Enter" && handleCustomMessage()}
               />
               <Button
                 onClick={handleCustomMessage}
@@ -146,15 +168,13 @@ export default function WhatsAppChat() {
                 <Send className="h-3 w-3" />
               </Button>
             </div>
-            <p className="text-xs text-gray-400 mt-1 text-center">
-              WhatsApp • Sushi yAki Mohammadpur
-            </p>
+            <p className="text-xs text-gray-400 mt-1 text-center">WhatsApp • Sushi yAki Mohammadpur</p>
           </div>
         </div>
       )}
-      
+
       {/* Live Chat Button - Always stays in same position with higher z-index */}
-      <div 
+      <div
         onClick={() => setIsOpen(!isOpen)}
         className="cursor-pointer transition-all duration-300 hover:scale-105 active:scale-95 relative z-50"
       >
@@ -162,23 +182,23 @@ export default function WhatsAppChat() {
           <Image
             src="/images/sushi-yaki-live-chat-transparent.png"
             alt="Sushi yAki Live Chat Support"
-            width={100}
-            height={80}
-            className="w-20 h-16 sm:w-22 sm:h-17 md:w-24 md:h-19 lg:w-26 lg:h-20 drop-shadow-lg hover:drop-shadow-xl transition-all duration-300 rounded-lg"
+            width={142}
+            height={114}
+            className="w-[112px] h-[90px] sm:w-[122px] sm:h-[98px] md:w-[132px] md:h-[106px] lg:w-[142px] lg:h-[114px] drop-shadow-lg hover:drop-shadow-xl transition-all duration-300 rounded-lg"
             priority
             style={{
-              maxWidth: '100%',
-              height: 'auto',
+              maxWidth: "100%",
+              height: "auto",
             }}
           />
-          
-          {/* Single Live Dot Indicator */}
-          <div className="absolute top-1 right-1">
+
+          {/* Live status dot — hug the icon and never block clicks */}
+          <div className="pointer-events-none absolute top-1 right-1 md:top-1 md:right-1">
             <div className="relative">
-              {/* Outer pulsing ring */}
-              <div className="absolute w-4 h-4 bg-green-400 rounded-full animate-ping opacity-75"></div>
+              {/* Outer pulsing ring (slightly larger than the solid dot) */}
+              <div className="absolute w-4 h-4 rounded-full bg-green-400 opacity-70 animate-ping"></div>
               {/* Inner solid dot */}
-              <div className="relative w-3 h-3 bg-green-500 rounded-full border-2 border-white shadow-lg"></div>
+              <div className="relative w-3 h-3 rounded-full bg-green-500 border-2 border-white shadow-lg"></div>
             </div>
           </div>
         </div>
