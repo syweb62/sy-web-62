@@ -1,57 +1,83 @@
-"use client"
+import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js"
 
-import { createClient, type SupabaseClient } from "@supabase/supabase-js"
+// Server-visible env (build/runtime on server)
+const SERVER_PUBLIC_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
+const SERVER_PUBLIC_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-// Read public env (required)
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+type PublicEnv = {
+  NEXT_PUBLIC_SUPABASE_URL?: string
+  NEXT_PUBLIC_SUPABASE_ANON_KEY?: string
+}
 
-let browserClient: SupabaseClient | null = null
+// Read browser-injected env if available (window.__PUBLIC_ENV)
+// Safe on server (returns empty object)
+function getBrowserEnv(): PublicEnv {
+  if (typeof window === "undefined") return {}
+  const w = window as unknown as { __PUBLIC_ENV?: PublicEnv }
+  return w.__PUBLIC_ENV || {}
+}
 
-function createBrowserClient(): SupabaseClient {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+let browserSingleton: SupabaseClient | null = null
 
+function resolvePublicCreds() {
+  const be = getBrowserEnv()
+  const url = SERVER_PUBLIC_URL || be.NEXT_PUBLIC_SUPABASE_URL || ""
+  const anon = SERVER_PUBLIC_ANON || be.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
+  return { url, anon }
+}
+
+function createSupabaseClientInternal(): SupabaseClient {
+  const { url, anon } = resolvePublicCreds()
   if (!url || !anon) {
+    // Lazy client: আমরা import টাইমে ক্র্যাশ না করে প্রথম ব্যবহারেই স্পষ্ট বার্তা দিই
     throw new Error(
-      "Supabase URL/Anon key missing. Make sure NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are set.",
+      "Supabase public env missing. Expecting NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.",
     )
   }
-
   return createClient(url, anon, {
     auth: {
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: true,
+      flowType: "pkce",
     },
   })
 }
 
 /**
- * ব্রাউজারে Supabase ক্লায়েন্ট সিঙ্গেলটন
+ * ব্রাউজারে Supabase ক্লায়েন্ট (সিঙ্গেলটন)
  */
 export function getSupabaseBrowserClient(): SupabaseClient {
-  if (!browserClient) {
-    browserClient = createBrowserClient()
+  if (!browserSingleton) {
+    browserSingleton = createSupabaseClientInternal()
   }
-  return browserClient
+  return browserSingleton
 }
 
-// Optional named export to preserve existing imports
-export const supabase = getSupabaseBrowserClient()
+/**
+ * Lazy proxy: import করার সাথে সাথে ক্লায়েন্ট বানায় না,
+ * প্রথমবার প্রপার্টি/মেথডে অ্যাক্সেসের সময় ক্লায়েন্ট তৈরি করে।
+ */
+export const supabase: SupabaseClient = new Proxy({} as SupabaseClient, {
+  get(_target, prop, _receiver) {
+    const client = getSupabaseBrowserClient()
+    // @ts-ignore dynamic access
+    const value = client[prop]
+    return typeof value === "function" ? value.bind(client) : value
+  },
+}) as SupabaseClient
 
-// Server-side client for admin operations (service role bypasses RLS)
+// Server-side admin client (RLS bypass). Only created on the server.
 export const supabaseAdmin =
   typeof window === "undefined"
-    ? createClient(supabaseUrl || "", process.env.SUPABASE_SERVICE_ROLE_KEY || supabaseAnonKey || "", {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false,
-        },
-      })
+    ? createClient(
+        SERVER_PUBLIC_URL || "",
+        (process.env.SUPABASE_SERVICE_ROLE_KEY || SERVER_PUBLIC_ANON || "") as string,
+        { auth: { autoRefreshToken: false, persistSession: false } },
+      )
     : null
 
-// Types
+// ---- Types ----
 export interface Profile {
   id: string
   email: string
@@ -108,7 +134,7 @@ export interface OrderItem {
 
 export interface Reservation {
   reservation_id: string
-  user_id?: string
+  user_id?: string | null
   name: string
   phone: string
   date: string
@@ -126,43 +152,42 @@ export interface SocialMediaLink {
   created_at: string
 }
 
+// ---- Helpers ----
+
 /**
- * নিরপেক্ষ হেলথ-চেক: profiles নয়, menu_items এ HEAD select
- * লক্ষ্য: RLS recursion এ না পড়া।
+ * নিরপেক্ষ হেলথ-চেক: profiles নয়, menu_items টেবিলে সিম্পল সিলেক্ট
+ * (RLS recursion এড়াতে)
  */
-export async function testSupabaseConnection(): Promise<{ ok: boolean; message: string }> {
+export async function testSupabaseConnection(): Promise<{ ok: boolean; error?: string }> {
   try {
-    const supabase = getSupabaseBrowserClient()
-    // menu_items টেবিলটি v7 স্কিমা অনুযায়ী পাবলিক রিডেবল/নন-RLS রাখা হয়েছে।
-    const { error, status } = await supabase.from("menu_items").select("id", { head: true, count: "exact" })
-
-    if (error) {
-      return { ok: false, message: `Connection OK but query error: ${error.message}` }
-    }
-
-    return { ok: true, message: `Connected (status ${status})` }
-  } catch (err: any) {
-    return { ok: false, message: `Connection failed: ${err?.message || String(err)}` }
+    const client = getSupabaseBrowserClient()
+    const { error } = await client.from("menu_items").select("id").limit(1)
+    if (error) return { ok: false, error: error.message }
+    return { ok: true }
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err)
+    return { ok: false, error: message }
   }
 }
 
 /**
- * হালকা হেল্পার: কারেন্ট ইউজার রিটার্ন
+ * কারেন্ট ইউজার বের করার হেল্পার (named export হিসাবে)
  */
-export async function getCurrentUser() {
-  const supabase = getSupabaseBrowserClient()
-  const { data, error } = await supabase.auth.getUser()
-  if (error) {
-    return { user: null, error }
+export async function getCurrentUser(): Promise<User | null> {
+  try {
+    const client = getSupabaseBrowserClient()
+    const { data, error } = await client.auth.getUser()
+    if (error) return null
+    return data.user ?? null
+  } catch {
+    return null
   }
-  return { user: data.user, error: null }
 }
 
-// Services
+// ---- Services ----
 export const menuItemsService = {
   async getAll() {
-    const client = getSupabaseBrowserClient()
-    const { data, error } = await client
+    const { data, error } = await supabase
       .from("menu_items")
       .select("*")
       .eq("is_available", true)
@@ -171,8 +196,7 @@ export const menuItemsService = {
     return data as MenuItem[]
   },
   async getByCategory(category: string) {
-    const client = getSupabaseBrowserClient()
-    const { data, error } = await client
+    const { data, error } = await supabase
       .from("menu_items")
       .select("*")
       .eq("category", category)
@@ -182,8 +206,7 @@ export const menuItemsService = {
     return data as MenuItem[]
   },
   async getById(id: string) {
-    const client = getSupabaseBrowserClient()
-    const { data, error } = await client.from("menu_items").select("*").eq("id", id).single()
+    const { data, error } = await supabase.from("menu_items").select("*").eq("id", id).single()
     if (error) throw error
     return data as MenuItem
   },
@@ -191,14 +214,12 @@ export const menuItemsService = {
 
 export const ordersService = {
   async create(order: Omit<Order, "order_id" | "created_at">) {
-    const client = getSupabaseBrowserClient()
-    const { data, error } = await client.from("orders").insert(order).select().single()
+    const { data, error } = await supabase.from("orders").insert(order).select().single()
     if (error) throw error
     return data as Order
   },
   async getByUserId(userId: string) {
-    const client = getSupabaseBrowserClient()
-    const { data, error } = await client
+    const { data, error } = await supabase
       .from("orders")
       .select("*")
       .eq("user_id", userId)
@@ -207,8 +228,7 @@ export const ordersService = {
     return data as Order[]
   },
   async updateStatus(orderId: string, status: Order["status"]) {
-    const client = getSupabaseBrowserClient()
-    const { data, error } = await client.from("orders").update({ status }).eq("order_id", orderId).select().single()
+    const { data, error } = await supabase.from("orders").update({ status }).eq("order_id", orderId).select().single()
     if (error) throw error
     return data as Order
   },
@@ -216,14 +236,12 @@ export const ordersService = {
 
 export const reservationsService = {
   async create(reservation: Omit<Reservation, "reservation_id" | "created_at">) {
-    const client = getSupabaseBrowserClient()
-    const { data, error } = await client.from("reservations").insert(reservation).select().single()
+    const { data, error } = await supabase.from("reservations").insert(reservation).select().single()
     if (error) throw error
     return data as Reservation
   },
   async getByUserId(userId: string) {
-    const client = getSupabaseBrowserClient()
-    const { data, error } = await client
+    const { data, error } = await supabase
       .from("reservations")
       .select("*")
       .eq("user_id", userId)
@@ -235,8 +253,7 @@ export const reservationsService = {
 
 export const socialMediaService = {
   async getAll() {
-    const client = getSupabaseBrowserClient()
-    const { data, error } = await client
+    const { data, error } = await supabase
       .from("social_media_links")
       .select("*")
       .order("display_order", { ascending: true })
@@ -247,19 +264,14 @@ export const socialMediaService = {
 
 export const profileService = {
   async getById(userId: string) {
-    const client = getSupabaseBrowserClient()
-    const { data, error } = await client.from("profiles").select("*").eq("id", userId).single()
+    const { data, error } = await supabase.from("profiles").select("*").eq("id", userId).single()
     if (error) throw error
     return data as Profile
   },
   async update(userId: string, updates: Partial<Profile>) {
-    const client = getSupabaseBrowserClient()
-    const { data, error } = await client
+    const { data, error } = await supabase
       .from("profiles")
-      .update({
-        ...updates,
-        updated_at: new Date().toISOString(),
-      })
+      .update({ ...updates, updated_at: new Date().toISOString() })
       .eq("id", userId)
       .select()
       .single()
@@ -267,14 +279,9 @@ export const profileService = {
     return data as Profile
   },
   async create(profile: Omit<Profile, "created_at" | "updated_at">) {
-    const client = getSupabaseBrowserClient()
-    const { data, error } = await client
+    const { data, error } = await supabase
       .from("profiles")
-      .insert({
-        ...profile,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
+      .insert({ ...profile, created_at: new Date().toISOString(), updated_at: new Date().toISOString() })
       .select()
       .single()
     if (error) throw error
