@@ -604,9 +604,10 @@ body {
   height: 100vh !important;
   height: 100dvh !important;
   z-index: 1000 !important;
-  background: rgba(0, 0, 0, 0.95) !important;
-  backdrop-filter: blur(10px) !important;
-  -webkit-backdrop-filter: blur(10px) !important;
+  /* Reduced mobile overlay opacity from 0.95 to 0.2 for lighter background */
+  background: rgba(0, 0, 0, 0.2) !important;
+  backdrop-filter: blur(3px) !important; /* Reduced blur from 10px to 3px */
+  -webkit-backdrop-filter: blur(3px) !important;
 }
 
 /* Prevent body scroll when menu is open */
@@ -923,6 +924,9 @@ body.mobile-menu-open .mobile-menu-overlay-fix * {
     height: 40px !important;
     min-width: 40px !important;
     min-height: 40px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
     padding: 8px !important;
   }
 

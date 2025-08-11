@@ -34,6 +34,7 @@ export default function WhatsAppChat() {
   const [isOpen, setIsOpen] = useState(false)
   const [isVisible, setIsVisible] = useState(false)
   const [message, setMessage] = useState("")
+  const [isSending, setIsSending] = useState(false)
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -57,10 +58,15 @@ export default function WhatsAppChat() {
 
   const handleCustomMessage = () => {
     if (message.trim()) {
+      setIsSending(true)
       const url = buildWhatsAppUrl(message)
       window.open(url, "_blank")
-      setMessage("")
-      setIsOpen(false)
+
+      setTimeout(() => {
+        setMessage("")
+        setIsSending(false)
+        setIsOpen(false)
+      }, 500)
     }
   }
 
@@ -86,7 +92,7 @@ export default function WhatsAppChat() {
     <div className="fixed bottom-4 right-4 z-50">
       {/* Chat Window - Positioned independently to not affect button position */}
       {isOpen && (
-        <div className="fixed bottom-24 right-4 bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden animate-in slide-in-from-bottom-2 duration-300 w-64 sm:w-72 max-w-[calc(100vw-2rem)] z-40">
+        <div className="fixed bottom-20 sm:bottom-24 right-2 sm:right-4 bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden animate-in slide-in-from-bottom-2 duration-300 w-[calc(100vw-1rem)] sm:w-72 max-w-[320px] z-40 mb-2 sm:mb-0">
           {/* Header */}
           <div className="bg-gray-50 px-3 py-2 border-b border-gray-200">
             <div className="flex justify-between items-center">
@@ -111,7 +117,7 @@ export default function WhatsAppChat() {
           </div>
 
           {/* Content */}
-          <div className="p-3 max-h-64 overflow-y-auto">
+          <div className="p-3 max-h-48 sm:max-h-64 overflow-y-auto">
             {/* Welcome Message */}
             <div className="mb-3">
               <div className="bg-gray-100 rounded-lg p-2 max-w-[90%]">
@@ -149,26 +155,34 @@ export default function WhatsAppChat() {
           </div>
 
           {/* Message Input */}
-          <div className="border-t border-gray-200 p-3 bg-gray-50">
-            <div className="flex space-x-2">
+          <div className="border-t border-gray-200 p-3 bg-gray-50 sticky bottom-0">
+            <div className="flex space-x-2 items-center">
               <input
                 type="text"
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 placeholder="Type your message..."
-                className="flex-1 px-2 py-1.5 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-gray-400 bg-stone-800"
-                onKeyPress={(e) => e.key === "Enter" && handleCustomMessage()}
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-green-400 bg-white text-gray-800 placeholder-gray-500 min-h-[40px]"
+                onKeyPress={(e) => e.key === "Enter" && !isSending && handleCustomMessage()}
+                disabled={isSending}
               />
               <Button
                 onClick={handleCustomMessage}
-                disabled={!message.trim()}
-                className="bg-gray-600 hover:bg-gray-700 text-white px-2 py-1.5 rounded-lg disabled:opacity-50"
+                disabled={!message.trim() || isSending}
+                className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed min-h-[40px] min-w-[40px] flex items-center justify-center transition-all duration-200"
                 size="sm"
+                title="Send message to WhatsApp"
               >
-                <Send className="h-3 w-3" />
+                {isSending ? (
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
               </Button>
             </div>
-            <p className="text-xs text-gray-400 mt-1 text-center">WhatsApp • Sushi yAki Mohammadpur</p>
+            <p className="text-xs text-gray-400 mt-2 text-center">
+              {message.trim() ? "Click send to open WhatsApp with your message" : "WhatsApp • Sushi yAki Mohammadpur"}
+            </p>
           </div>
         </div>
       )}

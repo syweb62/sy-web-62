@@ -1,70 +1,111 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Search, Eye, Edit, Trash2, Plus } from "lucide-react"
+import { Search, Eye, Edit, Plus, RefreshCw } from "lucide-react"
+import { useToast } from "@/hooks/use-toast"
 
-// Mock orders data
-const mockOrders = [
-  {
-    id: "ORD-12345",
-    customer: "John Doe",
-    email: "john@example.com",
-    items: ["Sushi Platter", "Miso Soup"],
-    total: 34.99,
-    status: "preparing",
-    date: "2024-01-15",
-    time: "12:30 PM",
-    type: "dine-in",
-    paymentMethod: "cash",
-  },
-  {
-    id: "ORD-12346",
-    customer: "Sarah Johnson",
-    email: "sarah@example.com",
-    items: ["Teriyaki Salmon", "Green Tea"],
-    total: 28.5,
-    status: "ready",
-    date: "2024-01-15",
-    time: "1:15 PM",
-    type: "takeout",
-    paymentMethod: "bkash",
-  },
-  {
-    id: "ORD-12347",
-    customer: "Mike Chen",
-    email: "mike@example.com",
-    items: ["Ramen Bowl", "Gyoza"],
-    total: 24.99,
-    status: "delivered",
-    date: "2024-01-15",
-    time: "11:45 AM",
-    type: "delivery",
-    paymentMethod: "cash",
-  },
-  {
-    id: "ORD-12348",
-    customer: "Emily Davis",
-    email: "emily@example.com",
-    items: ["Sashimi Set", "Sake"],
-    total: 45.99,
-    status: "pending",
-    date: "2024-01-15",
-    time: "2:00 PM",
-    type: "dine-in",
-    paymentMethod: "pickup",
-  },
-]
+interface Order {
+  id: string
+  customer: string
+  email: string
+  items: Array<{ name: string; quantity: number; price: number }>
+  total_price: number
+  status: string
+  formatted_date: string
+  formatted_time: string
+  bangladesh_timestamp: string
+  order_type: string
+  payment_method: string
+}
 
 export default function OrdersPage() {
+  const [orders, setOrders] = useState<Order[]>([])
+  const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [typeFilter, setTypeFilter] = useState("all")
+  const { toast } = useToast()
+
+  const fetchOrders = async () => {
+    try {
+      setLoading(true)
+      const params = new URLSearchParams()
+      if (statusFilter !== "all") params.append("status", statusFilter)
+      if (typeFilter !== "all") params.append("type", typeFilter)
+      if (searchTerm) params.append("search", searchTerm)
+
+      const response = await fetch(`/api/orders?${params.toString()}`)
+      const data = await response.json()
+
+      if (response.ok) {
+        setOrders(data.orders || [])
+      } else {
+        toast({
+          title: "Error",
+          description: data.error || "Failed to fetch orders",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("Error fetching orders:", error)
+      toast({
+        title: "Error",
+        description: "Failed to fetch orders",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const updateOrderStatus = async (orderId: string, newStatus: string) => {
+    try {
+      const response = await fetch("/api/orders", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId, status: newStatus }),
+      })
+
+      if (response.ok) {
+        toast({
+          title: "Success",
+          description: "Order status updated successfully",
+        })
+        fetchOrders() // Refresh the list
+      } else {
+        const data = await response.json()
+        toast({
+          title: "Error",
+          description: data.error || "Failed to update order",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("Error updating order:", error)
+      toast({
+        title: "Error",
+        description: "Failed to update order",
+        variant: "destructive",
+      })
+    }
+  }
+
+  useEffect(() => {
+    fetchOrders()
+  }, [statusFilter, typeFilter])
+
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      fetchOrders()
+    }, 500)
+    return () => clearTimeout(timeoutId)
+  }, [searchTerm])
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -109,30 +150,24 @@ export default function OrdersPage() {
     }
   }
 
-  const filteredOrders = mockOrders.filter((order) => {
-    const matchesSearch =
-      order.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.customer.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.email.toLowerCase().includes(searchTerm.toLowerCase())
-
-    const matchesStatus = statusFilter === "all" || order.status === statusFilter
-    const matchesType = typeFilter === "all" || order.type === typeFilter
-
-    return matchesSearch && matchesStatus && matchesType
-  })
-
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-serif font-bold text-white">Orders Management</h1>
-          <p className="text-gray-400 mt-1">Manage and track all customer orders</p>
+          <p className="text-gray-400 mt-1">Manage and track all customer orders (Bangladesh Time)</p>
         </div>
-        <Button className="bg-gold text-black hover:bg-gold/80">
-          <Plus size={16} className="mr-2" />
-          New Order
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={fetchOrders} disabled={loading} className="bg-gray-800/50 border-gray-700">
+            <RefreshCw size={16} className={`mr-2 ${loading ? "animate-spin" : ""}`} />
+            Refresh
+          </Button>
+          <Button className="bg-gold text-black hover:bg-gold/80">
+            <Plus size={16} className="mr-2" />
+            New Order
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -181,7 +216,9 @@ export default function OrdersPage() {
       {/* Orders Table */}
       <Card className="bg-black/30 border-gray-800">
         <CardHeader>
-          <CardTitle className="text-white">Orders ({filteredOrders.length})</CardTitle>
+          <CardTitle className="text-white">
+            Orders ({orders.length}) {loading && <span className="text-sm text-gray-400">- Loading...</span>}
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -195,56 +232,88 @@ export default function OrdersPage() {
                   <TableHead className="text-gray-400">Status</TableHead>
                   <TableHead className="text-gray-400">Type</TableHead>
                   <TableHead className="text-gray-400">Payment</TableHead>
-                  <TableHead className="text-gray-400">Date & Time</TableHead>
+                  <TableHead className="text-gray-400">Date & Time (BD)</TableHead>
                   <TableHead className="text-gray-400">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredOrders.map((order) => (
-                  <TableRow key={order.id} className="border-gray-800">
-                    <TableCell className="font-medium text-white">{order.id}</TableCell>
-                    <TableCell>
-                      <div>
-                        <p className="text-white font-medium">{order.customer}</p>
-                        <p className="text-gray-400 text-sm">{order.email}</p>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="text-gray-300">{order.items.join(", ")}</div>
-                    </TableCell>
-                    <TableCell className="text-gold font-medium">${order.total.toFixed(2)}</TableCell>
-                    <TableCell>
-                      <Badge className={getStatusColor(order.status)}>{order.status}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={getTypeColor(order.type)}>{order.type}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={getPaymentMethodColor(order.paymentMethod)}>
-                        {order.paymentMethod === "bkash" ? "bKash" : order.paymentMethod === "cash" ? "Cash" : "Pickup"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="text-gray-300">
-                        <p>{order.date}</p>
-                        <p className="text-sm text-gray-400">{order.time}</p>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Button variant="outline" size="sm">
-                          <Eye size={14} />
-                        </Button>
-                        <Button variant="outline" size="sm">
-                          <Edit size={14} />
-                        </Button>
-                        <Button variant="outline" size="sm" className="text-red-400 hover:text-red-300 bg-transparent">
-                          <Trash2 size={14} />
-                        </Button>
-                      </div>
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={9} className="text-center text-gray-400 py-8">
+                      Loading orders...
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : orders.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={9} className="text-center text-gray-400 py-8">
+                      No orders found
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  orders.map((order) => (
+                    <TableRow key={order.id} className="border-gray-800">
+                      <TableCell className="font-medium text-white">{order.id}</TableCell>
+                      <TableCell>
+                        <div>
+                          <p className="text-white font-medium">{order.customer}</p>
+                          <p className="text-gray-400 text-sm">{order.email}</p>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-gray-300">
+                          {order.items.map((item, index) => (
+                            <div key={index} className="text-sm">
+                              {item.name} x{item.quantity}
+                            </div>
+                          ))}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-gold font-medium">
+                        ৳{order.total_price?.toFixed(2) || "0.00"}
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={getStatusColor(order.status)}>{order.status}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={getTypeColor(order.order_type)}>{order.order_type}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={getPaymentMethodColor(order.payment_method)}>
+                          {order.payment_method === "bkash"
+                            ? "bKash"
+                            : order.payment_method === "cash"
+                              ? "Cash"
+                              : order.payment_method}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-gray-300">
+                          <p>{order.formatted_date}</p>
+                          <p className="text-sm text-gray-400">{order.formatted_time}</p>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Button variant="outline" size="sm">
+                            <Eye size={14} />
+                          </Button>
+                          <Select onValueChange={(value) => updateOrderStatus(order.id, value)}>
+                            <SelectTrigger className="w-20 h-8">
+                              <Edit size={14} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="pending">Pending</SelectItem>
+                              <SelectItem value="preparing">Preparing</SelectItem>
+                              <SelectItem value="ready">Ready</SelectItem>
+                              <SelectItem value="delivered">Delivered</SelectItem>
+                              <SelectItem value="cancelled">Cancelled</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </div>

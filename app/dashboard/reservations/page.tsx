@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -8,64 +8,24 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Search, Plus, Edit, Trash2, Calendar, Clock, Users } from "lucide-react"
+import { useAuth } from "@/hooks/use-auth"
 
-// Mock reservations data
-const mockReservations = [
-  {
-    id: "RES-001",
-    customer: "Emily Davis",
-    email: "emily@example.com",
-    phone: "+1 (555) 123-4567",
-    date: "2024-01-15",
-    time: "7:30 PM",
-    guests: 4,
-    table: "Table 12",
-    status: "confirmed",
-    notes: "Birthday celebration",
-    created: "2024-01-10",
-  },
-  {
-    id: "RES-002",
-    customer: "Robert Wilson",
-    email: "robert@example.com",
-    phone: "+1 (555) 234-5678",
-    date: "2024-01-15",
-    time: "8:00 PM",
-    guests: 2,
-    table: "Table 5",
-    status: "confirmed",
-    notes: "Anniversary dinner",
-    created: "2024-01-12",
-  },
-  {
-    id: "RES-003",
-    customer: "Lisa Anderson",
-    email: "lisa@example.com",
-    phone: "+1 (555) 345-6789",
-    date: "2024-01-16",
-    time: "6:30 PM",
-    guests: 6,
-    table: "Table 8",
-    status: "pending",
-    notes: "Business dinner",
-    created: "2024-01-14",
-  },
-  {
-    id: "RES-004",
-    customer: "David Brown",
-    email: "david@example.com",
-    phone: "+1 (555) 456-7890",
-    date: "2024-01-16",
-    time: "7:00 PM",
-    guests: 3,
-    table: "Table 3",
-    status: "cancelled",
-    notes: "",
-    created: "2024-01-13",
-  },
-]
+// Interface for real reservations data
+interface Reservation {
+  reservation_id: string
+  name: string
+  phone: string
+  date: string
+  time: string
+  people_count: number
+  user_id: string | null
+  created_at: string
+}
 
 export default function ReservationsPage() {
+  const { user } = useAuth()
+  const [reservations, setReservations] = useState<Reservation[]>([])
+  const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [dateFilter, setDateFilter] = useState("all")
@@ -85,26 +45,45 @@ export default function ReservationsPage() {
     }
   }
 
-  const filteredReservations = mockReservations.filter((reservation) => {
-    const matchesSearch =
-      reservation.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      reservation.customer.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      reservation.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      reservation.phone.includes(searchTerm)
+  useEffect(() => {
+    const fetchReservations = async () => {
+      try {
+        setLoading(true)
+        const response = await fetch("/api/reservations")
+        const result = await response.json()
 
-    const matchesStatus = statusFilter === "all" || reservation.status === statusFilter
+        if (result.success) {
+          setReservations(result.reservations)
+        } else {
+          console.error("Failed to fetch reservations:", result.error)
+        }
+      } catch (error) {
+        console.error("Error fetching reservations:", error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchReservations()
+  }, [])
+
+  const filteredReservations = reservations.filter((reservation) => {
+    const matchesSearch =
+      reservation.reservation_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      reservation.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      reservation.phone.includes(searchTerm)
 
     let matchesDate = true
     if (dateFilter === "today") {
-      matchesDate = reservation.date === "2024-01-15"
+      const today = new Date().toISOString().split("T")[0]
+      matchesDate = reservation.date === today
     } else if (dateFilter === "tomorrow") {
-      matchesDate = reservation.date === "2024-01-16"
-    } else if (dateFilter === "week") {
-      // Mock logic for this week
-      matchesDate = true
+      const tomorrow = new Date()
+      tomorrow.setDate(tomorrow.getDate() + 1)
+      matchesDate = reservation.date === tomorrow.toISOString().split("T")[0]
     }
 
-    return matchesSearch && matchesStatus && matchesDate
+    return matchesSearch && matchesDate
   })
 
   return (
@@ -130,7 +109,7 @@ export default function ReservationsPage() {
               <div>
                 <p className="text-sm text-gray-400">Today</p>
                 <p className="text-xl font-bold text-white">
-                  {mockReservations.filter((r) => r.date === "2024-01-15").length}
+                  {reservations.filter((r) => r.date === new Date().toISOString().split("T")[0]).length}
                 </p>
               </div>
             </div>
@@ -143,7 +122,7 @@ export default function ReservationsPage() {
               <div>
                 <p className="text-sm text-gray-400">Pending</p>
                 <p className="text-xl font-bold text-white">
-                  {mockReservations.filter((r) => r.status === "pending").length}
+                  {reservations.filter((r) => r.status === "pending").length}
                 </p>
               </div>
             </div>
@@ -155,7 +134,9 @@ export default function ReservationsPage() {
               <Users className="text-gold" size={20} />
               <div>
                 <p className="text-sm text-gray-400">Total Guests</p>
-                <p className="text-xl font-bold text-white">{mockReservations.reduce((sum, r) => sum + r.guests, 0)}</p>
+                <p className="text-xl font-bold text-white">
+                  {reservations.reduce((sum, r) => sum + r.people_count, 0)}
+                </p>
               </div>
             </div>
           </CardContent>
@@ -166,7 +147,7 @@ export default function ReservationsPage() {
               <Calendar className="text-gold" size={20} />
               <div>
                 <p className="text-sm text-gray-400">This Week</p>
-                <p className="text-xl font-bold text-white">{mockReservations.length}</p>
+                <p className="text-xl font-bold text-white">{reservations.length}</p>
               </div>
             </div>
           </CardContent>
@@ -236,40 +217,57 @@ export default function ReservationsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredReservations.map((reservation) => (
-                  <TableRow key={reservation.id} className="border-gray-800">
-                    <TableCell className="font-medium text-white">{reservation.id}</TableCell>
-                    <TableCell>
-                      <div>
-                        <p className="text-white font-medium">{reservation.customer}</p>
-                        <p className="text-gray-400 text-sm">{reservation.email}</p>
-                        <p className="text-gray-400 text-sm">{reservation.phone}</p>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="text-gray-300">
-                        <p>{reservation.date}</p>
-                        <p className="text-sm text-gray-400">{reservation.time}</p>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-white">{reservation.guests}</TableCell>
-                    <TableCell className="text-gold">{reservation.table}</TableCell>
-                    <TableCell>
-                      <Badge className={getStatusColor(reservation.status)}>{reservation.status}</Badge>
-                    </TableCell>
-                    <TableCell className="text-gray-300 max-w-32 truncate">{reservation.notes || "—"}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Button variant="outline" size="sm">
-                          <Edit size={14} />
-                        </Button>
-                        <Button variant="outline" size="sm" className="text-red-400 hover:text-red-300">
-                          <Trash2 size={14} />
-                        </Button>
-                      </div>
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center text-gray-400">
+                      Loading reservations...
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : filteredReservations.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center text-gray-400">
+                      No reservations found
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredReservations.map((reservation) => (
+                    <TableRow key={reservation.reservation_id} className="border-gray-800">
+                      <TableCell className="font-medium text-white">{reservation.reservation_id}</TableCell>
+                      <TableCell>
+                        <div>
+                          <p className="text-white font-medium">{reservation.name}</p>
+                          <p className="text-gray-400 text-sm">{reservation.phone}</p>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-gray-300">
+                          <p>{reservation.date}</p>
+                          <p className="text-sm text-gray-400">{reservation.time}</p>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-white">{reservation.people_count}</TableCell>
+                      <TableCell className="text-gold">Table TBD</TableCell>
+                      <TableCell>
+                        <Badge className="bg-green-900/50 text-green-300">confirmed</Badge>
+                      </TableCell>
+                      <TableCell className="text-gray-300">—</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Button variant="outline" size="sm">
+                            <Edit size={14} />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-red-400 hover:text-red-300 bg-transparent"
+                          >
+                            <Trash2 size={14} />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </div>

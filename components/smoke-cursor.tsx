@@ -32,10 +32,29 @@ export default function SmokeCursor() {
     const canvas = canvasRef.current
     if (!canvas || isInitializedRef.current) return
 
+    const isMobile = () => {
+      return (
+        /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+        window.innerWidth <= 768 ||
+        "ontouchstart" in window
+      )
+    }
+
+    // Don't initialize smoke animation on mobile devices
+    if (isMobile()) {
+      canvas.style.display = "none"
+      return
+    }
+
     isInitializedRef.current = true
 
     // Set canvas to full window size
     const handleResize = () => {
+      if (isMobile()) {
+        canvas.style.display = "none"
+        return
+      }
+      canvas.style.display = "block"
       canvas.width = window.innerWidth
       canvas.height = window.innerHeight
     }
@@ -277,7 +296,7 @@ export default function SmokeCursor() {
   return (
     <canvas
       ref={canvasRef}
-      className="fixed inset-0 pointer-events-none z-50"
+      className="fixed inset-0 pointer-events-none z-50 hidden md:block"
       style={{ opacity: 0.35 }} // REDUCED overall canvas opacity
     />
   )

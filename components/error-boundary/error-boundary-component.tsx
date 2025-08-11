@@ -3,6 +3,7 @@
 import React from "react"
 import { AlertTriangle, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { getClientEnv } from "@/lib/env-utils"
 
 interface ErrorBoundaryState {
   hasError: boolean
@@ -31,8 +32,8 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error("Error caught by boundary:", error, errorInfo)
 
-    // In production, send to error reporting service
-    if (process.env.NODE_ENV === "production") {
+    const { isProd } = getClientEnv()
+    if (isProd) {
       // Example: Sentry.captureException(error, { extra: errorInfo })
     }
 
@@ -52,6 +53,8 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
         const FallbackComponent = this.props.fallback
         return <FallbackComponent error={this.state.error!} retry={this.handleRetry} />
       }
+
+      const { isDev } = getClientEnv()
 
       return (
         <div className="min-h-[400px] flex items-center justify-center p-8">
@@ -75,7 +78,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
               </Button>
             </div>
 
-            {process.env.NODE_ENV === "development" && this.state.error && (
+            {isDev && this.state.error && (
               <details className="mt-6 text-left">
                 <summary className="cursor-pointer text-sm text-gray-500 hover:text-gray-400">
                   Error Details (Development)

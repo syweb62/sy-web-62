@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-
+import { useAuth } from "@/hooks/use-auth"
 import { useState } from "react"
 import { Calendar, Clock, Users, Mail, CheckCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import type { LocationData } from "@/hooks/use-location"
 
 export default function BookTable() {
+  const { user } = useAuth()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isSubmitted, setIsSubmitted] = useState(false)
   const [formData, setFormData] = useState({
@@ -61,34 +62,58 @@ export default function BookTable() {
     e.preventDefault()
     setIsSubmitting(true)
 
-    // Format phone number with Bangladesh country code
-    const cleanPhone = formData.phone.replace(/\D/g, "").slice(-10) // Get last 10 digits only
-    const formattedData = {
-      ...formData,
-      phone: `+880${cleanPhone}`,
-    }
+    try {
+      const cleanPhone = formData.phone.replace(/\D/g, "").slice(-10)
+      const formattedPhone = `+880${cleanPhone}`
 
-    // Simulate API call with formatted data
-    console.log("Submitting reservation:", formattedData)
-    await new Promise((resolve) => setTimeout(resolve, 2000))
+      const reservationData = {
+        name: formData.name.trim(),
+        email: formData.email.trim(),
+        phone: formattedPhone,
+        date: formData.date,
+        time: formData.time,
+        guests: formData.guests,
+        specialRequests: formData.specialRequests.trim(),
+        user_id: user?.id || null, // Include user ID if authenticated
+      }
 
-    setIsSubmitting(false)
-    setIsSubmitted(true)
-
-    // Reset form after 5 seconds
-    setTimeout(() => {
-      setIsSubmitted(false)
-      setFormData({
-        name: "",
-        email: "",
-        phone: "",
-        date: "",
-        time: "",
-        guests: "",
-        specialRequests: "",
-        location: "",
+      const response = await fetch("/api/reservations", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(reservationData),
       })
-    }, 5000)
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to create reservation")
+      }
+
+      console.log("Reservation created successfully:", result.reservation)
+      setIsSubmitted(true)
+
+      // Reset form after 5 seconds
+      setTimeout(() => {
+        setIsSubmitted(false)
+        setFormData({
+          name: "",
+          email: "",
+          phone: "",
+          date: "",
+          time: "",
+          guests: "",
+          specialRequests: "",
+          location: "",
+        })
+      }, 5000)
+    } catch (error) {
+      console.error("Reservation submission error:", error)
+      alert(error instanceof Error ? error.message : "Failed to create reservation. Please try again.")
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   if (isSubmitted) {

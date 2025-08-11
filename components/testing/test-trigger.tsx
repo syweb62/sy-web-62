@@ -4,14 +4,13 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { TestDashboard } from "./test-dashboard"
 import { BarChart3 } from "lucide-react"
+import { getClientEnv } from "@/lib/env-utils"
 
 export function TestTrigger() {
   const [showDashboard, setShowDashboard] = useState(false)
 
-  // Only show in development or when explicitly enabled
-  const shouldShow =
-    process.env.NODE_ENV === "development" ||
-    (typeof window !== "undefined" && window.location.search.includes("testing=true"))
+  const { isDev } = getClientEnv()
+  const shouldShow = isDev || (typeof window !== "undefined" && window.location.search.includes("testing=true"))
 
   if (!shouldShow) return null
 

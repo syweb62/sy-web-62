@@ -3,6 +3,7 @@
 import { useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { AlertTriangle, RefreshCw } from "lucide-react"
+import { getClientEnv } from "@/lib/env-utils"
 
 export default function GlobalError({
   error,
@@ -16,6 +17,8 @@ export default function GlobalError({
     console.error("Global error:", error)
   }, [error])
 
+  const { isDev } = getClientEnv()
+
   return (
     <html>
       <body>
@@ -25,9 +28,7 @@ export default function GlobalError({
               <AlertTriangle className="h-16 w-16 text-red-500 mx-auto mb-4" />
               <h1 className="text-2xl font-bold text-white mb-2">Something went wrong!</h1>
               <p className="text-gray-300 mb-4">A critical error occurred. Please try refreshing the page.</p>
-              {process.env.NODE_ENV === "development" && error.digest && (
-                <p className="text-xs text-gray-500 mb-4">Error ID: {error.digest}</p>
-              )}
+              {isDev && error.digest && <p className="text-xs text-gray-500 mb-4">Error ID: {error.digest}</p>}
             </div>
 
             <div className="space-y-3">

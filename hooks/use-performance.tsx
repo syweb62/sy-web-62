@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useCallback } from "react"
+import { getClientEnv } from "@/lib/env-utils"
 
 interface PerformanceMetrics {
   fcp?: number // First Contentful Paint
@@ -11,17 +12,15 @@ interface PerformanceMetrics {
 
 export function usePerformance() {
   const reportMetric = useCallback((metric: PerformanceMetrics) => {
-    // In production, send to analytics service
-    if (process.env.NODE_ENV === "production") {
+    const { isProd } = getClientEnv()
+    if (isProd) {
       console.log("Performance metric:", metric)
       // Example: analytics.track('performance', metric)
     }
   }, [])
 
   useEffect(() => {
-    // Measure Core Web Vitals
     if (typeof window !== "undefined" && "PerformanceObserver" in window) {
-      // First Contentful Paint
       const fcpObserver = new PerformanceObserver((list) => {
         for (const entry of list.getEntries()) {
           if (entry.name === "first-contentful-paint") {
@@ -31,7 +30,6 @@ export function usePerformance() {
       })
       fcpObserver.observe({ entryTypes: ["paint"] })
 
-      // Largest Contentful Paint
       const lcpObserver = new PerformanceObserver((list) => {
         const entries = list.getEntries()
         const lastEntry = entries[entries.length - 1]
@@ -39,7 +37,6 @@ export function usePerformance() {
       })
       lcpObserver.observe({ entryTypes: ["largest-contentful-paint"] })
 
-      // First Input Delay
       const fidObserver = new PerformanceObserver((list) => {
         for (const entry of list.getEntries()) {
           reportMetric({ fid: (entry as any).processingStart - entry.startTime })
@@ -47,7 +44,6 @@ export function usePerformance() {
       })
       fidObserver.observe({ entryTypes: ["first-input"] })
 
-      // Cumulative Layout Shift
       const clsObserver = new PerformanceObserver((list) => {
         let clsValue = 0
         for (const entry of list.getEntries()) {

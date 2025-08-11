@@ -96,14 +96,14 @@ export async function testSupabaseConnection() {
 
     if (error) {
       console.error("Supabase connection test failed:", error)
-      return { success: false, error: error.message }
+      return { status: "disconnected", error: error.message }
     }
 
     console.log("Supabase connection test successful")
-    return { success: true, data }
+    return { status: "connected", data }
   } catch (error) {
     console.error("Supabase connection test error:", error)
-    return { success: false, error: String(error) }
+    return { status: "disconnected", error: String(error) }
   }
 }
 
