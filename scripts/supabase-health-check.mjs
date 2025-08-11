@@ -1,5 +1,3 @@
-import process from "node:process"
-
 // Minimal Supabase REST health check using fetch (no extra deps).
 // This does NOT mutate any data. It only reads public info to verify connectivity.
 // Output is printed with console.log so v0 captures results.
