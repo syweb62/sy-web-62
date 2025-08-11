@@ -1,14 +1,99 @@
 import type React from "react"
-import type { Metadata } from "next"
-import { GeistSans } from "geist/font/sans"
-import { GeistMono } from "geist/font/mono"
-import "./globals.css"
-import Script from "next/script"
+import type { Metadata, Viewport } from "next"
+import ClientComponent from "./client"
+import ResourceHints from "@/components/perf/resource-hints"
+
+// Helper function to get a valid base URL
+function getBaseUrl(): string {
+  // In production, use VERCEL_URL or custom domain
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL}`
+  }
+
+  // Fallback to NEXT_PUBLIC_BASE_URL if set and valid
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL
+  if (baseUrl && baseUrl.startsWith("http")) {
+    return baseUrl
+  }
+
+  // Development fallback
+  return "http://localhost:3000"
+}
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  userScalable: true,
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#0a0f14" },
+    { media: "(prefers-color-scheme: dark)", color: "#0a0f14" },
+  ],
+  colorScheme: "dark",
+}
+
+const baseUrl = getBaseUrl()
 
 export const metadata: Metadata = {
-  title: "v0 App",
-  description: "Created with v0",
-  generator: "v0.dev",
+  title: {
+    default: "Sushi Yaki - Authentic Japanese Restaurant",
+    template: "%s | Sushi Yaki",
+  },
+  description:
+    "Experience the finest Japanese cuisine at Sushi Yaki. Fresh sushi, traditional dishes, and exceptional service in an elegant atmosphere.",
+  keywords: ["sushi", "japanese restaurant", "authentic japanese food", "fresh sushi", "ramen", "teriyaki"],
+  authors: [{ name: "Sushi Yaki Restaurant" }],
+  creator: "Sushi Yaki",
+  publisher: "Sushi Yaki",
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-video-preview": -1,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
+  },
+  openGraph: {
+    type: "website",
+    locale: "en_US",
+    url: baseUrl,
+    siteName: "Sushi Yaki",
+    title: "Sushi Yaki - Authentic Japanese Restaurant",
+    description:
+      "Experience the finest Japanese cuisine at Sushi Yaki. Fresh sushi, traditional dishes, and exceptional service.",
+    images: [
+      {
+        url: "/images/sushiyaki-og-image.jpg",
+        width: 1200,
+        height: 630,
+        alt: "Sushi Yaki Restaurant",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Sushi Yaki - Authentic Japanese Restaurant",
+    description: "Experience the finest Japanese cuisine at Sushi Yaki.",
+    images: ["/images/sushiyaki-og-image.jpg"],
+  },
+  verification: {
+    google: "your-google-verification-code",
+  },
+  generator: "Next.js",
+  applicationName: "Sushi Yaki",
+  referrer: "origin-when-cross-origin",
+  metadataBase: new URL(baseUrl),
+  alternates: {
+    canonical: "/",
+  },
+  formatDetection: {
+    email: false,
+    address: false,
+    telephone: false,
+  },
 }
 
 export default function RootLayout({
@@ -17,25 +102,24 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en">
-      <head>
-        <style>{`
-html {
-  font-family: ${GeistSans.style.fontFamily};
-  --font-sans: ${GeistSans.variable};
-  --font-mono: ${GeistMono.variable};
-}
-        `}</style>
-      </head>
-      <body>
-        <Script id="public-env" strategy="beforeInteractive">
-          {`window.__PUBLIC_ENV = {
-            NEXT_PUBLIC_SUPABASE_URL: "${process.env.NEXT_PUBLIC_SUPABASE_URL ?? ""}",
-            NEXT_PUBLIC_SUPABASE_ANON_KEY: "${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? ""}"
-          };`}
-        </Script>
-        {children}
-      </body>
-    </html>
+    <>
+      <ResourceHints />
+      <script
+        dangerouslySetInnerHTML={{
+          __html: `
+        (function () {
+          try {
+            window.__PUBLIC_ENV = window.__PUBLIC_ENV || {};
+            window.__PUBLIC_ENV.NEXT_PUBLIC_SUPABASE_URL = ${JSON.stringify(process.env.NEXT_PUBLIC_SUPABASE_URL || "")};
+            window.__PUBLIC_ENV.NEXT_PUBLIC_SUPABASE_ANON_KEY = ${JSON.stringify(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "")};
+          } catch (e) { /* no-op */ }
+        })();
+      `,
+        }}
+      />
+      <ClientComponent children={children} />
+    </>
   )
 }
+
+import "./globals.css"

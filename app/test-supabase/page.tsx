@@ -1,212 +1,245 @@
 "use client"
 
-import { useCallback, useState } from "react"
-import { getSupabaseBrowserClient, testSupabaseConnection, getCurrentUser } from "@/lib/supabase"
+import { useState, useEffect } from "react"
+import { supabase, testSupabaseConnection } from "@/lib/supabase"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
-type OrderRow = {
-  id: string
-  status: string
-  total_amount: number
-  created_at: string
+interface TestResult {
+  test: string
+  status: "success" | "error" | "pending"
+  message: string
+  data?: any
 }
 
-export default function TestSupabasePage() {
-  const [connMsg, setConnMsg] = useState<string>("")
-  const [authMsg, setAuthMsg] = useState<string>("")
-  const [orderMsg, setOrderMsg] = useState<string>("")
-  const [myOrders, setMyOrders] = useState<OrderRow[] | null>(null)
-  const [isLoading, setIsLoading] = useState(false)
+export default function TestSupabase() {
+  const [results, setResults] = useState<TestResult[]>([])
+  const [isRunning, setIsRunning] = useState(false)
 
-  const handleCheckConnection = useCallback(async () => {
-    setConnMsg("চেক করা হচ্ছে...")
-    const res = await testSupabaseConnection()
-    setConnMsg(res.ok ? `✅ ${res.message}` : `⚠️ ${res.message}`)
-  }, [])
+  const addResult = (result: TestResult) => {
+    setResults((prev) => [...prev, result])
+  }
 
-  const handleShowAuth = useCallback(async () => {
-    setAuthMsg("লোড হচ্ছে...")
-    const { user, error } = await getCurrentUser()
-    if (error) {
-      setAuthMsg(`⚠️ ${error.message}`)
-    } else if (user) {
-      setAuthMsg(`✅ সাইন-ইন আছেন: ${user.email || user.id}`)
-    } else {
-      setAuthMsg("ℹ️ আপনি সাইন-ইন করেননি (Guest)")
-    }
-  }, [])
+  const runTests = async () => {
+    setIsRunning(true)
+    setResults([])
 
-  const handleCreateGuestOrder = useCallback(async () => {
-    setIsLoading(true)
-    setOrderMsg("গেস্ট অর্ডার তৈরি করা হচ্ছে...")
+    // Test 1: Basic connection
+    addResult({ test: "Basic Connection", status: "pending", message: "Testing..." })
     try {
-      const supabase = getSupabaseBrowserClient()
-
-      // 1) অর্ডার তৈরি
-      const { data: order, error: orderErr } = await supabase
-        .from("orders")
-        .insert({
-          // guest checkout — user_id null
-          user_id: null,
-          status: "pending",
-          payment_method: "cash",
-          total_amount: 12.5,
-        })
-        .select("id")
-        .single()
-
-      if (orderErr || !order) {
-        setOrderMsg(`⚠️ অর্ডার তৈরি ব্যর্থ: ${orderErr?.message || "unknown"}`)
-        setIsLoading(false)
-        return
-      }
-
-      // 2) অর্ডার আইটেম যোগ
-      const { error: itemErr } = await supabase.from("order_items").insert({
-        order_id: order.id,
-        quantity: 1,
-        price_at_purchase: 12.5,
-        item_name: "Test Roll",
-        item_description: "স্বল্প-পরীক্ষার জন্য আইটেম",
-        item_image: "/test-roll.png",
-        menu_item_id: null, // nullable — FK কনফ্লিক্ট এড়াতে
+      const connectionResult = await testSupabaseConnection()
+      addResult({
+        test: "Basic Connection",
+        status: connectionResult.success ? "success" : "error",
+        message: connectionResult.success ? "Connected successfully" : connectionResult.error || "Connection failed",
+        data: connectionResult.data,
       })
-
-      if (itemErr) {
-        setOrderMsg(`⚠️ অর্ডার আইটেম ব্যর্থ: ${itemErr.message}`)
-        setIsLoading(false)
-        return
-      }
-
-      setOrderMsg(`✅ গেস্ট অর্ডার তৈরি হয়েছে (ID: ${order.id})`)
-    } catch (e: any) {
-      setOrderMsg(`⚠️ ত্রুটি: ${e?.message || String(e)}`)
-    } finally {
-      setIsLoading(false)
+    } catch (error) {
+      addResult({
+        test: "Basic Connection",
+        status: "error",
+        message: `Connection error: ${error}`,
+      })
     }
-  }, [])
 
-  const handleFetchMyOrders = useCallback(async () => {
-    setIsLoading(true)
-    setOrderMsg("আপনার অর্ডারগুলো আনা হচ্ছে...")
-    setMyOrders(null)
+    // Test 2: Menu Items
+    addResult({ test: "Menu Items", status: "pending", message: "Fetching menu items..." })
     try {
-      const supabase = getSupabaseBrowserClient()
-      const { user } = await getCurrentUser()
-      if (!user) {
-        setOrderMsg("ℹ️ সাইন-ইন না থাকলে অর্ডার দেখা যাবে না।")
-        setIsLoading(false)
-        return
-      }
-
-      const { data, error } = await supabase
-        .from("orders")
-        .select("id,status,total_amount,created_at")
-        .order("created_at", { ascending: false })
-
-      if (error) {
-        setOrderMsg(`⚠️ RLS/কোয়েরি ত্রুটি: ${error.message}`)
-        setIsLoading(false)
-        return
-      }
-
-      setMyOrders((data as OrderRow[]) || [])
-      setOrderMsg(`✅ মোট ${data?.length || 0}টি অর্ডার পাওয়া গেছে`)
-    } catch (e: any) {
-      setOrderMsg(`⚠️ ত্রুটি: ${e?.message || String(e)}`)
-    } finally {
-      setIsLoading(false)
+      const { data, error } = await supabase.from("menu_items").select("*").limit(5)
+      addResult({
+        test: "Menu Items",
+        status: error ? "error" : "success",
+        message: error ? `Error: ${error.message}` : `Found ${data?.length || 0} menu items`,
+        data: data?.slice(0, 3),
+      })
+    } catch (error) {
+      addResult({
+        test: "Menu Items",
+        status: "error",
+        message: `Menu items error: ${error}`,
+      })
     }
+
+    // Test 3: Orders table
+    addResult({ test: "Orders Table", status: "pending", message: "Testing orders table..." })
+    try {
+      const { data, error } = await supabase.from("orders").select("order_id, status, created_at").limit(3)
+      addResult({
+        test: "Orders Table",
+        status: error ? "error" : "success",
+        message: error ? `Error: ${error.message}` : `Orders table accessible, found ${data?.length || 0} orders`,
+        data: data,
+      })
+    } catch (error) {
+      addResult({
+        test: "Orders Table",
+        status: "error",
+        message: `Orders error: ${error}`,
+      })
+    }
+
+    // Test 4: Reservations table
+    addResult({ test: "Reservations Table", status: "pending", message: "Testing reservations table..." })
+    try {
+      const { data, error } = await supabase.from("reservations").select("reservation_id, name, date").limit(3)
+      addResult({
+        test: "Reservations Table",
+        status: error ? "error" : "success",
+        message: error
+          ? `Error: ${error.message}`
+          : `Reservations table accessible, found ${data?.length || 0} reservations`,
+        data: data,
+      })
+    } catch (error) {
+      addResult({
+        test: "Reservations Table",
+        status: "error",
+        message: `Reservations error: ${error}`,
+      })
+    }
+
+    // Test 5: Authentication
+    addResult({ test: "Authentication", status: "pending", message: "Testing auth..." })
+    try {
+      const {
+        data: { user },
+        error,
+      } = await supabase.auth.getUser()
+      addResult({
+        test: "Authentication",
+        status: "success",
+        message: user ? `Authenticated as: ${user.email}` : "Not authenticated (this is normal)",
+        data: user ? { id: user.id, email: user.email } : null,
+      })
+    } catch (error) {
+      addResult({
+        test: "Authentication",
+        status: "error",
+        message: `Auth error: ${error}`,
+      })
+    }
+
+    // Test 6: Environment Variables
+    addResult({ test: "Environment Variables", status: "pending", message: "Checking env vars..." })
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+    addResult({
+      test: "Environment Variables",
+      status: supabaseUrl && supabaseKey ? "success" : "error",
+      message: `URL: ${supabaseUrl ? "✓ Set" : "✗ Missing"}, Key: ${supabaseKey ? "✓ Set" : "✗ Missing"}`,
+      data: {
+        url: supabaseUrl ? `${supabaseUrl.substring(0, 20)}...` : "Not set",
+        keyLength: supabaseKey ? `${supabaseKey.length} characters` : "Not set",
+      },
+    })
+
+    setIsRunning(false)
+  }
+
+  useEffect(() => {
+    runTests()
   }, [])
+
+  const getStatusColor = (status: TestResult["status"]) => {
+    switch (status) {
+      case "success":
+        return "text-green-400"
+      case "error":
+        return "text-red-400"
+      case "pending":
+        return "text-yellow-400"
+      default:
+        return "text-gray-400"
+    }
+  }
+
+  const getStatusIcon = (status: TestResult["status"]) => {
+    switch (status) {
+      case "success":
+        return "✓"
+      case "error":
+        return "✗"
+      case "pending":
+        return "⏳"
+      default:
+        return "?"
+    }
+  }
 
   return (
-    <main className="mx-auto max-w-3xl p-4 sm:p-6">
-      <h1 className="text-2xl font-semibold mb-4">Supabase টেস্ট ও হেলথ-চেক</h1>
+    <div className="min-h-screen bg-darkBg text-white py-20">
+      <div className="container mx-auto px-4 max-w-4xl">
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-serif font-bold mb-4">Supabase Connection Test</h1>
+          <p className="text-gray-300 mb-6">Testing database connectivity and functionality</p>
+          <Button onClick={runTests} disabled={isRunning} className="mb-8">
+            {isRunning ? "Running Tests..." : "Run Tests Again"}
+          </Button>
+        </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>কানেকশন টেস্ট</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <Button onClick={handleCheckConnection} disabled={isLoading}>
-              কানেকশন চেক করুন
-            </Button>
-            <p className="text-sm text-muted-foreground" aria-live="polite">
-              {connMsg}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>অথেনটিকেশন স্টেটাস</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <Button onClick={handleShowAuth} disabled={isLoading}>
-              বর্তমান ইউজার দেখুন
-            </Button>
-            <p className="text-sm text-muted-foreground" aria-live="polite">
-              {authMsg}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="md:col-span-2">
-          <CardHeader>
-            <CardTitle>অর্ডার টেস্ট</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex flex-wrap gap-2">
-              <Button variant="secondary" onClick={handleCreateGuestOrder} disabled={isLoading}>
-                গেস্ট অর্ডার তৈরি করুন
-              </Button>
-              <Button onClick={handleFetchMyOrders} disabled={isLoading}>
-                আমার অর্ডারগুলো দেখুন
-              </Button>
-            </div>
-            <p className="text-sm text-muted-foreground" aria-live="polite">
-              {orderMsg}
-            </p>
-
-            {myOrders && (
-              <div className="mt-2 space-y-2">
-                {myOrders.length === 0 ? (
-                  <p className="text-sm">কোনো অর্ডার পাওয়া যায়নি।</p>
-                ) : (
-                  <ul className="space-y-2">
-                    {myOrders.map((o) => (
-                      <li key={o.id} className="rounded border p-2">
-                        <div className="flex justify-between">
-                          <span className="font-medium">#{o.id}</span>
-                          <span className="text-xs">{new Date(o.created_at).toLocaleString()}</span>
-                        </div>
-                        <div className="text-sm">
-                          স্ট্যাটাস: {o.status} • মোট: ${o.total_amount}
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
+        <div className="space-y-4">
+          {results.map((result, index) => (
+            <div key={index} className="bg-black/30 rounded-lg border border-gray-800 p-6">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-lg font-medium">{result.test}</h3>
+                <span className={`text-xl ${getStatusColor(result.status)}`}>{getStatusIcon(result.status)}</span>
               </div>
-            )}
-          </CardContent>
-        </Card>
 
-        <Card className="md:col-span-2">
-          <CardHeader>
-            <CardTitle>টেস্ট ইমেজ</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <img
-              src="/test-roll.png"
-              alt="টেস্ট সুশি রোল"
-              className="h-24 w-24 rounded object-cover ring-1 ring-slate-200"
-            />
-          </CardContent>
-        </Card>
+              <p className={`text-sm mb-3 ${getStatusColor(result.status)}`}>{result.message}</p>
+
+              {result.data && (
+                <details className="mt-3">
+                  <summary className="cursor-pointer text-sm text-gray-400 hover:text-white">View Data</summary>
+                  <pre className="mt-2 p-3 bg-gray-900 rounded text-xs overflow-auto">
+                    {JSON.stringify(result.data, null, 2)}
+                  </pre>
+                </details>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {results.length > 0 && (
+          <div className="mt-8 p-6 bg-black/30 rounded-lg border border-gray-800">
+            <h3 className="text-lg font-medium mb-4">Summary</h3>
+            <div className="grid grid-cols-3 gap-4 text-center">
+              <div>
+                <div className="text-2xl font-bold text-green-400">
+                  {results.filter((r) => r.status === "success").length}
+                </div>
+                <div className="text-sm text-gray-400">Passed</div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-red-400">
+                  {results.filter((r) => r.status === "error").length}
+                </div>
+                <div className="text-sm text-gray-400">Failed</div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-yellow-400">
+                  {results.filter((r) => r.status === "pending").length}
+                </div>
+                <div className="text-sm text-gray-400">Pending</div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="mt-8 p-6 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+          <h3 className="text-lg font-medium mb-3 text-blue-300">Setup Instructions</h3>
+          <div className="text-sm text-gray-300 space-y-2">
+            <p>1. Make sure your Supabase project is created and running</p>
+            <p>2. Set your environment variables in Vercel or .env.local:</p>
+            <div className="bg-gray-900 p-3 rounded mt-2 font-mono text-xs">
+              NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+              <br />
+              NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
+            </div>
+            <p>3. Run the database setup script in your Supabase SQL editor</p>
+            <p>4. Check that RLS policies are properly configured</p>
+          </div>
+        </div>
       </div>
-    </main>
+    </div>
   )
 }
