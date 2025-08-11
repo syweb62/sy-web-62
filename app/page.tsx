@@ -90,7 +90,7 @@ const GALLERY_IMAGES: GalleryImage[] = [
     description: "Colorful maki with balanced flavors.",
   },
   {
-    src: "https://images.unsplash.com/photo-1580822184713-fc5400e7fe10?q=80&w=300&h=300&auto=format&fit=crop&fm=webp",
+    src: "https://images.unsplash.com/photo-1611143669185-af224c5e3252?q=80&w=300&h=300&auto=format&fit=crop&fm=webp",
     alt: "Traditional Japanese tea ceremony setting",
     title: "Tea Ceremony",
     description: "A quiet moment, perfectly brewed.",
@@ -102,7 +102,7 @@ const GALLERY_IMAGES: GalleryImage[] = [
     description: "Light batter, golden crunch.",
   },
   {
-    src: "https://images.unsplash.com/photo-1554502078-ef0fc409efce?q=80&w=300&h=300&auto=format&fit=crop&fm=webp",
+    src: "https://images.unsplash.com/photo-1580822184713-fc5400e7fe10?q=80&w=300&h=300&auto=format&fit=crop&fm=webp",
     alt: "Premium sake paired with fresh sushi",
     title: "Sake Pairing",
     description: "Curated pours to match your plate.",
@@ -184,13 +184,11 @@ export default function Home() {
   }, [])
 
   const handleSearch = useCallback(() => {
-    if (!branch || !location) {
+    if (!branch.trim() || !location.trim()) {
       setSearchError("Please select both branch and location")
       return
     }
 
-    // In a real app, this would navigate to search results
-    console.log(`Searching for restaurants in ${location}, ${branch}`)
     setSearchError("")
   }, [branch, location])
 
@@ -334,267 +332,113 @@ export default function Home() {
     [],
   )
 
-  // Enhanced cherry blossom petal creation function
-  const createEnhancedPetal = (container, centerX, centerY, fallDistance, waveIndex = 0) => {
-    const petal = document.createElement("div")
+  const createEnhancedPetal = useCallback(
+    (container: HTMLElement, centerX: number, centerY: number, fallDistance: number, waveIndex: number) => {
+      const petal = document.createElement("div")
+      petal.className = "cherry-petal absolute pointer-events-none z-10"
 
-    // Enhanced petal properties
-    const size = 14 + Math.random() * 10 // Size between 14-24px
-    const spreadX = (Math.random() - 0.5) * 150 // Horizontal spread from center
-    const spreadY = (Math.random() - 0.5) * 50 // Vertical spread from center
-    const startX = centerX + spreadX
-    const startY = centerY + spreadY
-    const duration = 5 + Math.random() * 3 + waveIndex * 0.5 // Longer duration 5-8s
-    const rotation = Math.random() * 360
-    const swayAmount = 60 + Math.random() * 80 // Increased sway
-    const swayFrequency = 2 + Math.random() * 2 // Sway frequency
+      // Optimized styling with CSS transforms
+      const startX = centerX + (Math.random() - 0.5) * 200
+      const startY = centerY + (Math.random() - 0.5) * 100
+      const size = Math.random() * 8 + 6
+      const rotation = Math.random() * 360
+      const duration = Math.random() * 3 + 4
 
-    // Premium petal colors with more variation
-    const petalColors = [
-      "#ffb3d1", // Light pink
-      "#ffc0cb", // Pink
-      "#ffcccb", // Light coral
-      "#ffd1dc", // Thistle
-      "#ffe4e1", // Misty rose
-      "#fff0f5", // Lavender blush
-      "#ffeef0", // Very light pink
-      "#ffb6c1", // Light pink
-    ]
-    const petalColor = petalColors[Math.floor(Math.random() * petalColors.length)]
-    const petalColorDark = petalColors[Math.floor(Math.random() * petalColors.length)]
+      petal.style.cssText = `
+      left: ${startX}px;
+      top: ${startY}px;
+      width: ${size}px;
+      height: ${size}px;
+      background: linear-gradient(45deg, #ff69b4, #ffb6c1, #ffc0cb);
+      border-radius: 50% 10% 50% 10%;
+      transform: rotate(${rotation}deg);
+      opacity: 0.8;
+      will-change: transform, opacity;
+    `
 
-    // Create enhanced realistic petal shape
-    petal.className = "cherry-petal absolute"
-    petal.style.cssText = `
-  width: ${size}px;
-  height: ${size * 1.3}px;
-  left: ${startX}px;
-  top: ${startY}px;
-  background: radial-gradient(ellipse at 30% 20%, ${petalColor} 0%, ${petalColorDark}dd 60%, ${petalColor}aa 100%);
-  border-radius: 50% 10% 50% 10%;
-  transform: rotate(${rotation}deg);
-  opacity: 0.85;
-  box-shadow: 
-    0 3px 8px rgba(255, 182, 193, 0.4),
-    inset 0 2px 4px rgba(255, 255, 255, 0.5),
-    inset 0 -2px 3px rgba(255, 182, 193, 0.3),
-    0 0 15px rgba(255, 192, 203, 0.2);
-  filter: blur(0.2px) drop-shadow(0 2px 4px rgba(255, 182, 193, 0.3));
-  z-index: 1000;
-  pointer-events: none;
-  transition: all 0.1s ease-out;
-`
+      container.appendChild(petal)
 
-    // Add enhanced petal texture and veins
-    petal.innerHTML = `
-  <div style="
-    position: absolute;
-    top: 15%;
-    left: 25%;
-    width: 50%;
-    height: 70%;
-    background: linear-gradient(135deg, rgba(255,255,255,0.4) 0%, transparent 50%, rgba(255,182,193,0.2) 100%);
-    border-radius: 50% 10% 50% 10%;
-    transform: rotate(-15deg);
-  "></div>
-  <div style="
-    position: absolute;
-    top: 30%;
-    left: 40%;
-    width: 2px;
-    height: 40%;
-    background: linear-gradient(to bottom, rgba(255,182,193,0.3) 0%, transparent 100%);
-    transform: rotate(10deg);
-  "></div>
-`
+      // Enhanced realistic motion with better performance
+      const swayAmount = Math.random() * 150 + 50
+      const swayDirection = Math.random() > 0.5 ? 1 : -1
+      const finalX = startX + swayAmount * swayDirection + (Math.random() - 0.5) * 100
+      const finalRotation = rotation + 360 + Math.random() * 720
 
-    container.appendChild(petal)
+      requestAnimationFrame(() => {
+        petal.style.transition = `all ${duration}s cubic-bezier(0.25, 0.46, 0.45, 0.94)`
+        petal.style.transform = `
+        translateY(${fallDistance}px) 
+        translateX(${finalX - startX}px) 
+        rotate(${finalRotation}deg) 
+        scale(0.6)
+      `
+        petal.style.opacity = "0"
+      })
 
-    // Enhanced realistic motion with complex physics
-    const swayDirection = Math.random() > 0.5 ? 1 : -1
-    const finalX = startX + swayAmount * swayDirection + (Math.random() - 0.5) * 100
-    const finalRotation = rotation + 360 + Math.random() * 720
+      setTimeout(
+        () => {
+          if (petal.parentNode) {
+            petal.remove()
+          }
+        },
+        duration * 1000 + 200,
+      )
+    },
+    [],
+  )
 
-    // Apply enhanced realistic motion with keyframe animation
-    setTimeout(() => {
-      petal.style.transition = `all ${duration}s cubic-bezier(0.25, 0.46, 0.45, 0.94)`
-      petal.style.transform = `
-    translateY(${fallDistance}px) 
-    translateX(${finalX - startX}px) 
-    rotate(${finalRotation}deg) 
-    scale(0.6)
-  `
-      petal.style.opacity = "0"
+  const createRealisticLeaf = useCallback(
+    (container: HTMLElement, centerX: number, centerY: number, fallDistance: number, waveIndex: number) => {
+      const leaf = document.createElement("div")
+      leaf.className = "cherry-leaf absolute pointer-events-none z-10"
 
-      // Add swaying motion during fall
-      const swayKeyframes = `
-    @keyframes sway-${Date.now()}-${Math.random()} {
-      0% { transform: translateY(0px) translateX(0px) rotate(${rotation}deg) scale(1); }
-      25% { transform: translateY(${fallDistance * 0.25}px) translateX(${(finalX - startX) * 0.3}px) rotate(${rotation + 90}deg) scale(0.9); }
-      50% { transform: translateY(${fallDistance * 0.5}px) translateX(${(finalX - startX) * 0.6}px) rotate(${rotation + 180}deg) scale(0.8); }
-      75% { transform: translateY(${fallDistance * 0.75}px) translateX(${(finalX - startX) * 0.8}px) rotate(${rotation + 270}deg) scale(0.7); }
-      100% { transform: translateY(${fallDistance}px) translateX(${finalX - startX}px) rotate(${finalRotation}deg) scale(0.6); opacity: 0; }
-    }
-  `
+      const startX = centerX + (Math.random() - 0.5) * 180
+      const startY = centerY + (Math.random() - 0.5) * 80
+      const size = Math.random() * 6 + 8
+      const rotation = Math.random() * 360
+      const duration = Math.random() * 2.5 + 3.5
 
-      // Apply the swaying animation
-      const style = document.createElement("style")
-      style.textContent = swayKeyframes
-      document.head.appendChild(style)
+      leaf.style.cssText = `
+      left: ${startX}px;
+      top: ${startY}px;
+      width: ${size}px;
+      height: ${size * 1.4}px;
+      background: linear-gradient(45deg, #228b22, #32cd32, #90ee90);
+      border-radius: 0% 100% 0% 100%;
+      transform: rotate(${rotation}deg);
+      opacity: 0.7;
+      will-change: transform, opacity;
+    `
 
-      setTimeout(() => {
-        if (style.parentNode) {
-          style.remove()
-        }
-      }, duration * 1000)
-    }, 100)
+      container.appendChild(leaf)
 
-    // Remove petal after animation with cleanup
-    setTimeout(
-      () => {
-        if (petal.parentNode) {
-          petal.remove()
-        }
-      },
-      duration * 1000 + 200,
-    )
-  }
+      const swayAmount = Math.random() * 120 + 40
+      const swayDirection = Math.random() > 0.5 ? 1 : -1
+      const finalX = startX + swayAmount * swayDirection + (Math.random() - 0.5) * 120
+      const finalRotation = rotation + 180 + Math.random() * 540
 
-  // Realistic leaf creation function
-  const createRealisticLeaf = (container, centerX, centerY, fallDistance, waveIndex = 0) => {
-    const leaf = document.createElement("div")
+      requestAnimationFrame(() => {
+        leaf.style.transition = `all ${duration}s cubic-bezier(0.23, 1, 0.32, 1)`
+        leaf.style.transform = `
+        translateY(${fallDistance}px) 
+        translateX(${finalX - startX}px) 
+        rotate(${finalRotation}deg) 
+        scale(0.7)
+      `
+        leaf.style.opacity = "0"
+      })
 
-    // Realistic leaf properties
-    const size = 16 + Math.random() * 12 // Size between 16-28px
-    const spreadX = (Math.random() - 0.5) * 180 // Horizontal spread from center
-    const spreadY = (Math.random() - 0.5) * 60 // Vertical spread from center
-    const startX = centerX + spreadX
-    const startY = centerY + spreadY
-    const duration = 6 + Math.random() * 4 + waveIndex * 0.3 // Longer duration 6-10s
-    const rotation = Math.random() * 360
-    const swayAmount = 80 + Math.random() * 100 // More pronounced sway for leaves
-    const swayFrequency = 1.5 + Math.random() * 1.5 // Slower sway frequency
-
-    // Realistic leaf colors (various green shades and autumn colors)
-    const leafColors = [
-      "#228B22", // Forest green
-      "#32CD32", // Lime green
-      "#90EE90", // Light green
-      "#9ACD32", // Yellow green
-      "#8FBC8F", // Dark sea green
-      "#98FB98", // Pale green
-      "#ADFF2F", // Green yellow
-      "#7CFC00", // Lawn green
-      "#00FF7F", // Spring green
-      "#3CB371", // Medium sea green
-    ]
-
-    const autumnColors = [
-      "#FF6347", // Tomato
-      "#FF4500", // Orange red
-      "#FFD700", // Gold
-      "#FFA500", // Orange
-      "#FF8C00", // Dark orange
-      "#DAA520", // Goldenrod
-    ]
-
-    // Mix of green and autumn colors (80% green, 20% autumn)
-    const colorPalette = Math.random() > 0.2 ? leafColors : autumnColors
-    const leafColor = colorPalette[Math.floor(Math.random() * colorPalette.length)]
-    const leafColorDark = colorPalette[Math.floor(Math.random() * colorPalette.length)]
-
-    // Create realistic leaf shape
-    leaf.className = "cherry-leaf absolute"
-    leaf.style.cssText = `
-  width: ${size}px;
-  height: ${size * 1.4}px;
-  left: ${startX}px;
-  top: ${startY}px;
-  background: linear-gradient(135deg, ${leafColor} 0%, ${leafColorDark}dd 40%, ${leafColor}aa 100%);
-  border-radius: 0% 100% 0% 100%;
-  transform: rotate(${rotation}deg);
-  opacity: 0.9;
-  box-shadow: 
-    0 2px 6px rgba(0, 100, 0, 0.3),
-    inset 0 1px 3px rgba(255, 255, 255, 0.4),
-    inset 0 -1px 2px rgba(0, 100, 0, 0.2),
-    0 0 10px rgba(0, 150, 0, 0.15);
-  filter: blur(0.1px) drop-shadow(0 1px 3px rgba(0, 100, 0, 0.2));
-  z-index: 999;
-  pointer-events: none;
-  transition: all 0.1s ease-out;
-`
-
-    // Add realistic leaf texture and veins
-    leaf.innerHTML = `
-  <div style="
-    position: absolute;
-    top: 10%;
-    left: 20%;
-    width: 60%;
-    height: 80%;
-    background: linear-gradient(45deg, rgba(255,255,255,0.3) 0%, transparent 30%, rgba(0,100,0,0.1) 100%);
-    border-radius: 0% 100% 0% 100%;
-    transform: rotate(-10deg);
-  "></div>
-  <div style="
-    position: absolute;
-    top: 20%;
-    left: 50%;
-    width: 1px;
-    height: 60%;
-    background: linear-gradient(to bottom, rgba(0,80,0,0.4) 0%, transparent 100%);
-    transform: translateX(-50%);
-  "></div>
-  <div style="
-    position: absolute;
-    top: 35%;
-    left: 30%;
-    width: 40%;
-    height: 1px;
-    background: linear-gradient(to right, rgba(0,80,0,0.3) 0%, transparent 100%);
-    transform: rotate(25deg);
-  "></div>
-  <div style="
-    position: absolute;
-    top: 50%;
-    left: 30%;
-    width: 35%;
-    height: 1px;
-    background: linear-gradient(to right, rgba(0,80,0,0.3) 0%, transparent 100%);
-    transform: rotate(-25deg);
-  "></div>
-`
-
-    container.appendChild(leaf)
-
-    // Enhanced realistic motion with leaf-specific physics
-    const swayDirection = Math.random() > 0.5 ? 1 : -1
-    const finalX = startX + swayAmount * swayDirection + (Math.random() - 0.5) * 120
-    const finalRotation = rotation + 180 + Math.random() * 540 // Less rotation than petals
-
-    // Apply enhanced realistic motion
-    setTimeout(() => {
-      leaf.style.transition = `all ${duration}s cubic-bezier(0.23, 1, 0.32, 1)`
-      leaf.style.transform = `
-    translateY(${fallDistance}px) 
-    translateX(${finalX - startX}px) 
-    rotate(${finalRotation}deg) 
-    scale(0.7)
-  `
-      leaf.style.opacity = "0"
-    }, 120)
-
-    // Remove leaf after animation with cleanup
-    setTimeout(
-      () => {
-        if (leaf.parentNode) {
-          leaf.remove()
-        }
-      },
-      duration * 1000 + 300,
-    )
-  }
+      setTimeout(
+        () => {
+          if (leaf.parentNode) {
+            leaf.remove()
+          }
+        },
+        duration * 1000 + 300,
+      )
+    },
+    [],
+  )
 
   return (
     <>
@@ -663,10 +507,8 @@ export default function Home() {
                         () => {
                           // Mix petals and leaves randomly (70% petals, 30% leaves)
                           if (Math.random() > 0.3) {
-                            // @ts-ignore - uses the local function defined in this file
                             createEnhancedPetal(container, centerX, centerY, fallDistance, waveIndex)
                           } else {
-                            // @ts-ignore - uses the local function defined in this file
                             createRealisticLeaf(container, centerX, centerY, fallDistance, waveIndex)
                           }
                         },
@@ -802,9 +644,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Popular Menu Section removed for this page */}
-      {/* Intentionally left blank to avoid affecting other components */}
-
       {/* Gallery Section */}
       <section className="py-20 bg-black" aria-labelledby="gallery-heading">
         <div className="container mx-auto px-4">
@@ -882,6 +721,32 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      <div
+        className="fixed inset-0 pointer-events-none z-20 overflow-hidden"
+        onMouseMove={(e) => {
+          const container = e.currentTarget
+          const rect = container.getBoundingClientRect()
+          const centerX = e.clientX - rect.left
+          const centerY = e.clientY - rect.top
+          const fallDistance = window.innerHeight - centerY + 100
+
+          const existingElements = container.querySelectorAll(".cherry-petal, .cherry-leaf")
+          if (existingElements.length > 30) {
+            existingElements.forEach((element, index) => {
+              if (index < 15) element.remove()
+            })
+          }
+
+          if (Math.random() > 0.7) {
+            if (Math.random() > 0.3) {
+              createEnhancedPetal(container, centerX, centerY, fallDistance, 0)
+            } else {
+              createRealisticLeaf(container, centerX, centerY, fallDistance, 0)
+            }
+          }
+        }}
+      />
 
       <style jsx global>{`
       .gallery-grid .gallery-image {

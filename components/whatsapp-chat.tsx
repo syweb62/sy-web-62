@@ -184,7 +184,7 @@ export default function WhatsAppChat() {
             alt="Sushi yAki Live Chat Support"
             width={142}
             height={114}
-            className="w-[112px] h-[90px] sm:w-[122px] sm:h-[98px] md:w-[132px] md:h-[106px] lg:w-[142px] lg:h-[114px] drop-shadow-lg hover:drop-shadow-xl transition-all duration-300 rounded-lg"
+            className="w-[90px] h-[72px] sm:w-[98px] sm:h-[78px] md:w-[106px] md:h-[85px] lg:w-[114px] lg:h-[91px] drop-shadow-lg hover:drop-shadow-xl transition-all duration-300 rounded-lg"
             priority
             style={{
               maxWidth: "100%",

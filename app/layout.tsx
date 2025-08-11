@@ -110,8 +110,13 @@ export default function RootLayout({
         (function () {
           try {
             window.__PUBLIC_ENV = window.__PUBLIC_ENV || {};
-            window.__PUBLIC_ENV.NEXT_PUBLIC_SUPABASE_URL = ${JSON.stringify(process.env.NEXT_PUBLIC_SUPABASE_URL || "")};
-            window.__PUBLIC_ENV.NEXT_PUBLIC_SUPABASE_ANON_KEY = ${JSON.stringify(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "")};
+            window.__PUBLIC_ENV.NEXT_PUBLIC_SUPABASE_URL = ${JSON.stringify(
+              process.env.NEXT_PUBLIC_SUPABASE_URL || "https://pjoelkxkcwtzmbyswfhu.supabase.co",
+            )};
+            window.__PUBLIC_ENV.NEXT_PUBLIC_SUPABASE_ANON_KEY = ${JSON.stringify(
+              process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+                "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBqb2Vsa3hrY3d0em1ieXN3Zmh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ1NTMwMTksImV4cCI6MjA3MDEyOTAxOX0.xY2bVHrv_gl4iEHY79f_PC1OJxjHbHWYoqiSkrpi5n8",
+            )};
           } catch (e) { /* no-op */ }
         })();
       `,

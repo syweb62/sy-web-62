@@ -5,7 +5,6 @@
   "scripts": {
     "build": "next build",
     "dev": "next dev",
-    "postinstall": "echo 'Installation complete'",
     "lint": "next lint",
     "start": "next start"
   },
@@ -78,10 +77,5 @@
     "postcss": "^8.5",
     "tailwindcss": "^3.4.17",
     "typescript": "^5"
-  },
-  "packageManager": "pnpm@9.12.0",
-  "engines": {
-    "node": ">=22.0.0",
-    "pnpm": ">=9.0.0"
   }
 }

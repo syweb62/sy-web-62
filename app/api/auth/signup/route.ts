@@ -14,14 +14,11 @@ const createJSONResponse = (data: any, status = 200) => {
 
 export async function POST(request: NextRequest) {
   try {
-    console.log("=== SIGNUP REQUEST RECEIVED ===")
-
     // Rate limiting
     const clientIP = getClientIP(request)
     const rateLimit = authStorage.checkRateLimit(`signup:${clientIP}`)
 
     if (!rateLimit.allowed) {
-      console.log(`Rate limit exceeded for IP: ${clientIP}`)
       return createJSONResponse(
         {
           error: `Too many signup attempts. Please try again in ${rateLimit.retryAfter} seconds.`,
@@ -37,7 +34,6 @@ export async function POST(request: NextRequest) {
     try {
       body = await request.json()
     } catch (parseError) {
-      console.error("Invalid JSON in request body")
       return createJSONResponse(
         {
           error: "Invalid request format",
@@ -76,8 +72,6 @@ export async function POST(request: NextRequest) {
     const sanitizedEmail = sanitizeInput(email.toLowerCase())
     const sanitizedPhone = phone ? sanitizeInput(phone) : ""
     const sanitizedAddress = address ? sanitizeInput(address) : ""
-
-    console.log(`Signup attempt for: ${sanitizedEmail}`)
 
     // Validate email format
     if (!isValidEmail(sanitizedEmail)) {
@@ -125,7 +119,6 @@ export async function POST(request: NextRequest) {
 
     // Check if user already exists
     if (authStorage.userExists(sanitizedEmail)) {
-      console.log(`User already exists: ${sanitizedEmail}`)
       return createJSONResponse(
         {
           error: "An account with this email already exists",
@@ -145,13 +138,8 @@ export async function POST(request: NextRequest) {
       role: "user",
     })
 
-    console.log(`User created successfully: ${newUser.id}`)
-    console.log(`Current users:`, authStorage.getAllUserEmails())
-
     // Create session automatically (auto-login after signup)
     const sessionToken = authStorage.createSession(newUser)
-
-    console.log(`Auto-login session created for new user`)
 
     // Create response
     const response = createJSONResponse({
@@ -178,10 +166,11 @@ export async function POST(request: NextRequest) {
       path: "/",
     })
 
-    console.log("=== SIGNUP COMPLETED SUCCESSFULLY ===")
     return response
   } catch (error) {
-    console.error("Signup error:", error)
+    if (process.env.NODE_ENV === "development") {
+      console.error("Signup error:", error)
+    }
     return createJSONResponse(
       {
         error: "Registration service temporarily unavailable",
@@ -199,14 +188,18 @@ export async function DELETE(request: NextRequest) {
     authStorage.resetRateLimit(`signup:${clientIP}`)
     authStorage.resetRateLimit(`signin:${clientIP}`)
 
-    console.log(`Rate limits reset for IP: ${clientIP}`)
+    if (process.env.NODE_ENV === "development") {
+      console.log(`Rate limits reset for IP: ${clientIP}`)
+    }
 
     return createJSONResponse({
       success: true,
       message: "Rate limits reset successfully",
     })
   } catch (error) {
-    console.error("Rate limit reset error:", error)
+    if (process.env.NODE_ENV === "development") {
+      console.error("Rate limit reset error:", error)
+    }
     return createJSONResponse(
       {
         error: "Failed to reset rate limits",

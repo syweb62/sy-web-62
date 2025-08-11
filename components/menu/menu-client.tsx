@@ -5,7 +5,7 @@ import { Search, ShoppingBag } from "lucide-react"
 import ImageWithFallback from "@/components/image-fallback"
 import { Button } from "@/components/ui/button"
 import { OrderButton } from "@/components/ui/order-button"
-import type { MenuItem } from "@/app/menu/page"
+import type { MenuItem } from "@/lib/supabase"
 
 function normalizeCategory(value?: string | null) {
   return (value ?? "").toString().trim().toLowerCase().replace(/\s+/g, "-")
@@ -132,7 +132,7 @@ export function MenuClient({ items = [] }: Props) {
           {filteredItems.length > 0 ? (
             filteredItems.map((item) => {
               const available = item.is_available !== false
-              const image = item.image_url || item.image || "/placeholder.svg"
+              const image = item.image_url || "/placeholder.svg"
 
               return (
                 <article

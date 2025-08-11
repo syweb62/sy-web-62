@@ -14,14 +14,11 @@ const createJSONResponse = (data: any, status = 200) => {
 
 export async function POST(request: NextRequest) {
   try {
-    console.log("=== SIGNIN REQUEST RECEIVED ===")
-
     // Rate limiting
     const clientIP = getClientIP(request)
     const rateLimit = authStorage.checkRateLimit(`signin:${clientIP}`)
 
     if (!rateLimit.allowed) {
-      console.log(`Rate limit exceeded for IP: ${clientIP}`)
       return createJSONResponse(
         {
           error: `Too many login attempts. Please try again in ${rateLimit.retryAfter} seconds.`,
@@ -37,7 +34,6 @@ export async function POST(request: NextRequest) {
     try {
       body = await request.json()
     } catch (parseError) {
-      console.error("Invalid JSON in request body")
       return createJSONResponse(
         {
           error: "Invalid request format",
@@ -84,16 +80,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    console.log(`Login attempt for: ${sanitizedEmail}`)
-    console.log(`Available users:`, authStorage.getAllUserEmails())
-
     // Get user from storage
     const user = authStorage.getUser(sanitizedEmail)
 
     if (!user) {
-      console.log(`User not found: ${sanitizedEmail}`)
-      // Simulate timing attack protection
-      await new Promise((resolve) => setTimeout(resolve, 100))
+      await new Promise((resolve) => setTimeout(resolve, 50))
       return createJSONResponse(
         {
           error: "Invalid email or password",
@@ -102,15 +93,10 @@ export async function POST(request: NextRequest) {
         401,
       )
     }
-
-    console.log(`User found: ${user.id}`)
-    console.log(`Checking password...`)
 
     // Check password
     if (user.password !== password) {
-      console.log(`Password mismatch for user: ${sanitizedEmail}`)
-      // Simulate timing attack protection
-      await new Promise((resolve) => setTimeout(resolve, 100))
+      await new Promise((resolve) => setTimeout(resolve, 50))
       return createJSONResponse(
         {
           error: "Invalid email or password",
@@ -120,12 +106,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    console.log(`Password correct for user: ${user.id}`)
-
     // Create session
     const sessionToken = authStorage.createSession(user)
-
-    console.log(`Login successful for user: ${user.id}`)
 
     // Create response with session cookie
     const response = createJSONResponse({
@@ -151,10 +133,11 @@ export async function POST(request: NextRequest) {
       path: "/",
     })
 
-    console.log("=== SIGNIN COMPLETED SUCCESSFULLY ===")
     return response
   } catch (error) {
-    console.error("Signin error:", error)
+    if (process.env.NODE_ENV === "development") {
+      console.error("Signin error:", error)
+    }
     return createJSONResponse(
       {
         error: "Authentication service temporarily unavailable",

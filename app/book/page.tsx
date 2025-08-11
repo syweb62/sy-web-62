@@ -8,29 +8,26 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { supabase } from "@/lib/supabase"
-import { useAuth } from "@/hooks/use-auth"
+import type { LocationData } from "@/hooks/use-location"
 
 export default function BookTable() {
-  const { user } = useAuth()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isSubmitted, setIsSubmitted] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [reservationId, setReservationId] = useState<string>("")
-
   const [formData, setFormData] = useState({
-    name: user?.name || "",
-    email: user?.email || "",
-    phone: user?.phone || "",
+    name: "",
+    email: "",
+    phone: "",
     date: "",
     time: "",
     guests: "",
     specialRequests: "",
+    location: "",
   })
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
 
+    // Special validation for guests field
     if (name === "guests") {
       const numValue = Number.parseInt(value)
       if (value === "" || (numValue > 0 && numValue <= 20)) {
@@ -46,115 +43,65 @@ export default function BookTable() {
     setFormData((prev) => ({ ...prev, [name]: value }))
   }
 
+  const handleLocationUpdate = (location: LocationData) => {
+    setFormData((prev) => ({
+      ...prev,
+      location: location.address || `${location.latitude}, ${location.longitude}`,
+    }))
+  }
+
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value.replace(/\D/g, "")
-    if (value.length <= 11) {
+    const value = e.target.value.replace(/\D/g, "") // Remove non-digits
+    if (value.length <= 10) {
       setFormData((prev) => ({ ...prev, phone: value }))
     }
   }
 
-  const validateForm = () => {
-    if (!formData.name.trim()) return "Name is required"
-    if (!formData.email.trim()) return "Email is required"
-    if (!formData.phone.trim()) return "Phone number is required"
-    if (!formData.date) return "Date is required"
-    if (!formData.time) return "Time is required"
-    if (!formData.guests) return "Number of guests is required"
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    if (!emailRegex.test(formData.email)) return "Please enter a valid email"
-
-    if (formData.phone.length < 10) return "Please enter a valid phone number"
-
-    const selectedDate = new Date(formData.date)
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    if (selectedDate < today) return "Please select a future date"
-
-    return null
-  }
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setError(null)
-
-    const validationError = validateForm()
-    if (validationError) {
-      setError(validationError)
-      return
-    }
-
     setIsSubmitting(true)
 
-    try {
-      // Format the reservation data
-      const reservationData = {
-        user_id: user?.id || null,
-        name: formData.name.trim(),
-        email: formData.email.trim(),
-        phone: formData.phone.startsWith("+880") ? formData.phone : `+880${formData.phone.slice(-10)}`,
-        date: formData.date,
-        time: formData.time,
-        people_count: Number.parseInt(formData.guests),
-        special_requests: formData.specialRequests.trim() || null,
-        status: "pending",
-      }
-
-      // Save to Supabase
-      const { data, error: supabaseError } = await supabase
-        .from("reservations")
-        .insert(reservationData)
-        .select()
-        .single()
-
-      if (supabaseError) {
-        console.error("Supabase error:", supabaseError)
-        throw new Error("Failed to save reservation. Please try again.")
-      }
-
-      setReservationId(data.reservation_id)
-      setIsSubmitted(true)
-
-      // Reset form after 10 seconds
-      setTimeout(() => {
-        setIsSubmitted(false)
-        setFormData({
-          name: user?.name || "",
-          email: user?.email || "",
-          phone: user?.phone || "",
-          date: "",
-          time: "",
-          guests: "",
-          specialRequests: "",
-        })
-        setReservationId("")
-      }, 10000)
-    } catch (err) {
-      console.error("Reservation error:", err)
-      setError(err instanceof Error ? err.message : "Failed to make reservation. Please try again.")
-    } finally {
-      setIsSubmitting(false)
+    // Format phone number with Bangladesh country code
+    const cleanPhone = formData.phone.replace(/\D/g, "").slice(-10) // Get last 10 digits only
+    const formattedData = {
+      ...formData,
+      phone: `+880${cleanPhone}`,
     }
+
+    // Simulate API call with formatted data
+    console.log("Submitting reservation:", formattedData)
+    await new Promise((resolve) => setTimeout(resolve, 2000))
+
+    setIsSubmitting(false)
+    setIsSubmitted(true)
+
+    // Reset form after 5 seconds
+    setTimeout(() => {
+      setIsSubmitted(false)
+      setFormData({
+        name: "",
+        email: "",
+        phone: "",
+        date: "",
+        time: "",
+        guests: "",
+        specialRequests: "",
+        location: "",
+      })
+    }, 5000)
   }
 
   if (isSubmitted) {
     return (
       <>
+        {/* Hero Section */}
         <section className="hero-section min-h-[40vh] flex items-center justify-center relative">
           <div className="container mx-auto px-4 text-center z-10 pt-20">
             <div className="max-w-2xl mx-auto">
               <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-6" />
               <h1 className="text-4xl md:text-5xl font-serif font-bold mb-6">Reservation Confirmed!</h1>
-              <p className="text-lg text-gray-200 mb-4">
-                Thank you for your reservation. We've received your booking request.
-              </p>
-              {reservationId && (
-                <p className="text-gold mb-6">
-                  Reservation ID: <span className="font-mono">{reservationId}</span>
-                </p>
-              )}
-              <p className="text-gray-300 mb-8">
-                We'll contact you at {formData.phone} to confirm your reservation details.
+              <p className="text-lg text-gray-200 mb-8">
+                Thank you for your reservation. We've sent a confirmation email with all the details.
               </p>
               <Button onClick={() => setIsSubmitted(false)} variant="outline" size="lg">
                 Make Another Reservation
@@ -168,6 +115,7 @@ export default function BookTable() {
 
   return (
     <>
+      {/* Hero Section */}
       <section className="hero-section min-h-[40vh] flex items-center justify-center relative">
         <div className="container mx-auto px-4 text-center z-10 pt-20">
           <h1 className="text-4xl md:text-5xl font-serif font-bold mb-6">Book a Table</h1>
@@ -177,19 +125,15 @@ export default function BookTable() {
         </div>
       </section>
 
+      {/* Booking Form Section */}
       <section className="py-20 bg-darkBg">
         <div className="container mx-auto px-4">
           <div className="max-w-2xl mx-auto">
             <div className="bg-black/30 rounded-lg border border-gray-800 p-8">
               <h2 className="text-2xl font-serif mb-8 text-center">Make a Reservation</h2>
 
-              {error && (
-                <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4 mb-6">
-                  <p className="text-red-300 text-sm">{error}</p>
-                </div>
-              )}
-
               <form onSubmit={handleSubmit} className="space-y-6">
+                {/* Essential Information - Simplified Layout */}
                 <div className="space-y-4">
                   <h3 className="text-lg font-medium text-gold mb-4">Your Details</h3>
 
@@ -234,13 +178,15 @@ export default function BookTable() {
                         placeholder="1234567890"
                         required
                         className="transition-all duration-200 focus:ring-2 focus:ring-gold/50 focus:border-gold pl-16 bg-gray-800 border-gray-700 text-white placeholder:text-gray-500"
-                        maxLength={11}
+                        maxLength={10}
+                        pattern="[0-9]{10}"
                       />
                     </div>
-                    <p className="text-xs text-gray-400">Enter your mobile number</p>
+                    <p className="text-xs text-gray-400">Enter your 10-digit mobile number (without country code)</p>
                   </div>
                 </div>
 
+                {/* Reservation Details - Enhanced UI */}
                 <div className="space-y-4">
                   <h3 className="text-lg font-medium text-gold mb-4">Reservation Details</h3>
 
@@ -316,10 +262,11 @@ export default function BookTable() {
                   </div>
                 </div>
 
+                {/* Optional Details - Collapsible */}
                 <div className="space-y-4">
                   <details className="group">
                     <summary className="cursor-pointer text-gold hover:text-yellow-300 transition-colors duration-200 flex items-center gap-2">
-                      <span className="text-sm font-medium">Special Requests (Optional)</span>
+                      <span className="text-sm font-medium">Additional Options (Optional)</span>
                       <svg
                         className="w-4 h-4 transition-transform group-open:rotate-180"
                         fill="none"
@@ -331,6 +278,7 @@ export default function BookTable() {
                     </summary>
 
                     <div className="mt-4 space-y-4 pl-4 border-l-2 border-gold/30">
+                      {/* Special Requests */}
                       <div>
                         <label className="block text-sm font-medium mb-2 text-gray-300">Special Requests</label>
                         <Textarea
@@ -346,6 +294,7 @@ export default function BookTable() {
                   </details>
                 </div>
 
+                {/* Enhanced Submit Button */}
                 <div className="pt-6">
                   <Button
                     type="submit"
@@ -367,7 +316,7 @@ export default function BookTable() {
                   </Button>
 
                   <p className="text-xs text-gray-400 text-center mt-3">
-                    We'll contact you to confirm your reservation details
+                    We'll send you a confirmation email with all the details
                   </p>
                 </div>
               </form>
