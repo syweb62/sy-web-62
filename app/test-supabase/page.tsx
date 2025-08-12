@@ -99,38 +99,68 @@ export default function TestSupabasePage() {
     setOrderMsg("Fetching orders...")
     setMyOrders(null)
     try {
-      const response = await fetch("/api/orders")
+      console.log("Fetching orders from /api/orders...")
+      const response = await fetch("/api/orders", {
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+      })
+
+      console.log("Response status:", response.status)
+      console.log("Response headers:", Object.fromEntries(response.headers.entries()))
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
+        const errorText = await response.text()
+        console.error("Error response:", errorText)
+        throw new Error(`HTTP ${response.status}: ${errorText || response.statusText}`)
       }
 
       const contentType = response.headers.get("content-type")
       if (!contentType || !contentType.includes("application/json")) {
-        throw new Error("Response is not JSON")
+        const responseText = await response.text()
+        console.error("Non-JSON response:", responseText)
+        throw new Error(`Expected JSON, got ${contentType}. Response: ${responseText.slice(0, 200)}`)
       }
 
       const text = await response.text()
+      console.log("Response text length:", text.length)
+      console.log("Response preview:", text.slice(0, 200))
+
       if (!text.trim()) {
-        throw new Error("Empty response received")
+        throw new Error("Empty response received from server")
       }
 
-      const data = JSON.parse(text)
+      let data
+      try {
+        data = JSON.parse(text)
+      } catch (parseError) {
+        console.error("JSON parse error:", parseError)
+        console.error("Raw response:", text)
+        throw new Error(`Invalid JSON response: ${parseError}`)
+      }
 
-      if (data.orders) {
+      console.log("Parsed data:", data)
+
+      if (data.orders && Array.isArray(data.orders)) {
         const orders = data.orders.slice(0, 10).map((order: any) => ({
-          order_id: order.order_id,
+          order_id: order.order_id || order.id,
           status: order.status,
           total_price: order.total_price,
           created_at: order.created_at,
         }))
 
         setMyOrders(orders)
-        setOrderMsg(`✅ Found ${orders.length} orders`)
+        setOrderMsg(`✅ Found ${orders.length} orders (Total: ${data.metadata?.total_orders || orders.length})`)
+      } else if (data.error) {
+        setOrderMsg(`⚠️ API Error: ${data.error}`)
       } else {
-        setOrderMsg(`⚠️ Query error: ${data.error || "Failed to fetch orders"}`)
+        console.error("Unexpected data structure:", data)
+        setOrderMsg(`⚠️ Unexpected response format: ${JSON.stringify(data).slice(0, 100)}`)
       }
     } catch (e: any) {
+      console.error("Fetch orders error:", e)
       setOrderMsg(`⚠️ Error: ${e?.message || String(e)}`)
     } finally {
       setIsLoading(false)
