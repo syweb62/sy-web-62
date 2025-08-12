@@ -100,9 +100,24 @@ export default function TestSupabasePage() {
     setMyOrders(null)
     try {
       const response = await fetch("/api/orders")
-      const data = await response.json()
 
-      if (response.ok && data.orders) {
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+
+      const contentType = response.headers.get("content-type")
+      if (!contentType || !contentType.includes("application/json")) {
+        throw new Error("Response is not JSON")
+      }
+
+      const text = await response.text()
+      if (!text.trim()) {
+        throw new Error("Empty response received")
+      }
+
+      const data = JSON.parse(text)
+
+      if (data.orders) {
         const orders = data.orders.slice(0, 10).map((order: any) => ({
           order_id: order.order_id,
           status: order.status,
