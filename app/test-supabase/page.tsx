@@ -21,8 +21,12 @@ export default function TestSupabasePage() {
 
   const handleCheckConnection = useCallback(async () => {
     setConnMsg("Checking connection...")
-    const res = await testSupabaseConnection()
-    setConnMsg(res.success ? `✅ Connection successful` : `⚠️ ${res.error}`)
+    try {
+      const res = await testSupabaseConnection()
+      setConnMsg(res.status === "connected" ? `✅ Connection successful` : `⚠️ ${res.error}`)
+    } catch (error: any) {
+      setConnMsg(`⚠️ Connection failed: ${error.message}`)
+    }
   }, [])
 
   const handleShowAuth = useCallback(async () => {
