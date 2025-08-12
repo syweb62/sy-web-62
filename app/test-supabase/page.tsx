@@ -1,7 +1,6 @@
 "use client"
 
 import { useCallback, useState } from "react"
-import { getSupabaseBrowserClient, testSupabaseConnection, getCurrentUser } from "@/lib/supabase"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
@@ -22,8 +21,14 @@ export default function TestSupabasePage() {
   const handleCheckConnection = useCallback(async () => {
     setConnMsg("Checking connection...")
     try {
-      const res = await testSupabaseConnection()
-      setConnMsg(res.status === "connected" ? `✅ Connection successful` : `⚠️ ${res.error}`)
+      const response = await fetch("/api/test-supabase-orders")
+      const data = await response.json()
+
+      if (response.ok && data.success) {
+        setConnMsg(`✅ Connection successful - Found ${data.tests.ordersTable.count} orders`)
+      } else {
+        setConnMsg(`⚠️ Connection failed: ${data.error || "Unknown error"}`)
+      }
     } catch (error: any) {
       setConnMsg(`⚠️ Connection failed: ${error.message}`)
     }
@@ -32,9 +37,11 @@ export default function TestSupabasePage() {
   const handleShowAuth = useCallback(async () => {
     setAuthMsg("Loading...")
     try {
-      const user = await getCurrentUser()
-      if (user) {
-        setAuthMsg(`✅ Signed in as: ${user.email || user.id}`)
+      const response = await fetch("/api/auth/session")
+      const data = await response.json()
+
+      if (response.ok && data.user) {
+        setAuthMsg(`✅ Signed in as: ${data.user.email || data.user.id}`)
       } else {
         setAuthMsg("ℹ️ Not signed in (Guest)")
       }
@@ -47,12 +54,12 @@ export default function TestSupabasePage() {
     setIsLoading(true)
     setOrderMsg("Creating guest order...")
     try {
-      const supabase = getSupabaseBrowserClient()
-
-      const { data: order, error: orderErr } = await supabase
-        .from("orders")
-        .insert({
-          user_id: null,
+      const response = await fetch("/api/orders", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
           customer_name: "Test Guest",
           phone: "123-456-7890",
           status: "pending",
@@ -61,33 +68,25 @@ export default function TestSupabasePage() {
           subtotal: 12.5,
           vat: 0,
           delivery_charge: 0,
-        })
-        .select("order_id")
-        .single()
-
-      if (orderErr || !order) {
-        setOrderMsg(`⚠️ Order creation failed: ${orderErr?.message || "unknown"}`)
-        setIsLoading(false)
-        return
-      }
-
-      const { error: itemErr } = await supabase.from("order_items").insert({
-        order_id: order.order_id,
-        quantity: 1,
-        price_at_purchase: 12.5,
-        item_name: "Test Roll",
-        item_description: "Test item for connection verification",
-        item_image: "/sushi-roll.png",
-        menu_item_id: null,
+          items: [
+            {
+              name: "Test Roll",
+              quantity: 1,
+              price: 12.5,
+              description: "Test item for connection verification",
+              image: "/sushi-roll.png",
+            },
+          ],
+        }),
       })
 
-      if (itemErr) {
-        setOrderMsg(`⚠️ Order item failed: ${itemErr.message}`)
-        setIsLoading(false)
-        return
-      }
+      const data = await response.json()
 
-      setOrderMsg(`✅ Guest order created successfully (ID: ${order.order_id})`)
+      if (response.ok && data.success) {
+        setOrderMsg(`✅ Guest order created successfully (ID: ${data.order_id})`)
+      } else {
+        setOrderMsg(`⚠️ Order creation failed: ${data.error || "Unknown error"}`)
+      }
     } catch (e: any) {
       setOrderMsg(`⚠️ Error: ${e?.message || String(e)}`)
     } finally {
@@ -100,22 +99,22 @@ export default function TestSupabasePage() {
     setOrderMsg("Fetching orders...")
     setMyOrders(null)
     try {
-      const supabase = getSupabaseBrowserClient()
+      const response = await fetch("/api/orders")
+      const data = await response.json()
 
-      const { data, error } = await supabase
-        .from("orders")
-        .select("order_id,status,total_price,created_at")
-        .order("created_at", { ascending: false })
-        .limit(10)
+      if (response.ok && data.orders) {
+        const orders = data.orders.slice(0, 10).map((order: any) => ({
+          order_id: order.order_id,
+          status: order.status,
+          total_price: order.total_price,
+          created_at: order.created_at,
+        }))
 
-      if (error) {
-        setOrderMsg(`⚠️ Query error: ${error.message}`)
-        setIsLoading(false)
-        return
+        setMyOrders(orders)
+        setOrderMsg(`✅ Found ${orders.length} orders`)
+      } else {
+        setOrderMsg(`⚠️ Query error: ${data.error || "Failed to fetch orders"}`)
       }
-
-      setMyOrders((data as OrderRow[]) || [])
-      setOrderMsg(`✅ Found ${data?.length || 0} orders`)
     } catch (e: any) {
       setOrderMsg(`⚠️ Error: ${e?.message || String(e)}`)
     } finally {
