@@ -17,6 +17,7 @@ import { TestTrigger } from "@/components/testing/test-trigger"
 import { Suspense, useEffect } from "react"
 import LoadingFallback from "@/components/loading-fallback"
 import { performanceMonitor } from "@/lib/performance-monitor"
+import { Toaster } from "sonner"
 
 const playfair = Playfair_Display({
   subsets: ["latin"],
@@ -122,6 +123,20 @@ export default function ClientComponent({
 
                 {/* Testing Dashboard Trigger */}
                 <TestTrigger />
+
+                {/* Toaster component for toast notifications */}
+                <Toaster
+                  position="top-right"
+                  toastOptions={{
+                    style: {
+                      background: "rgb(17 24 39)",
+                      border: "1px solid rgb(75 85 99)",
+                      color: "rgb(243 244 246)",
+                    },
+                  }}
+                  theme="dark"
+                  richColors
+                />
               </CartProvider>
             </AuthProvider>
           </Suspense>

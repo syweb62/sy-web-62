@@ -715,12 +715,12 @@ export default function Cart() {
                     ))}
                   </div>
 
-                  <div className="p-4 sm:p-6 border-t border-gray-800 flex flex-col sm:flex-row justify-between items-center gap-3">
-                    <button onClick={clearCart} className="text-sm text-gray-400 hover:text-white">
+                  <div className="p-4 sm:p-6 border-t border-gray-800 flex justify-between items-center">
+                    <button onClick={clearCart} className="text-xs text-gray-400 hover:text-white">
                       Clear Cart
                     </button>
                     <Link href="/menu">
-                      <Button variant="outline" size="sm">
+                      <Button variant="outline" size="xs" className="text-xs px-3 py-1 bg-transparent">
                         Add More Items
                       </Button>
                     </Link>

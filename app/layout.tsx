@@ -36,12 +36,24 @@ const baseUrl = getBaseUrl()
 
 export const metadata: Metadata = {
   title: {
-    default: "Sushi Yaki - Authentic Japanese Restaurant",
+    default: "Sushi Yaki - Authentic Japanese Restaurant in Bangladesh",
     template: "%s | Sushi Yaki",
   },
   description:
-    "Experience the finest Japanese cuisine at Sushi Yaki. Fresh sushi, traditional dishes, and exceptional service in an elegant atmosphere.",
-  keywords: ["sushi", "japanese restaurant", "authentic japanese food", "fresh sushi", "ramen", "teriyaki"],
+    "Experience the finest Japanese cuisine at Sushi Yaki in Bangladesh. Fresh sushi, traditional dishes, and exceptional service in an elegant atmosphere. Order online with BDT pricing.",
+  keywords: [
+    "sushi",
+    "japanese restaurant",
+    "authentic japanese food",
+    "fresh sushi",
+    "ramen",
+    "teriyaki",
+    "bangladesh japanese restaurant",
+    "dhaka sushi",
+    "japanese food bangladesh",
+    "bdt pricing",
+    "online food delivery bangladesh",
+  ],
   authors: [{ name: "Sushi Yaki Restaurant" }],
   creator: "Sushi Yaki",
   publisher: "Sushi Yaki",
@@ -58,12 +70,12 @@ export const metadata: Metadata = {
   },
   openGraph: {
     type: "website",
-    locale: "en_US",
+    locale: "en_BD",
     url: baseUrl,
-    siteName: "Sushi Yaki",
-    title: "Sushi Yaki - Authentic Japanese Restaurant",
+    siteName: "Sushi Yaki Bangladesh",
+    title: "Sushi Yaki - Authentic Japanese Restaurant in Bangladesh",
     description:
-      "Experience the finest Japanese cuisine at Sushi Yaki. Fresh sushi, traditional dishes, and exceptional service.",
+      "Experience the finest Japanese cuisine at Sushi Yaki in Bangladesh. Fresh sushi, traditional dishes, and exceptional service with BDT pricing.",
     images: [
       {
         url: "/images/sushiyaki-og-image.jpg",
@@ -75,8 +87,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Sushi Yaki - Authentic Japanese Restaurant",
-    description: "Experience the finest Japanese cuisine at Sushi Yaki.",
+    title: "Sushi Yaki - Authentic Japanese Restaurant in Bangladesh",
+    description: "Experience the finest Japanese cuisine at Sushi Yaki in Bangladesh with BDT pricing.",
     images: ["/images/sushiyaki-og-image.jpg"],
   },
   verification: {

@@ -1,7 +1,5 @@
 "use client"
 
-import { Loader2 } from "lucide-react"
-
 interface LoadingFallbackProps {
   message?: string
 }
@@ -10,8 +8,11 @@ export default function LoadingFallback({ message = "Loading..." }: LoadingFallb
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-slate-900 to-slate-800">
       <div className="text-center">
-        <Loader2 className="h-8 w-8 animate-spin text-gold mx-auto mb-4" />
-        <p className="text-gray-300 font-medium">{message}</p>
+        <div
+          className="h-6 w-6 mx-auto mb-3 rounded-full border-2 border-gold/20 border-t-gold/60 animate-spin"
+          style={{ animationDuration: "1.5s" }}
+        />
+        <p className="text-gray-400 text-sm opacity-80">{message}</p>
       </div>
     </div>
   )

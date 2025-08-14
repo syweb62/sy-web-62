@@ -1,0 +1,17 @@
+User-agent: *
+Allow: /
+
+# Important pages
+Allow: /menu
+Allow: /reservations
+Allow: /gallery
+Allow: /contact
+
+# Disallow admin and API routes
+Disallow: /api/
+Disallow: /dashboard/
+Disallow: /admin/
+Disallow: /account/
+
+# Sitemap location
+Sitemap: https://sushiyaki.vercel.app/sitemap.xml

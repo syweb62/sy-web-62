@@ -1,4 +1,6 @@
 import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js"
+import { createBrowserClient, createServerClient } from "@supabase/ssr"
+import { cookies } from "next/headers"
 
 // Environment variables with fallbacks
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://pjoelkxkcwtzmbyswfhu.supabase.co"
@@ -17,22 +19,100 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true,
     detectSessionInUrl: true,
   },
+  db: {
+    schema: "public",
+  },
+  global: {
+    headers: {
+      "X-Client-Timezone": "Asia/Dhaka",
+    },
+  },
 })
 
 // Client-side supabase client (browser)
 export function getSupabaseBrowserClient(): SupabaseClient {
-  return createClient(supabaseUrl, supabaseAnonKey, {
-    auth: {
-      persistSession: true,
-      autoRefreshToken: true,
-      detectSessionInUrl: true,
+  return createBrowserClient(supabaseUrl, supabaseAnonKey, {
+    global: {
+      headers: {
+        "X-Client-Timezone": "Asia/Dhaka",
+      },
     },
   })
 }
 
 // Server-side supabase client
 export function getSupabaseClient(): SupabaseClient {
-  return createClient(supabaseUrl, supabaseAnonKey)
+  const cookieStore = cookies()
+
+  return createServerClient(supabaseUrl, supabaseAnonKey, {
+    cookies: {
+      getAll() {
+        return cookieStore.getAll()
+      },
+      setAll(cookiesToSet) {
+        try {
+          cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options))
+        } catch {
+          // The `setAll` method was called from a Server Component.
+          // This can be ignored if you have middleware refreshing
+          // user sessions.
+        }
+      },
+    },
+    global: {
+      headers: {
+        "X-Client-Timezone": "Asia/Dhaka",
+      },
+    },
+  })
+}
+
+// Added alias export for consistency with API routes
+export const createSupabaseServerClient = getSupabaseClient
+
+// Convert UTC timestamp to Bangladesh time
+export function convertToBangladeshTime(utcTimestamp: string | Date): Date {
+  const date = typeof utcTimestamp === "string" ? new Date(utcTimestamp) : utcTimestamp
+  return new Date(date.toLocaleString("en-US", { timeZone: "Asia/Dhaka" }))
+}
+
+// Format timestamp for Bangladesh locale
+export function formatBangladeshTime(timestamp: string | Date, options?: Intl.DateTimeFormatOptions): string {
+  const date = typeof timestamp === "string" ? new Date(timestamp) : timestamp
+  const defaultOptions: Intl.DateTimeFormatOptions = {
+    timeZone: "Asia/Dhaka",
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  }
+
+  return date.toLocaleString("en-BD", { ...defaultOptions, ...options })
+}
+
+// Get current Bangladesh time
+export function getBangladeshTime(): Date {
+  return new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Dhaka" }))
+}
+
+// Format date for Bangladesh display
+export function formatBangladeshDate(timestamp: string | Date): string {
+  return formatBangladeshTime(timestamp, {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  })
+}
+
+// Format time for Bangladesh display
+export function formatBangladeshTimeOnly(timestamp: string | Date): string {
+  return formatBangladeshTime(timestamp, {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  })
 }
 
 // Get current user
@@ -99,8 +179,21 @@ export async function testSupabaseConnection() {
       return { status: "disconnected", error: error.message }
     }
 
+    // Test timezone functionality
+    const bangladeshTime = getBangladeshTime()
+    const formattedTime = formatBangladeshTime(bangladeshTime)
+
     console.log("Supabase connection test successful")
-    return { status: "connected", data }
+    console.log("Bangladesh time:", formattedTime)
+
+    return {
+      status: "connected",
+      data,
+      timezone: {
+        current: formattedTime,
+        zone: "Asia/Dhaka",
+      },
+    }
   } catch (error) {
     console.error("Supabase connection test error:", error)
     return { status: "disconnected", error: String(error) }

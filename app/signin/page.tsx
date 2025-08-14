@@ -1,9 +1,10 @@
 "use client"
 
+import type React from "react"
+
 import { useState, useEffect } from "react"
-import { Eye, EyeOff, Mail, Lock, User, Phone, Info } from 'lucide-react'
+import { Eye, EyeOff, Mail, Lock, User, Phone, Info } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { useAuth } from "@/hooks/use-auth"
 import { useRouter } from "next/navigation"
 
@@ -41,10 +42,10 @@ export default function SignInPage() {
   }, [user, authLoading, router])
 
   const handleInputChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }))
+    setFormData((prev) => ({ ...prev, [field]: value }))
     // Clear specific error when user starts typing
     if (errors[field as keyof FormErrors]) {
-      setErrors(prev => ({ ...prev, [field]: undefined }))
+      setErrors((prev) => ({ ...prev, [field]: undefined }))
     }
   }
 
@@ -92,7 +93,7 @@ export default function SignInPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     if (!validateForm()) {
       return
     }
@@ -110,7 +111,7 @@ export default function SignInPage() {
       }
     } catch (error) {
       console.error("Authentication error:", error)
-      
+
       if (error instanceof Error) {
         if (error.message.includes("Invalid login credentials")) {
           setErrors({ general: "Invalid email or password. Please check your credentials and try again." })
@@ -151,8 +152,7 @@ export default function SignInPage() {
           <p className="text-lg max-w-3xl mx-auto mb-8 text-gray-200">
             {isLogin
               ? "Sign in to your account to access exclusive features and track your orders."
-              : "Create your account to enjoy personalized dining experiences and exclusive offers."
-            }
+              : "Create your account to enjoy personalized dining experiences and exclusive offers."}
           </p>
         </div>
       </section>
@@ -172,8 +172,7 @@ export default function SignInPage() {
                   <p className="text-blue-300 text-sm leading-relaxed">
                     {isLogin
                       ? "Enter your email and password to access your account. Don't have an account yet? Switch to sign up below."
-                      : "Fill out the form below to create your new account. You'll be automatically logged in after successful registration."
-                    }
+                      : "Fill out the form below to create your new account. You'll be automatically logged in after successful registration."}
                   </p>
                 </div>
               </div>
@@ -186,7 +185,9 @@ export default function SignInPage() {
                   {isLogin ? "Sign In to Your Account" : "Create Your Account"}
                 </h2>
                 <p className="text-gray-400 text-sm">
-                  {isLogin ? "Enter your email and password to access your account" : "Enter your details to get started"}
+                  {isLogin
+                    ? "Enter your email and password to access your account"
+                    : "Enter your details to get started"}
                 </p>
               </div>
 
@@ -215,9 +216,7 @@ export default function SignInPage() {
                         disabled={isLoading}
                       />
                     </div>
-                    {errors.name && (
-                      <p className="text-sm text-red-400">{errors.name}</p>
-                    )}
+                    {errors.name && <p className="text-sm text-red-400">{errors.name}</p>}
                   </div>
                 )}
 
@@ -237,9 +236,7 @@ export default function SignInPage() {
                       disabled={isLoading}
                     />
                   </div>
-                  {errors.email && (
-                    <p className="text-sm text-red-400">{errors.email}</p>
-                  )}
+                  {errors.email && <p className="text-sm text-red-400">{errors.email}</p>}
                 </div>
 
                 {/* Phone Field (Signup only) */}
@@ -251,7 +248,10 @@ export default function SignInPage() {
                     <div className="flex">
                       <div className="flex items-center px-3 bg-gray-700 border border-r-0 border-gray-600 rounded-l-md">
                         <Phone className="h-4 w-4 text-gray-400 mr-2" />
-                        <span className="text-gray-300 text-sm">+880</span>
+                        <div className="w-6 h-4 bg-gradient-to-b from-green-600 to-green-700 rounded-sm relative overflow-hidden">
+                          <div className="absolute inset-0 bg-gradient-to-b from-green-600 to-green-700"></div>
+                          <div className="absolute top-0 left-0 w-2.5 h-2.5 bg-red-600 rounded-full transform translate-x-1.5 translate-y-0.5"></div>
+                        </div>
                       </div>
                       <input
                         type="tel"
@@ -262,9 +262,7 @@ export default function SignInPage() {
                         disabled={isLoading}
                       />
                     </div>
-                    {errors.phone && (
-                      <p className="text-sm text-red-400">{errors.phone}</p>
-                    )}
+                    {errors.phone && <p className="text-sm text-red-400">{errors.phone}</p>}
                   </div>
                 )}
 
@@ -292,9 +290,7 @@ export default function SignInPage() {
                       {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                     </button>
                   </div>
-                  {errors.password && (
-                    <p className="text-sm text-red-400">{errors.password}</p>
-                  )}
+                  {errors.password && <p className="text-sm text-red-400">{errors.password}</p>}
                 </div>
 
                 {/* Confirm Password Field (Signup only) */}
@@ -322,9 +318,7 @@ export default function SignInPage() {
                         {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                       </button>
                     </div>
-                    {errors.confirmPassword && (
-                      <p className="text-sm text-red-400">{errors.confirmPassword}</p>
-                    )}
+                    {errors.confirmPassword && <p className="text-sm text-red-400">{errors.confirmPassword}</p>}
                   </div>
                 )}
 

@@ -6,7 +6,6 @@ import { useState } from "react"
 import { Calendar, Clock, Users, Mail, CheckCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import type { LocationData } from "@/hooks/use-location"
 
@@ -285,38 +284,6 @@ export default function BookTable() {
                       <p className="text-xs text-gray-400">Maximum 20 guests per reservation</p>
                     </div>
                   </div>
-                </div>
-
-                {/* Optional Details - Collapsible */}
-                <div className="space-y-4">
-                  <details className="group">
-                    <summary className="cursor-pointer text-gold hover:text-yellow-300 transition-colors duration-200 flex items-center gap-2">
-                      <span className="text-sm font-medium">Additional Options (Optional)</span>
-                      <svg
-                        className="w-4 h-4 transition-transform group-open:rotate-180"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </summary>
-
-                    <div className="mt-4 space-y-4 pl-4 border-l-2 border-gold/30">
-                      {/* Special Requests */}
-                      <div>
-                        <label className="block text-sm font-medium mb-2 text-gray-300">Special Requests</label>
-                        <Textarea
-                          name="specialRequests"
-                          value={formData.specialRequests}
-                          onChange={handleInputChange}
-                          placeholder="Dietary restrictions, allergies, special occasions..."
-                          rows={3}
-                          className="transition-all duration-200 focus:ring-2 focus:ring-gold/50 focus:border-gold bg-gray-800 border-gray-700 text-white placeholder:text-gray-400"
-                        />
-                      </div>
-                    </div>
-                  </details>
                 </div>
 
                 {/* Enhanced Submit Button */}
