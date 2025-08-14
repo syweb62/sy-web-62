@@ -3,9 +3,6 @@
   "installCommand": "pnpm install --no-frozen-lockfile",
   "framework": "nextjs",
   "regions": ["sin1"],
-  "env": {
-    "SITE_URL": "https://sushiyakiresto.com"
-  },
   "functions": {
     "app/api/**/*.ts": {
       "maxDuration": 30

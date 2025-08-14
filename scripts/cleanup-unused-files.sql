@@ -1,6 +1,4 @@
 -- Database cleanup script to remove old/unused records
--- Note: VACUUM commands must be run outside of transaction blocks
-
 -- Clean up old sessions (older than 30 days)
 DELETE FROM auth.sessions 
 WHERE created_at < NOW() - INTERVAL '30 days';
@@ -23,9 +21,16 @@ DELETE FROM orders
 WHERE status = 'cancelled' 
 AND created_at < NOW() - INTERVAL '90 days';
 
--- Update statistics (can run in transaction)
+-- Update statistics
 ANALYZE menu_items;
 ANALYZE orders;
 ANALYZE order_items;
 ANALYZE profiles;
 ANALYZE reservations;
+
+-- Vacuum tables for better performance
+VACUUM ANALYZE menu_items;
+VACUUM ANALYZE orders;
+VACUUM ANALYZE order_items;
+VACUUM ANALYZE profiles;
+VACUUM ANALYZE reservations;
