@@ -3,23 +3,26 @@ export default function RootLoading() {
   // during route transitions and segment-level data fetching.
   return (
     <main className="min-h-screen w-full bg-black flex items-center justify-center">
-      {/* Reuse the shared spinner */}
-      {/* Note: import is not needed in this file since Next.js inlines components; 
-          we render the component via dynamic import pattern below. */}
-      {/* We’ll keep this simple and inline to avoid bundling issues */}
-      <div className="flex flex-col items-center justify-center gap-3 text-white">
-        <div className="relative" style={{ width: 128, height: 128 }}>
+      <div className="flex flex-col items-center justify-center gap-4 text-white">
+        <div className="relative animate-pulse" style={{ width: 160, height: 160 }}>
           <video
-            className="w-full h-full rounded-full object-contain"
-            src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Sushi-7EnDgi4AZlDTFOrpwt6HOp3oC83HAn.webm"
+            className="w-full h-full rounded-full object-cover shadow-2xl ring-2 ring-gold/20"
+            src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Sushi-WzZ2UHMg1btadwhv7RV7IOmU32iVTF.webm"
             autoPlay
             loop
             muted
             playsInline
+            style={{
+              filter: "brightness(1.1) contrast(1.05)",
+            }}
           />
+          <div className="absolute inset-0 rounded-full bg-gradient-to-r from-gold/10 to-transparent animate-pulse"></div>
         </div>
-        <p className="text-sm text-gray-300">Loading...</p>
-        <span className="sr-only">Loading</span>
+        <div className="text-center space-y-2">
+          <p className="text-lg font-medium text-gold tracking-wide">Loading...</p>
+          <p className="text-xs text-gray-400 opacity-75">Preparing your experience</p>
+        </div>
+        <span className="sr-only">Loading Sushi Yaki Restaurant</span>
       </div>
     </main>
   )
