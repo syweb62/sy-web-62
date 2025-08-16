@@ -7,8 +7,6 @@ import { Eye, EyeOff, Mail, Lock, User, Phone, Info } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/hooks/use-auth"
 import { useRouter } from "next/navigation"
-import { useActionState } from "react"
-import { signUpAction } from "@/lib/auth-actions"
 
 interface FormErrors {
   email?: string
@@ -33,10 +31,8 @@ export default function SignInPage() {
     phone: "",
   })
 
-  const { signIn, user, isLoading: authLoading } = useAuth()
+  const { signIn, signUp, user, isLoading: authLoading } = useAuth()
   const router = useRouter()
-
-  const [signUpState, signUpFormAction] = useActionState(signUpAction, null)
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -44,22 +40,6 @@ export default function SignInPage() {
       router.push("/")
     }
   }, [user, authLoading, router])
-
-  useEffect(() => {
-    if (signUpState?.success) {
-      setErrors({})
-      // Show success message and redirect or switch to login
-      setErrors({ general: signUpState.success })
-      setTimeout(() => {
-        setIsLogin(true)
-        setFormData({ email: "", password: "", confirmPassword: "", name: "", phone: "" })
-        setErrors({})
-      }, 3000)
-    } else if (signUpState?.error) {
-      setErrors({ general: signUpState.error })
-      setIsLoading(false)
-    }
-  }, [signUpState])
 
   const handleInputChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
@@ -126,32 +106,36 @@ export default function SignInPage() {
         await signIn(formData.email.trim().toLowerCase(), formData.password)
         router.push("/")
       } else {
-        const formDataObj = new FormData()
-        formDataObj.append("email", formData.email.trim().toLowerCase())
-        formDataObj.append("password", formData.password)
-        formDataObj.append("fullName", formData.name.trim())
-        formDataObj.append("phone", formData.phone)
+        await signUp(formData.email.trim().toLowerCase(), formData.password, formData.name.trim(), formData.phone)
 
-        signUpFormAction(formDataObj)
-        // Don't set loading to false here, let the useEffect handle it
-        return
+        setErrors({
+          general: "Account created successfully! Please check your email to verify your account before signing in.",
+        })
+
+        // Switch to login mode after successful signup
+        setTimeout(() => {
+          setIsLogin(true)
+          setFormData({ email: formData.email, password: "", confirmPassword: "", name: "", phone: "" })
+          setErrors({})
+        }, 3000)
       }
     } catch (error) {
       console.error("Authentication error:", error)
 
-      if (isLogin && error instanceof Error) {
+      if (error instanceof Error) {
         if (error.message.includes("Invalid login credentials")) {
           setErrors({ general: "Invalid email or password. Please check your credentials and try again." })
-        } else if (error.message.includes("service unavailable")) {
-          setErrors({ general: "Authentication service is temporarily unavailable. Please try again later." })
+        } else if (error.message.includes("User already registered")) {
+          setErrors({ general: "An account with this email already exists. Please sign in instead." })
+          setTimeout(() => setIsLogin(true), 2000)
+        } else if (error.message.includes("service unavailable") || error.message.includes("temporarily unavailable")) {
+          setErrors({ general: "Service temporarily unavailable. Please try again in a few moments." })
         } else {
           setErrors({ general: error.message })
         }
       }
     } finally {
-      if (isLogin) {
-        setIsLoading(false)
-      }
+      setIsLoading(false)
     }
   }
 

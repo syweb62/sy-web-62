@@ -11,12 +11,11 @@ interface AuthContextType {
   connectionStatus: "connected" | "disconnected" | "testing"
   signIn: (email: string, password: string) => Promise<void>
   signUp: (
-    name: string,
     email: string,
     password: string,
+    name: string,
     phone?: string,
-    address?: string,
-  ) => Promise<{ success: boolean; requiresSignIn?: boolean; user?: SupabaseUser } | void>
+  ) => Promise<{ success: boolean; requiresSignIn: boolean } | void>
   signOut: () => Promise<void>
   updateUser: (userData: Partial<Profile>) => Promise<void>
   resetPassword: (email: string) => Promise<void>
@@ -271,7 +270,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   )
 
   const signUp = useCallback(
-    async (name: string, email: string, password: string, phone?: string) => {
+    async (email: string, password: string, name: string, phone?: string) => {
       if (!supabase || connectionStatus !== "connected") {
         throw new Error("Signup service unavailable. Please try again later.")
       }
@@ -282,53 +281,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!isValidEmail(email)) throw new Error("Invalid email format.")
         if (!isStrongPassword(password)) throw new Error("Password must be at least 6 characters long.")
 
-        // Instant signup path (kept as-is, wrapped with timeout)
-        const controller = new AbortController()
-        const timeout = setTimeout(() => controller.abort(), 15000)
-
-        const resp = await fetch("/api/auth/instant-signup", {
+        const response = await fetch("/api/auth/signup", {
           method: "POST",
-          signal: controller.signal,
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            name: sanitizeInput(name),
             email: sanitizeInput(email.toLowerCase()),
             password,
+            name: sanitizeInput(name),
             phone: phone ? sanitizeInput(phone) : undefined,
           }),
         })
-          .catch((e) => {
-            console.error("instant-signup fetch error:", e)
-            throw new Error("Network issue during signup. Please try again.")
-          })
-          .finally(() => clearTimeout(timeout))
 
-        if (!resp.ok) {
-          const data = await resp.json().catch(() => ({}))
-          if (resp.status !== 409 && !data?.error?.includes?.("already")) {
-            throw new Error(data?.error || "Failed to create account.")
+        const result = await response.json()
+
+        if (!response.ok) {
+          if (result.error?.includes("User already registered")) {
+            throw new Error("User already registered")
           }
+          throw new Error(result.error || "Failed to create account")
         }
 
-        const { data, error } = await withTimeout(
-          supabase.auth.signInWithPassword({
-            email: sanitizeInput(email.toLowerCase()),
-            password,
-          }),
-          10000,
-        )
-
-        if (error) {
-          throw new Error(error.message || "Sign-in failed after signup.")
-        }
-
-        if (data.session && data.user) {
-          setSession(data.session)
-          await fetchUserProfile(data.user)
-          return { success: true, requiresSignIn: false, user: data.user }
-        }
-
-        return { success: true, requiresSignIn: !data.session, user: data.user ?? undefined }
+        return { success: true, requiresSignIn: true }
       } catch (err) {
         handleError(err)
         throw err
@@ -336,7 +309,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setIsLoading(false)
       }
     },
-    [clearError, handleError, fetchUserProfile, connectionStatus],
+    [clearError, handleError, connectionStatus],
   )
 
   const signOut = useCallback(async () => {
