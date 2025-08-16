@@ -22,7 +22,20 @@ const strongEnough = (p: string) => String(p).length >= 6
 
 export async function POST(req: NextRequest) {
   try {
-    const admin = getSupabaseAdminClient()
+    let admin
+    try {
+      admin = getSupabaseAdminClient()
+    } catch (adminError) {
+      console.error("Failed to initialize Supabase admin client:", adminError)
+      return json(
+        {
+          error: "Authentication service configuration error. Please contact support.",
+          code: "ADMIN_CLIENT_ERROR",
+        },
+        503,
+      )
+    }
+
     const body = (await req.json().catch(() => ({}))) as {
       name?: string
       email?: string
@@ -45,6 +58,8 @@ export async function POST(req: NextRequest) {
     const safeName = sanitize(name)
     const safePhone = phone ? sanitize(phone) : ""
 
+    console.log("[v0] Attempting to create user with admin client:", { email: safeEmail, name: safeName })
+
     // Attempt to create the user with confirmed email so client can sign in immediately
     const created = await admin.auth.admin.createUser({
       email: safeEmail,
@@ -57,6 +72,12 @@ export async function POST(req: NextRequest) {
       },
     })
 
+    console.log("[v0] User creation result:", {
+      success: !created.error,
+      error: created.error?.message,
+      userId: created.data?.user?.id,
+    })
+
     // If Supabase says the user already exists, treat it as a successful, idempotent outcome
     if (created.error) {
       const msg = String(created.error.message || "").toLowerCase()
@@ -67,6 +88,7 @@ export async function POST(req: NextRequest) {
         msg.includes("duplicate")
 
       if (alreadyExists) {
+        console.log("[v0] User already exists, returning success")
         return json(
           {
             success: true,
@@ -79,14 +101,22 @@ export async function POST(req: NextRequest) {
         )
       }
 
-      return json({ error: created.error.message || "Failed to create user." }, 400)
+      console.error("[v0] User creation failed:", created.error)
+      return json(
+        {
+          error: created.error.message || "Failed to create user.",
+          code: "USER_CREATION_FAILED",
+        },
+        400,
+      )
     }
 
     const user = created.data.user
+    console.log("[v0] User created successfully, creating profile")
 
     // Best-effort profile upsert (skip quietly if table isn't present)
     try {
-      await admin.from("profiles").upsert(
+      const profileResult = await admin.from("profiles").upsert(
         [
           {
             id: user.id,
@@ -101,7 +131,14 @@ export async function POST(req: NextRequest) {
         ],
         { onConflict: "id" },
       )
-    } catch {
+
+      if (profileResult.error) {
+        console.warn("[v0] Profile creation failed:", profileResult.error)
+      } else {
+        console.log("[v0] Profile created successfully")
+      }
+    } catch (profileError) {
+      console.warn("[v0] Profile creation error:", profileError)
       // no-op
     }
 
@@ -116,7 +153,13 @@ export async function POST(req: NextRequest) {
       201,
     )
   } catch (err) {
-    console.error("instant-signup error:", err)
-    return json({ error: "Internal error while creating account." }, 500)
+    console.error("[v0] instant-signup error:", err)
+    return json(
+      {
+        error: "Internal error while creating account. Please try again or contact support.",
+        code: "INTERNAL_ERROR",
+      },
+      500,
+    )
   }
 }
