@@ -144,26 +144,39 @@ export async function POST(request: NextRequest) {
     }
 
     if (authData.user) {
-      const { data: existingProfile } = await supabase.from("profiles").select("id").eq("id", authData.user.id).single()
+      const { data: existingProfile, error: profileCheckError } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("id", authData.user.id)
+        .maybeSingle()
 
-      if (!existingProfile) {
-        const { error: profileError } = await supabase.from("profiles").insert({
-          id: authData.user.id,
-          email: sanitizedEmail,
-          full_name: sanitizedName,
-          phone: sanitizedPhone,
-          address: sanitizedAddress,
-          role: "user",
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
+      // Only create profile if it doesn't exist and there was no error checking
+      if (!existingProfile && !profileCheckError) {
+        const { error: profileError } = await supabase.from("profiles").upsert(
+          {
+            id: authData.user.id,
+            email: sanitizedEmail,
+            full_name: sanitizedName,
+            phone: sanitizedPhone,
+            address: sanitizedAddress,
+            role: "user",
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          },
+          {
+            onConflict: "id",
+            ignoreDuplicates: false,
+          },
+        )
 
         if (profileError) {
           console.error("Profile creation error:", profileError)
           // Don't fail the signup if profile creation fails, just log it
         }
-      } else {
+      } else if (existingProfile) {
         console.log("Profile already exists for user:", authData.user.id)
+      } else if (profileCheckError) {
+        console.error("Profile check error:", profileCheckError)
       }
     }
 

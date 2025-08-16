@@ -18,7 +18,7 @@ export async function signUpAction(prevState: any, formData: FormData) {
   }
 
   const cookieStore = cookies()
-  const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
+  const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_ANON_KEY!, {
     cookies: {
       get(name: string) {
         return cookieStore.get(name)?.value
@@ -41,6 +41,7 @@ export async function signUpAction(prevState: any, formData: FormData) {
         data: {
           full_name: fullName.toString(),
           phone: phone?.toString() || "",
+          role: "customer",
         },
       },
     })
@@ -50,22 +51,28 @@ export async function signUpAction(prevState: any, formData: FormData) {
       return { error: error.message }
     }
 
-    if (data.user) {
-      const { error: profileError } = await supabase.from("profiles").insert({
-        id: data.user.id,
-        email: email.toString(),
-        full_name: fullName.toString(),
-        phone: phone?.toString() || "",
-        role: "customer",
-      })
+    if (data.user && data.user.email_confirmed_at) {
+      // Only create profile if email is confirmed
+      const { error: profileError } = await supabase.from("profiles").upsert(
+        {
+          id: data.user.id,
+          email: email.toString(),
+          full_name: fullName.toString(),
+          phone: phone?.toString() || "",
+          role: "customer",
+        },
+        {
+          onConflict: "id",
+        },
+      )
 
       if (profileError) {
         console.error("Profile creation error:", profileError)
-        // Don't return error here as user is created, just profile failed
+        // Continue anyway as user is created
       }
     }
 
-    return { success: "Check your email to confirm your account." }
+    return { success: "Account created successfully! Check your email to confirm your account." }
   } catch (error) {
     console.error("Sign up error:", error)
     return { error: "An unexpected error occurred. Please try again." }
