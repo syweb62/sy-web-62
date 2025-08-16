@@ -144,20 +144,26 @@ export async function POST(request: NextRequest) {
     }
 
     if (authData.user) {
-      const { error: profileError } = await supabase.from("profiles").insert({
-        id: authData.user.id,
-        email: sanitizedEmail,
-        full_name: sanitizedName,
-        phone: sanitizedPhone,
-        address: sanitizedAddress,
-        role: "user",
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
+      const { data: existingProfile } = await supabase.from("profiles").select("id").eq("id", authData.user.id).single()
 
-      if (profileError) {
-        console.error("Profile creation error:", profileError)
-        // Don't fail the signup if profile creation fails, just log it
+      if (!existingProfile) {
+        const { error: profileError } = await supabase.from("profiles").insert({
+          id: authData.user.id,
+          email: sanitizedEmail,
+          full_name: sanitizedName,
+          phone: sanitizedPhone,
+          address: sanitizedAddress,
+          role: "user",
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+
+        if (profileError) {
+          console.error("Profile creation error:", profileError)
+          // Don't fail the signup if profile creation fails, just log it
+        }
+      } else {
+        console.log("Profile already exists for user:", authData.user.id)
       }
     }
 
