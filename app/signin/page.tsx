@@ -245,18 +245,18 @@ export default function SignInPage() {
                     <label className="block text-sm font-medium text-gray-300">
                       Phone Number <span className="text-red-400">*</span>
                     </label>
-                    <div className="flex">
-                      <div className="flex items-center px-1 bg-gray-700 border border-r-0 border-gray-600 rounded-l-md w-10 justify-center flex-shrink-0">
-                        <Phone className="h-5 w-5 text-gray-400 mr-0.5" />
-                        <div className="w-3 h-3 rounded-full relative overflow-hidden flex items-center justify-center bg-[rgba(14,133,11,1)] flex-shrink-0">
-                          <div className="absolute rounded-full bg-[rgba(185,6,6,1)] h-1.5 w-1.5"></div>
+                    <div className="flex items-stretch min-h-[48px]">
+                      <div className="flex items-center px-2 bg-gray-700 border border-r-0 border-gray-600 rounded-l-md min-w-[60px] max-w-[60px] justify-center flex-shrink-0">
+                        <Phone className="h-6 w-6 text-gray-400 mr-1" />
+                        <div className="w-4 h-4 rounded-full relative overflow-hidden flex items-center justify-center bg-[rgba(14,133,11,1)] flex-shrink-0">
+                          <div className="absolute rounded-full bg-[rgba(185,6,6,1)] h-2 w-2"></div>
                         </div>
                       </div>
                       <input
                         type="tel"
                         value={formData.phone}
                         onChange={(e) => handleInputChange("phone", e.target.value)}
-                        className="flex-1 px-3 py-3 bg-gray-800/50 border border-gray-600 rounded-r-md text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gold focus:border-transparent"
+                        className="flex-1 min-w-0 px-3 py-3 bg-gray-800/50 border border-gray-600 rounded-r-md text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gold focus:border-transparent resize-none overflow-hidden"
                         placeholder="1712345678"
                         disabled={isLoading}
                       />
