@@ -123,43 +123,55 @@ export async function POST(request: NextRequest) {
     const supabase = getSupabaseClient()
     const orderData = await request.json()
 
-    const { data: order, error: orderError } = await supabase
-      .from("orders")
-      .insert([
-        {
-          customer_name: orderData.customer_name,
-          phone: orderData.phone,
-          address: orderData.address,
-          total_price: orderData.total_price,
-          subtotal: orderData.subtotal || orderData.total_price,
-          vat: orderData.vat || 0,
-          delivery_charge: orderData.delivery_charge || 0,
-          discount: orderData.discount || 0,
-          status: orderData.status || "pending",
-          payment_method: orderData.payment_method || "cash",
-          message: orderData.message || "",
-        },
-      ])
-      .select()
-      .single()
+    console.log("[v0] Received order data:", orderData)
 
-    if (orderError) throw orderError
+    const orderInsertData = {
+      customer_name: orderData.customer_name,
+      phone: orderData.phone,
+      address: orderData.address,
+      total_price: orderData.total_price,
+      subtotal: orderData.subtotal || orderData.total_price,
+      vat: orderData.vat || 0,
+      delivery_charge: orderData.delivery_charge || 0,
+      discount: orderData.discount || 0,
+      status: orderData.status || "pending",
+      payment_method: orderData.payment_method || "cash",
+      message: orderData.message || "",
+    }
+
+    console.log("[v0] Inserting order with data:", orderInsertData)
+
+    const { data: order, error: orderError } = await supabase.from("orders").insert([orderInsertData]).select().single()
+
+    if (orderError) {
+      console.error("[v0] Order insertion error:", orderError)
+      throw orderError
+    }
+
+    console.log("[v0] Order created successfully:", order)
 
     if (orderData.items && orderData.items.length > 0) {
       const orderItems = orderData.items.map((item: any) => ({
         order_id: order.order_id,
-        menu_item_id: item.menu_item_id,
+        menu_item_id: item.menu_item_id || null,
         item_name: item.name,
-        item_description: item.description,
-        item_image: item.image,
+        item_description: item.description || "",
+        item_image: item.image || "",
         item_price: item.price,
         quantity: item.quantity,
         price_at_purchase: item.price,
       }))
 
+      console.log("[v0] Inserting order items:", orderItems)
+
       const { error: itemsError } = await supabase.from("order_items").insert(orderItems)
 
-      if (itemsError) throw itemsError
+      if (itemsError) {
+        console.error("[v0] Order items insertion error:", itemsError)
+        throw itemsError
+      }
+
+      console.log("[v0] Order items created successfully")
     }
 
     return NextResponse.json({ success: true, order })

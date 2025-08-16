@@ -101,14 +101,29 @@ export default function SignInPage() {
         await signIn(formData.email.trim().toLowerCase(), formData.password)
         router.push("/")
       } else {
+        if (!formData.email || !formData.password || !formData.name || !formData.phone) {
+          setErrors({ general: "All fields are required" })
+          setIsLoading(false)
+          return
+        }
+
         const formDataObj = new FormData()
         formDataObj.append("email", formData.email.trim().toLowerCase())
         formDataObj.append("password", formData.password)
         formDataObj.append("name", formData.name.trim())
-        formDataObj.append("phone", formData.phone)
+        formDataObj.append("phone", formData.phone.trim())
+
+        console.log("[v0] Form data being sent:", {
+          email: formData.email.trim().toLowerCase(),
+          name: formData.name.trim(),
+          phone: formData.phone.trim(),
+          hasPassword: !!formData.password,
+        })
 
         // Call the server action and wait for completion
         const result = await signUpAction(formDataObj)
+
+        console.log("[v0] Signup result:", result)
 
         if (result.success) {
           setErrors({
