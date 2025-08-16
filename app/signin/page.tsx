@@ -106,22 +106,70 @@ export default function SignInPage() {
         await signIn(formData.email.trim().toLowerCase(), formData.password)
         router.push("/")
       } else {
-        await signUp(formData.name.trim(), formData.email.trim().toLowerCase(), formData.password, formData.phone)
-        router.push("/")
+        try {
+          await signUp(formData.name.trim(), formData.email.trim().toLowerCase(), formData.password, formData.phone)
+          router.push("/")
+        } catch (signupError) {
+          console.error("Signup error details:", signupError)
+
+          // Handle specific signup errors
+          if (signupError instanceof Error) {
+            if (
+              signupError.message.includes("service unavailable") ||
+              signupError.message.includes("temporarily unavailable")
+            ) {
+              // Try to reset rate limits and suggest retry
+              try {
+                await fetch("/api/auth/signup", { method: "DELETE" })
+                setErrors({
+                  general:
+                    "Service temporarily unavailable. Rate limits have been reset. Please try again in a few moments.",
+                })
+              } catch {
+                setErrors({
+                  general:
+                    "Service temporarily unavailable. This might be due to rate limiting. Please wait a few minutes and try again.",
+                })
+              }
+            } else if (
+              signupError.message.includes("already exists") ||
+              signupError.message.includes("already registered")
+            ) {
+              setErrors({
+                email: "An account with this email already exists. Please sign in instead.",
+                general: "Account already exists. Please use the sign in form below.",
+              })
+              // Auto-switch to login mode
+              setTimeout(() => setIsLogin(true), 2000)
+            } else if (signupError.message.includes("Invalid email")) {
+              setErrors({ email: "Please enter a valid email address." })
+            } else if (signupError.message.includes("Password must be")) {
+              setErrors({ password: signupError.message })
+            } else if (signupError.message.includes("Name must be")) {
+              setErrors({ name: signupError.message })
+            } else if (signupError.message.includes("Phone")) {
+              setErrors({ phone: "Please enter a valid 11-digit phone number." })
+            } else {
+              setErrors({ general: signupError.message })
+            }
+          } else {
+            setErrors({ general: "An unexpected error occurred during signup. Please try again." })
+          }
+          throw signupError // Re-throw to prevent navigation
+        }
       }
     } catch (error) {
       console.error("Authentication error:", error)
 
-      if (error instanceof Error) {
+      // Only handle login errors here now, signup errors are handled above
+      if (isLogin && error instanceof Error) {
         if (error.message.includes("Invalid login credentials")) {
           setErrors({ general: "Invalid email or password. Please check your credentials and try again." })
-        } else if (error.message.includes("User already registered")) {
-          setErrors({ email: "An account with this email already exists. Please sign in instead." })
+        } else if (error.message.includes("service unavailable")) {
+          setErrors({ general: "Authentication service is temporarily unavailable. Please try again later." })
         } else {
           setErrors({ general: error.message })
         }
-      } else {
-        setErrors({ general: "An unexpected error occurred. Please try again." })
       }
     } finally {
       setIsLoading(false)
