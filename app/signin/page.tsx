@@ -1,12 +1,12 @@
 "use client"
 
 import type React from "react"
-
-import { useState, useEffect } from "react"
+import { useState, useEffect, useActionState } from "react"
 import { Eye, EyeOff, Mail, Lock, User, Phone, Info } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/hooks/use-auth"
 import { useRouter } from "next/navigation"
+import { signUpAction } from "@/lib/auth-actions"
 
 interface FormErrors {
   email?: string
@@ -31,10 +31,14 @@ export default function SignInPage() {
     phone: "",
   })
 
-  const { signIn, signUp, user, isLoading: authLoading } = useAuth()
+  const { signIn, user, isLoading: authLoading } = useAuth()
   const router = useRouter()
 
-  // Redirect if already authenticated
+  const [signUpState, signUpFormAction, isSignUpPending] = useActionState(signUpAction, {
+    error: "",
+    success: false,
+  })
+
   useEffect(() => {
     if (user && !authLoading) {
       router.push("/")
@@ -43,7 +47,6 @@ export default function SignInPage() {
 
   const handleInputChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
-    // Clear specific error when user starts typing
     if (errors[field as keyof FormErrors]) {
       setErrors((prev) => ({ ...prev, [field]: undefined }))
     }
@@ -52,21 +55,18 @@ export default function SignInPage() {
   const validateForm = (): boolean => {
     const newErrors: FormErrors = {}
 
-    // Email validation
     if (!formData.email.trim()) {
       newErrors.email = "Email is required"
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
       newErrors.email = "Please enter a valid email address"
     }
 
-    // Password validation
     if (!formData.password) {
       newErrors.password = "Password is required"
     } else if (formData.password.length < 6) {
       newErrors.password = "Password must be at least 6 characters"
     }
 
-    // Additional validations for signup
     if (!isLogin) {
       if (!formData.name.trim()) {
         newErrors.name = "Full name is required"
@@ -106,18 +106,27 @@ export default function SignInPage() {
         await signIn(formData.email.trim().toLowerCase(), formData.password)
         router.push("/")
       } else {
-        await signUp(formData.email.trim().toLowerCase(), formData.password, formData.name.trim(), formData.phone)
+        const formDataObj = new FormData()
+        formDataObj.append("email", formData.email.trim().toLowerCase())
+        formDataObj.append("password", formData.password)
+        formDataObj.append("name", formData.name.trim())
+        formDataObj.append("phone", formData.phone)
 
-        setErrors({
-          general: "Account created successfully! Please check your email to verify your account before signing in.",
-        })
+        await signUpFormAction(formDataObj)
 
-        // Switch to login mode after successful signup
-        setTimeout(() => {
-          setIsLogin(true)
-          setFormData({ email: formData.email, password: "", confirmPassword: "", name: "", phone: "" })
-          setErrors({})
-        }, 3000)
+        if (signUpState.success) {
+          setErrors({
+            general: "Account created successfully! Please check your email to verify your account before signing in.",
+          })
+
+          setTimeout(() => {
+            setIsLogin(true)
+            setFormData({ email: formData.email, password: "", confirmPassword: "", name: "", phone: "" })
+            setErrors({})
+          }, 3000)
+        } else if (signUpState.error) {
+          setErrors({ general: signUpState.error })
+        }
       }
     } catch (error) {
       console.error("Authentication error:", error)
@@ -147,14 +156,14 @@ export default function SignInPage() {
     setShowConfirmPassword(false)
   }
 
-  // Don't render if user is already authenticated
+  const isFormLoading = isLoading || isSignUpPending
+
   if (user && !authLoading) {
     return null
   }
 
   return (
     <>
-      {/* Hero Section */}
       <section className="hero-section min-h-[40vh] flex items-center justify-center relative">
         <div className="container mx-auto px-4 text-center z-10 pt-20">
           <h1 className="text-4xl md:text-5xl font-serif font-bold mb-6">
@@ -168,11 +177,9 @@ export default function SignInPage() {
         </div>
       </section>
 
-      {/* Form Section */}
       <section className="py-20 bg-darkBg">
         <div className="container mx-auto px-4">
           <div className="max-w-lg mx-auto">
-            {/* Info Box */}
             <div className="mb-8 p-6 bg-blue-900/30 border border-blue-700/50 rounded-lg">
               <div className="flex items-start gap-3">
                 <Info className="h-6 w-6 text-blue-400 mt-0.5 flex-shrink-0" />
@@ -189,7 +196,6 @@ export default function SignInPage() {
               </div>
             </div>
 
-            {/* Form Card */}
             <div className="bg-black/40 p-8 rounded-lg border border-gray-800 backdrop-blur-sm">
               <div className="text-center mb-8">
                 <h2 className="text-2xl font-bold text-white mb-2">
@@ -202,7 +208,6 @@ export default function SignInPage() {
                 </p>
               </div>
 
-              {/* General Error/Success */}
               {errors.general && (
                 <div
                   className={`mb-6 p-4 border rounded-md ${
@@ -216,7 +221,6 @@ export default function SignInPage() {
               )}
 
               <form onSubmit={handleSubmit} className="space-y-6">
-                {/* Name Field (Signup only) */}
                 {!isLogin && (
                   <div className="space-y-2">
                     <label className="block text-sm font-medium text-gray-300">
@@ -237,7 +241,6 @@ export default function SignInPage() {
                   </div>
                 )}
 
-                {/* Email Field */}
                 <div className="space-y-2">
                   <label className="block text-sm font-medium text-gray-300">
                     Email Address <span className="text-red-400">*</span>
@@ -256,7 +259,6 @@ export default function SignInPage() {
                   {errors.email && <p className="text-sm text-red-400">{errors.email}</p>}
                 </div>
 
-                {/* Phone Field (Signup only) */}
                 {!isLogin && (
                   <div className="space-y-2">
                     <label className="block text-sm font-medium text-gray-300">
@@ -282,7 +284,6 @@ export default function SignInPage() {
                   </div>
                 )}
 
-                {/* Password Field */}
                 <div className="space-y-2">
                   <label className="block text-sm font-medium text-gray-300">
                     Password <span className="text-red-400">*</span>
@@ -309,7 +310,6 @@ export default function SignInPage() {
                   {errors.password && <p className="text-sm text-red-400">{errors.password}</p>}
                 </div>
 
-                {/* Confirm Password Field (Signup only) */}
                 {!isLogin && (
                   <div className="space-y-2">
                     <label className="block text-sm font-medium text-gray-300">
@@ -338,7 +338,6 @@ export default function SignInPage() {
                   </div>
                 )}
 
-                {/* Forgot Password Link (Login only) */}
                 {isLogin && (
                   <div className="text-right">
                     <button
@@ -351,13 +350,12 @@ export default function SignInPage() {
                   </div>
                 )}
 
-                {/* Submit Button */}
                 <Button
                   type="submit"
-                  disabled={isLoading}
+                  disabled={isFormLoading}
                   className="w-full bg-gold hover:bg-gold/90 text-gray-900 font-semibold py-3 text-base transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {isLoading ? (
+                  {isFormLoading ? (
                     <div className="flex items-center justify-center space-x-2">
                       <div className="w-4 h-4 border-2 border-gray-900/30 border-t-gray-900 rounded-full animate-spin"></div>
                       <span>{isLogin ? "Signing In..." : "Creating Account..."}</span>
@@ -367,7 +365,6 @@ export default function SignInPage() {
                   )}
                 </Button>
 
-                {/* Toggle Mode */}
                 <div className="text-center pt-4">
                   <p className="text-gray-400">
                     {isLogin ? "Don't have an account?" : "Already have an account?"}{" "}
