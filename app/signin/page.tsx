@@ -7,6 +7,8 @@ import { Eye, EyeOff, Mail, Lock, User, Phone, Info } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/hooks/use-auth"
 import { useRouter } from "next/navigation"
+import { useActionState } from "react"
+import { signUpAction } from "@/lib/auth-actions"
 
 interface FormErrors {
   email?: string
@@ -31,8 +33,10 @@ export default function SignInPage() {
     phone: "",
   })
 
-  const { signIn, signUp, user, isLoading: authLoading } = useAuth()
+  const { signIn, user, isLoading: authLoading } = useAuth()
   const router = useRouter()
+
+  const [signUpState, signUpFormAction] = useActionState(signUpAction, null)
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -40,6 +44,22 @@ export default function SignInPage() {
       router.push("/")
     }
   }, [user, authLoading, router])
+
+  useEffect(() => {
+    if (signUpState?.success) {
+      setErrors({})
+      // Show success message and redirect or switch to login
+      setErrors({ general: signUpState.success })
+      setTimeout(() => {
+        setIsLogin(true)
+        setFormData({ email: "", password: "", confirmPassword: "", name: "", phone: "" })
+        setErrors({})
+      }, 3000)
+    } else if (signUpState?.error) {
+      setErrors({ general: signUpState.error })
+      setIsLoading(false)
+    }
+  }, [signUpState])
 
   const handleInputChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
@@ -106,62 +126,19 @@ export default function SignInPage() {
         await signIn(formData.email.trim().toLowerCase(), formData.password)
         router.push("/")
       } else {
-        try {
-          await signUp(formData.name.trim(), formData.email.trim().toLowerCase(), formData.password, formData.phone)
-          router.push("/")
-        } catch (signupError) {
-          console.error("Signup error details:", signupError)
+        const formDataObj = new FormData()
+        formDataObj.append("email", formData.email.trim().toLowerCase())
+        formDataObj.append("password", formData.password)
+        formDataObj.append("fullName", formData.name.trim())
+        formDataObj.append("phone", formData.phone)
 
-          // Handle specific signup errors
-          if (signupError instanceof Error) {
-            if (
-              signupError.message.includes("service unavailable") ||
-              signupError.message.includes("temporarily unavailable")
-            ) {
-              // Try to reset rate limits and suggest retry
-              try {
-                await fetch("/api/auth/signup", { method: "DELETE" })
-                setErrors({
-                  general:
-                    "Service temporarily unavailable. Rate limits have been reset. Please try again in a few moments.",
-                })
-              } catch {
-                setErrors({
-                  general:
-                    "Service temporarily unavailable. This might be due to rate limiting. Please wait a few minutes and try again.",
-                })
-              }
-            } else if (
-              signupError.message.includes("already exists") ||
-              signupError.message.includes("already registered")
-            ) {
-              setErrors({
-                email: "An account with this email already exists. Please sign in instead.",
-                general: "Account already exists. Please use the sign in form below.",
-              })
-              // Auto-switch to login mode
-              setTimeout(() => setIsLogin(true), 2000)
-            } else if (signupError.message.includes("Invalid email")) {
-              setErrors({ email: "Please enter a valid email address." })
-            } else if (signupError.message.includes("Password must be")) {
-              setErrors({ password: signupError.message })
-            } else if (signupError.message.includes("Name must be")) {
-              setErrors({ name: signupError.message })
-            } else if (signupError.message.includes("Phone")) {
-              setErrors({ phone: "Please enter a valid 11-digit phone number." })
-            } else {
-              setErrors({ general: signupError.message })
-            }
-          } else {
-            setErrors({ general: "An unexpected error occurred during signup. Please try again." })
-          }
-          throw signupError // Re-throw to prevent navigation
-        }
+        signUpFormAction(formDataObj)
+        // Don't set loading to false here, let the useEffect handle it
+        return
       }
     } catch (error) {
       console.error("Authentication error:", error)
 
-      // Only handle login errors here now, signup errors are handled above
       if (isLogin && error instanceof Error) {
         if (error.message.includes("Invalid login credentials")) {
           setErrors({ general: "Invalid email or password. Please check your credentials and try again." })
@@ -172,7 +149,9 @@ export default function SignInPage() {
         }
       }
     } finally {
-      setIsLoading(false)
+      if (isLogin) {
+        setIsLoading(false)
+      }
     }
   }
 
@@ -239,9 +218,15 @@ export default function SignInPage() {
                 </p>
               </div>
 
-              {/* General Error */}
+              {/* General Error/Success */}
               {errors.general && (
-                <div className="mb-6 p-4 bg-red-900/50 border border-red-700 rounded-md text-red-200">
+                <div
+                  className={`mb-6 p-4 border rounded-md ${
+                    errors.general.includes("Check your email")
+                      ? "bg-green-900/50 border-green-700 text-green-200"
+                      : "bg-red-900/50 border-red-700 text-red-200"
+                  }`}
+                >
                   <p className="text-sm">{errors.general}</p>
                 </div>
               )}
