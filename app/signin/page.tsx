@@ -102,16 +102,10 @@ export default function SignInPage() {
         router.push("/")
       } else {
         if (!formData.email || !formData.password || !formData.name || !formData.phone) {
-          setErrors({ general: "All fields are required" })
+          setErrors({ general: "Email, password, and full name are required" })
           setIsLoading(false)
           return
         }
-
-        const formDataObj = new FormData()
-        formDataObj.append("email", formData.email.trim().toLowerCase())
-        formDataObj.append("password", formData.password)
-        formDataObj.append("name", formData.name.trim())
-        formDataObj.append("phone", formData.phone.trim())
 
         console.log("[v0] Form data being sent:", {
           email: formData.email.trim().toLowerCase(),
@@ -120,8 +114,13 @@ export default function SignInPage() {
           hasPassword: !!formData.password,
         })
 
-        // Call the server action and wait for completion
-        const result = await signUpAction(formDataObj)
+        // Call the server action directly with proper data
+        const result = await signUpAction(null, {
+          email: formData.email.trim().toLowerCase(),
+          password: formData.password,
+          name: formData.name.trim(),
+          phone: formData.phone.trim(),
+        })
 
         console.log("[v0] Signup result:", result)
 
