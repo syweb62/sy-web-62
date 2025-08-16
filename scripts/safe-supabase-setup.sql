@@ -94,6 +94,24 @@ CREATE INDEX IF NOT EXISTS idx_menu_items_category ON public.menu_items(category
 CREATE INDEX IF NOT EXISTS idx_menu_items_available ON public.menu_items(is_available);
 CREATE INDEX IF NOT EXISTS idx_reservations_date ON public.reservations(date);
 
+-- Create helper function to prevent infinite recursion in RLS policies
+CREATE OR REPLACE FUNCTION public.is_admin(uid uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.profiles p
+    WHERE p.id = uid
+      AND p.role = 'admin'
+  );
+$$;
+
+GRANT EXECUTE ON FUNCTION public.is_admin(uuid) TO anon, authenticated, service_role;
+
 -- Drop existing policies if they exist and recreate them
 DO $$ 
 BEGIN
@@ -121,43 +139,47 @@ ALTER TABLE public.order_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.reservations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.social_media_links ENABLE ROW LEVEL SECURITY;
 
--- Create RLS policies
+-- Create RLS policies using helper function to avoid recursion
 CREATE POLICY "Menu items are viewable by everyone" ON public.menu_items FOR SELECT USING (true);
 
-CREATE POLICY "Users can view their own profile" ON public.profiles FOR SELECT USING (auth.uid() = id);
-CREATE POLICY "Users can update their own profile" ON public.profiles FOR UPDATE USING (auth.uid() = id);
-CREATE POLICY "Users can insert their own profile" ON public.profiles FOR INSERT WITH CHECK (auth.uid() = id);
+-- Profiles policies - no self-referencing queries to avoid recursion
+CREATE POLICY "Users can view their own profile" ON public.profiles FOR SELECT USING (auth.uid() = id OR public.is_admin(auth.uid()));
+CREATE POLICY "Users can update their own profile" ON public.profiles FOR UPDATE USING (auth.uid() = id OR public.is_admin(auth.uid()));
+CREATE POLICY "Users can insert their own profile" ON public.profiles FOR INSERT WITH CHECK (auth.uid() = id OR public.is_admin(auth.uid()));
 
+-- Orders policies using helper function
 CREATE POLICY "Orders are viewable by owner or admin" ON public.orders FOR SELECT USING (
     auth.uid() = user_id OR 
-    (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin' OR
+    public.is_admin(auth.uid()) OR
     user_id IS NULL
 );
 CREATE POLICY "Users can create orders" ON public.orders FOR INSERT WITH CHECK (true);
 CREATE POLICY "Users can update their own orders" ON public.orders FOR UPDATE USING (
     auth.uid() = user_id OR 
-    (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin' OR
+    public.is_admin(auth.uid()) OR
     user_id IS NULL
 );
 
+-- Order items policies using helper function
 CREATE POLICY "Order items are viewable by order owner" ON public.order_items FOR SELECT USING (
     EXISTS (
         SELECT 1 FROM public.orders 
         WHERE orders.order_id = order_items.order_id 
-        AND (orders.user_id = auth.uid() OR (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin' OR orders.user_id IS NULL)
+        AND (orders.user_id = auth.uid() OR public.is_admin(auth.uid()) OR orders.user_id IS NULL)
     )
 );
 CREATE POLICY "Users can create order items" ON public.order_items FOR INSERT WITH CHECK (true);
 
+-- Reservations policies using helper function
 CREATE POLICY "Reservations are viewable by owner" ON public.reservations FOR SELECT USING (
     auth.uid() = user_id OR 
-    (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin' OR
+    public.is_admin(auth.uid()) OR
     user_id IS NULL
 );
 CREATE POLICY "Users can create reservations" ON public.reservations FOR INSERT WITH CHECK (true);
 CREATE POLICY "Users can update their own reservations" ON public.reservations FOR UPDATE USING (
     auth.uid() = user_id OR 
-    (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin' OR
+    public.is_admin(auth.uid()) OR
     user_id IS NULL
 );
 

@@ -247,10 +247,9 @@ export default function SignInPage() {
                     </label>
                     <div className="flex">
                       <div className="flex items-center px-3 bg-gray-700 border border-r-0 border-gray-600 rounded-l-md">
-                        <Phone className="h-4 w-4 text-gray-400 mr-2" />
-                        <div className="w-6 h-4 bg-gradient-to-b from-green-600 to-green-700 rounded-sm relative overflow-hidden">
-                          <div className="absolute inset-0 bg-gradient-to-b from-green-600 to-green-700"></div>
-                          <div className="absolute top-0 left-0 w-2.5 h-2.5 bg-red-600 rounded-full transform translate-x-1.5 translate-y-0.5"></div>
+                        <Phone className="h-5 w-5 text-gray-400 mr-2" />
+                        <div className="w-6 h-6 rounded-full relative overflow-hidden flex items-center justify-center bg-[rgba(14,133,11,1)]">
+                          <div className="absolute rounded-full bg-[rgba(185,6,6,1)] h-3 w-3"></div>
                         </div>
                       </div>
                       <input
