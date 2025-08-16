@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { authStorage, isValidEmail, isStrongPassword, sanitizeInput, getClientIP } from "@/lib/auth-storage"
+import { createClient } from "@supabase/supabase-js"
 
 const createJSONResponse = (data: any, status = 200) => {
   return new NextResponse(JSON.stringify(data), {
@@ -12,23 +12,10 @@ const createJSONResponse = (data: any, status = 200) => {
   })
 }
 
+const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+
 export async function POST(request: NextRequest) {
   try {
-    // Rate limiting
-    const clientIP = getClientIP(request)
-    const rateLimit = authStorage.checkRateLimit(`signup:${clientIP}`)
-
-    if (!rateLimit.allowed) {
-      return createJSONResponse(
-        {
-          error: `Too many signup attempts. Please try again in ${rateLimit.retryAfter} seconds.`,
-          code: "RATE_LIMIT_EXCEEDED",
-          retryAfter: rateLimit.retryAfter,
-        },
-        429,
-      )
-    }
-
     // Parse request body
     let body
     try {
@@ -68,13 +55,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Sanitize inputs
-    const sanitizedName = sanitizeInput(name)
-    const sanitizedEmail = sanitizeInput(email.toLowerCase())
-    const sanitizedPhone = phone ? sanitizeInput(phone) : ""
-    const sanitizedAddress = address ? sanitizeInput(address) : ""
+    const sanitizedName = name.trim()
+    const sanitizedEmail = email.toLowerCase().trim()
+    const sanitizedPhone = phone ? phone.trim() : ""
+    const sanitizedAddress = address ? address.trim() : ""
 
     // Validate email format
-    if (!isValidEmail(sanitizedEmail)) {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(sanitizedEmail)) {
       return createJSONResponse(
         {
           error: "Please enter a valid email address",
@@ -85,10 +73,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate password strength
-    if (!isStrongPassword(password)) {
+    if (password.length < 6) {
       return createJSONResponse(
         {
-          error: "Password must be at least 8 characters with uppercase, lowercase, numbers, and special characters",
+          error: "Password must be at least 6 characters long",
           code: "WEAK_PASSWORD",
         },
         400,
@@ -96,10 +84,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate name
-    if (sanitizedName.length < 2 || !/^[a-zA-Z\s]+$/.test(sanitizedName)) {
+    if (sanitizedName.length < 2) {
       return createJSONResponse(
         {
-          error: "Name must be at least 2 characters and contain only letters and spaces",
+          error: "Name must be at least 2 characters long",
           code: "INVALID_NAME",
         },
         400,
@@ -107,102 +95,94 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate phone if provided
-    if (sanitizedPhone && !/^[0-9]{11}$/.test(sanitizedPhone)) {
+    if (sanitizedPhone && !/^[0-9]{10,15}$/.test(sanitizedPhone.replace(/\D/g, ""))) {
       return createJSONResponse(
         {
-          error: "Please enter a valid 11-digit phone number",
+          error: "Please enter a valid phone number",
           code: "INVALID_PHONE",
         },
         400,
       )
     }
 
-    // Check if user already exists
-    if (authStorage.userExists(sanitizedEmail)) {
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email: sanitizedEmail,
+      password: password,
+      options: {
+        emailRedirectTo:
+          process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL ||
+          `${process.env.SITE_URL || "http://localhost:3000"}/auth/callback`,
+        data: {
+          full_name: sanitizedName,
+          phone: sanitizedPhone,
+          address: sanitizedAddress,
+        },
+      },
+    })
+
+    if (authError) {
+      console.error("Supabase auth error:", authError)
+
+      // Handle specific Supabase errors
+      if (authError.message.includes("already registered")) {
+        return createJSONResponse(
+          {
+            error: "An account with this email already exists",
+            code: "EMAIL_EXISTS",
+          },
+          409,
+        )
+      }
+
       return createJSONResponse(
         {
-          error: "An account with this email already exists",
-          code: "EMAIL_EXISTS",
+          error: authError.message || "Failed to create account",
+          code: "AUTH_ERROR",
         },
-        409,
+        400,
       )
     }
 
-    // Create new user
-    const newUser = authStorage.createUser({
-      name: sanitizedName,
-      email: sanitizedEmail,
-      password: password, // Store password as-is for demo purposes
-      phone: sanitizedPhone,
-      address: sanitizedAddress,
-      role: "user",
-    })
+    if (authData.user) {
+      const { error: profileError } = await supabase.from("profiles").insert({
+        id: authData.user.id,
+        email: sanitizedEmail,
+        full_name: sanitizedName,
+        phone: sanitizedPhone,
+        address: sanitizedAddress,
+        role: "user",
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
 
-    // Create session automatically (auto-login after signup)
-    const sessionToken = authStorage.createSession(newUser)
-
-    // Create response
-    const response = createJSONResponse({
-      success: true,
-      user: {
-        id: newUser.id,
-        name: newUser.name,
-        email: newUser.email,
-        phone: newUser.phone,
-        address: newUser.address,
-        role: newUser.role,
-        avatar: "",
-      },
-      message: "Account created successfully and logged in",
-      requiresSignIn: false, // User is automatically signed in
-    })
-
-    // Set session cookie
-    response.cookies.set("session-token", sessionToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 24 * 60 * 60, // 24 hours
-      path: "/",
-    })
-
-    return response
-  } catch (error) {
-    if (process.env.NODE_ENV === "development") {
-      console.error("Signup error:", error)
-    }
-    return createJSONResponse(
-      {
-        error: "Registration service temporarily unavailable",
-        code: "INTERNAL_ERROR",
-      },
-      500,
-    )
-  }
-}
-
-// Reset rate limiting endpoint for development
-export async function DELETE(request: NextRequest) {
-  try {
-    const clientIP = getClientIP(request)
-    authStorage.resetRateLimit(`signup:${clientIP}`)
-    authStorage.resetRateLimit(`signin:${clientIP}`)
-
-    if (process.env.NODE_ENV === "development") {
-      console.log(`Rate limits reset for IP: ${clientIP}`)
+      if (profileError) {
+        console.error("Profile creation error:", profileError)
+        // Don't fail the signup if profile creation fails, just log it
+      }
     }
 
     return createJSONResponse({
       success: true,
-      message: "Rate limits reset successfully",
+      user: authData.user
+        ? {
+            id: authData.user.id,
+            email: authData.user.email,
+            name: sanitizedName,
+            phone: sanitizedPhone,
+            address: sanitizedAddress,
+            role: "user",
+          }
+        : null,
+      message: authData.user?.email_confirmed_at
+        ? "Account created successfully"
+        : "Account created successfully. Please check your email to confirm your account.",
+      requiresEmailConfirmation: !authData.user?.email_confirmed_at,
     })
   } catch (error) {
-    if (process.env.NODE_ENV === "development") {
-      console.error("Rate limit reset error:", error)
-    }
+    console.error("Signup error:", error)
     return createJSONResponse(
       {
-        error: "Failed to reset rate limits",
+        error: "Registration service temporarily unavailable",
         code: "INTERNAL_ERROR",
       },
       500,
@@ -220,5 +200,9 @@ export async function PUT() {
 }
 
 export async function PATCH() {
+  return createJSONResponse({ error: "Method not allowed" }, 405)
+}
+
+export async function DELETE() {
   return createJSONResponse({ error: "Method not allowed" }, 405)
 }
