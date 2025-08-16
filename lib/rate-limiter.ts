@@ -61,14 +61,6 @@ export function apiRateLimit(request: Request, limit = 100, windowMs = 15 * 60 *
 }
 
 export function authRateLimit(request: Request): RateLimitResult {
-  const url = new URL(request.url)
-  const isSignup = url.pathname.includes("/signup")
-
-  if (isSignup) {
-    // More generous limits for signup to allow multiple devices
-    return apiRateLimit(request, 20, 15 * 60 * 1000) // 20 attempts per 15 minutes for signup
-  }
-
-  // More restrictive rate limiting for signin endpoints
-  return apiRateLimit(request, 10, 15 * 60 * 1000) // 10 attempts per 15 minutes for signin
+  // More restrictive rate limiting for auth endpoints
+  return apiRateLimit(request, 5, 15 * 60 * 1000) // 5 attempts per 15 minutes
 }

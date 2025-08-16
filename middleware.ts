@@ -4,18 +4,6 @@ import { createServerClient } from "@supabase/ssr"
 
 // Simple rate limiting without external dependencies
 function simpleRateLimit(request: NextRequest): { success: boolean; remaining: number; resetTime: number } {
-  const isSignupEndpoint =
-    request.nextUrl.pathname.includes("/auth/signup") || request.nextUrl.pathname.includes("/auth/instant-signup")
-
-  if (isSignupEndpoint) {
-    // Allow more attempts for signup to support multiple devices
-    return {
-      success: true,
-      remaining: 50, // Increased from default
-      resetTime: Date.now() + 15 * 60 * 1000,
-    }
-  }
-
   // For deployment, we'll use a simple approach
   // In production, implement proper rate limiting with Redis
   return {
