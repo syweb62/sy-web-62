@@ -7,23 +7,31 @@ import { useRouter } from "next/navigation"
 import { useAuth } from "@/hooks/use-auth"
 import { SidebarProvider } from "@/components/ui/sidebar"
 import { DashboardSidebar } from "@/components/dashboard/dashboard-sidebar"
+import { LoadingSpinner } from "@/components/loading-spinner"
 
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const { user } = useAuth()
+  const { user, loading } = useAuth()
   const router = useRouter()
 
   useEffect(() => {
-    // Check if user is admin (in a real app, this would be a proper role check)
-    if (!user || user.email !== "admin@sushiyaki.com") {
-      router.push("/signin")
+    if (!loading && (!user || (user.email !== "admin@sushiyaki.com" && user.role !== "admin"))) {
+      router.push("/signin?redirect=/dashboard")
     }
-  }, [user, router])
+  }, [user, loading, router])
 
-  if (!user || user.email !== "admin@sushiyaki.com") {
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-darkBg">
+        <LoadingSpinner />
+      </div>
+    )
+  }
+
+  if (!user || (user.email !== "admin@sushiyaki.com" && user.role !== "admin")) {
     return null
   }
 
