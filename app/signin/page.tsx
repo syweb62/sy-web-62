@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect, useActionState } from "react"
+import { useState, useEffect } from "react"
 import { Eye, EyeOff, Mail, Lock, User, Phone, Info } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/hooks/use-auth"
@@ -33,11 +33,6 @@ export default function SignInPage() {
 
   const { signIn, user, isLoading: authLoading } = useAuth()
   const router = useRouter()
-
-  const [signUpState, signUpFormAction, isSignUpPending] = useActionState(signUpAction, {
-    error: "",
-    success: false,
-  })
 
   useEffect(() => {
     if (user && !authLoading) {
@@ -112,9 +107,10 @@ export default function SignInPage() {
         formDataObj.append("name", formData.name.trim())
         formDataObj.append("phone", formData.phone)
 
-        await signUpFormAction(formDataObj)
+        // Call the server action and wait for completion
+        const result = await signUpAction(formDataObj)
 
-        if (signUpState.success) {
+        if (result.success) {
           setErrors({
             general: "Account created successfully! Please check your email to verify your account before signing in.",
           })
@@ -124,8 +120,8 @@ export default function SignInPage() {
             setFormData({ email: formData.email, password: "", confirmPassword: "", name: "", phone: "" })
             setErrors({})
           }, 3000)
-        } else if (signUpState.error) {
-          setErrors({ general: signUpState.error })
+        } else if (result.error) {
+          setErrors({ general: result.error })
         }
       }
     } catch (error) {
@@ -156,7 +152,7 @@ export default function SignInPage() {
     setShowConfirmPassword(false)
   }
 
-  const isFormLoading = isLoading || isSignUpPending
+  const isFormLoading = isLoading
 
   if (user && !authLoading) {
     return null

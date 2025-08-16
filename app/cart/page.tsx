@@ -26,7 +26,6 @@ import { Input } from "@/components/ui/input"
 import { CustomerInfoBanner } from "@/components/ui/customer-info-banner"
 import { validation } from "@/lib/validation"
 import { customerStorage } from "@/lib/customer-storage"
-import { supabase } from "@/lib/supabase"
 
 const radioAccentStyle: React.CSSProperties = { accentColor: "#3b82f6" }
 
@@ -170,9 +169,7 @@ export default function Cart() {
     setIsCheckingOut(true)
 
     try {
-      // Prepare order data for Supabase
       const orderData = {
-        user_id: (user as any)?.id || null,
         customer_name: validation.sanitizeInput(formData.name),
         phone: formData.phone.replace(/\D/g, ""),
         address: validation.sanitizeInput(formData.address),
@@ -184,43 +181,36 @@ export default function Cart() {
         vat: vatAmount,
         delivery_charge: isFreeDelivery ? 0 : deliveryAmount,
         message: formData.notes ? validation.sanitizeInput(formData.notes) : null,
-      }
-
-      // Save order to Supabase
-      if (supabase) {
-        const { data: order, error: orderError } = await supabase.from("orders").insert(orderData).select().single()
-
-        if (orderError) {
-          console.error("Error creating order:", orderError)
-          throw new Error("Failed to create order in database")
-        }
-
-        // Map cart items to order_items rows
-        const orderItemsData = cartItems.map((item) => ({
-          order_id: order.order_id,
-          menu_item_id: null, // unknown UUID in cart; keep null to preserve FK integrity
+        items: cartItems.map((item) => ({
+          menu_item_id: null, // Cart items don't have menu_item_id
+          name: item.name,
+          description: (item as any).description || null,
+          image: item.image || null,
+          price: item.price,
           quantity: item.quantity,
-          price_at_purchase: item.price,
-          item_name: item.name,
-          item_description: (item as any).description || null,
-          item_image: item.image || null,
-        }))
-
-        // Insert order items (best-effort)
-        try {
-          const { error: itemsError } = await supabase.from("order_items").insert(orderItemsData)
-          if (itemsError) {
-            console.error("Error creating order items:", itemsError)
-          }
-        } catch (itemError) {
-          console.error("Failed to save order items:", itemError)
-        }
-
-        setOrderId(order.order_id)
-      } else {
-        // If Supabase not configured, still allow UX to complete
-        setOrderId(`ORD-${Date.now().toString().slice(-6)}-${Math.random().toString(36).substr(2, 4).toUpperCase()}`)
+        })),
       }
+
+      console.log("[v0] Sending order data to API:", orderData)
+
+      const response = await fetch("/api/orders", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(orderData),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        console.error("[v0] Order API error:", errorData)
+        throw new Error(errorData.error || "Failed to place order")
+      }
+
+      const result = await response.json()
+      console.log("[v0] Order created successfully:", result)
+
+      setOrderId(result.order.order_id)
 
       // Save customer data for future orders
       customerStorage.saveCustomerData({
@@ -233,8 +223,8 @@ export default function Cart() {
       setOrderPlaced(true)
       clearCart()
     } catch (error) {
-      console.error("Order failed:", error)
-      alert("Failed to place order. Please try again.")
+      console.error("[v0] Order failed:", error)
+      alert(`Failed to place order: ${error instanceof Error ? error.message : "Please try again."}`)
     } finally {
       setIsCheckingOut(false)
     }
