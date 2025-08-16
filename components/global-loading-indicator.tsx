@@ -35,10 +35,10 @@ export function GlobalLoadingIndicator() {
       <div className="text-center">
         <div className="mb-3">
           <Image
-            src="/images/logo.png"
+            src="/images/sushiyaki-logo.png"
             alt="Sushi Yaki"
             width={120}
-            height={72}
+            height={120}
             className="h-auto w-auto max-w-[120px] opacity-90"
             priority
           />
