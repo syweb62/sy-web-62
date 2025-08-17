@@ -1,45 +1,25 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { Calendar, Clock, Users, Mail, CheckCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import type { LocationData } from "@/hooks/use-location"
-import { useAuth } from "@/hooks/use-auth"
 
 export default function BookTable() {
-  const auth = useAuth()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isSubmitted, setIsSubmitted] = useState(false)
   const [formData, setFormData] = useState({
     name: "",
-    email: "",
     phone: "",
     date: "",
     time: "",
     guests: "",
     specialRequests: "",
-    location: "",
   })
-  const [showForm, setShowForm] = useState(false)
 
-  useEffect(() => {
-    const timeout = setTimeout(() => {
-      console.log("[v0] Auth loading timeout - showing booking form")
-      setShowForm(true)
-    }, 5000)
-
-    return () => clearTimeout(timeout)
-  }, [])
-
-  console.log("[v0] BookTable component rendered, auth state:", {
-    hasUser: !!auth?.user,
-    isLoading: auth?.isLoading,
-    hasError: !!auth?.error,
-    connectionStatus: auth?.connectionStatus,
-  })
+  console.log("[v0] BookTable component rendered - simple version")
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
@@ -58,13 +38,6 @@ export default function BookTable() {
 
   const handleSelectChange = (name: string, value: string) => {
     setFormData((prev) => ({ ...prev, [name]: value }))
-  }
-
-  const handleLocationUpdate = (location: LocationData) => {
-    setFormData((prev) => ({
-      ...prev,
-      location: location.address || `${location.latitude}, ${location.longitude}`,
-    }))
   }
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -86,16 +59,13 @@ export default function BookTable() {
 
       const reservationData = {
         name: formData.name.trim(),
-        email: formData.email.trim(),
         phone: formattedPhone,
         date: formData.date,
         time: formData.time,
-        guests: formData.guests,
-        specialRequests: formData.specialRequests.trim(),
-        user_id: auth?.user?.id || null, // Safe access to user ID
+        guests: Number.parseInt(formData.guests),
       }
 
-      console.log("[v0] Sending reservation data:", { ...reservationData, user_id: !!reservationData.user_id })
+      console.log("[v0] Sending reservation data:", reservationData)
 
       const response = await fetch("/api/reservations", {
         method: "POST",
@@ -119,13 +89,11 @@ export default function BookTable() {
         setIsSubmitted(false)
         setFormData({
           name: "",
-          email: "",
           phone: "",
           date: "",
           time: "",
           guests: "",
           specialRequests: "",
-          location: "",
         })
       }, 5000)
     } catch (error) {
@@ -134,17 +102,6 @@ export default function BookTable() {
     } finally {
       setIsSubmitting(false)
     }
-  }
-
-  if (auth?.isLoading && !showForm) {
-    return (
-      <section className="hero-section min-h-[60vh] flex items-center justify-center relative">
-        <div className="container mx-auto px-4 text-center z-10 pt-20">
-          <div className="w-8 h-8 border-2 border-gold border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-lg text-gray-200">Loading booking form...</p>
-        </div>
-      </section>
-    )
   }
 
   if (isSubmitted) {
@@ -157,7 +114,7 @@ export default function BookTable() {
               <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-6" />
               <h1 className="text-4xl md:text-5xl font-serif font-bold mb-6">Reservation Confirmed!</h1>
               <p className="text-lg text-gray-200 mb-8">
-                Thank you for your reservation. We've sent a confirmation email with all the details.
+                Thank you for your reservation. We'll contact you shortly to confirm the details.
               </p>
               <Button onClick={() => setIsSubmitted(false)} variant="outline" size="lg">
                 Make Another Reservation
@@ -201,17 +158,6 @@ export default function BookTable() {
                       onChange={handleInputChange}
                       placeholder="Full Name"
                       label="Name"
-                      required
-                      leftIcon={<Mail className="w-4 h-4" />}
-                      className="transition-all duration-200 focus:ring-2 focus:ring-gold/50 focus:border-gold"
-                    />
-                    <Input
-                      type="email"
-                      name="email"
-                      value={formData.email}
-                      onChange={handleInputChange}
-                      placeholder="your@email.com"
-                      label="Email"
                       required
                       leftIcon={<Mail className="w-4 h-4" />}
                       className="transition-all duration-200 focus:ring-2 focus:ring-gold/50 focus:border-gold"
@@ -340,7 +286,7 @@ export default function BookTable() {
                   </Button>
 
                   <p className="text-xs text-gray-400 text-center mt-3">
-                    We'll send you a confirmation email with all the details
+                    We'll contact you shortly to confirm your reservation
                   </p>
                 </div>
               </form>
