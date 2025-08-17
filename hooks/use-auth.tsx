@@ -159,10 +159,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let unsubscribe: (() => void) | undefined
+    let initTimeout: NodeJS.Timeout
 
     const initializeAuth = async () => {
       try {
         setIsLoading(true)
+
+        initTimeout = setTimeout(() => {
+          console.warn("[v0] Auth initialization timeout - setting loading to false")
+          setIsLoading(false)
+          setConnectionStatus("disconnected")
+        }, 10000) // 10 second maximum timeout
 
         // 1) Probe connectivity once up front
         const connectionResult = await testSupabaseConnection().catch((e) => {
@@ -174,13 +181,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // If client missing or no connectivity, stop here gracefully
         if (!supabase || connectionResult.status !== "connected") {
           console.warn("Supabase not reachable; running in disconnected mode.")
+          clearTimeout(initTimeout)
           setIsLoading(false)
           return
         }
 
         // 2) Get session with a timeout guard
         try {
-          const { data: sessionData, error: sessionError } = await withTimeout(supabase.auth.getSession(), 8000)
+          const { data: sessionData, error: sessionError } = await withTimeout(supabase.auth.getSession(), 5000)
 
           if (sessionError) {
             console.warn("getSession error:", sessionError.message)
@@ -211,6 +219,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         })
 
         unsubscribe = () => data.subscription.unsubscribe()
+
+        clearTimeout(initTimeout)
+      } catch (err) {
+        console.error("[v0] Auth initialization error:", err)
+        clearTimeout(initTimeout)
       } finally {
         setIsLoading(false)
       }
@@ -219,6 +232,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     initializeAuth()
     return () => {
       if (unsubscribe) unsubscribe()
+      if (initTimeout) clearTimeout(initTimeout)
     }
   }, [fetchUserProfile])
 

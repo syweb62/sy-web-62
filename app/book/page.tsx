@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Calendar, Clock, Users, Mail, CheckCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -23,11 +23,22 @@ export default function BookTable() {
     specialRequests: "",
     location: "",
   })
+  const [showForm, setShowForm] = useState(false)
+
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      console.log("[v0] Auth loading timeout - showing booking form")
+      setShowForm(true)
+    }, 5000)
+
+    return () => clearTimeout(timeout)
+  }, [])
 
   console.log("[v0] BookTable component rendered, auth state:", {
     hasUser: !!auth?.user,
     isLoading: auth?.isLoading,
     hasError: !!auth?.error,
+    connectionStatus: auth?.connectionStatus,
   })
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -125,7 +136,7 @@ export default function BookTable() {
     }
   }
 
-  if (auth?.isLoading) {
+  if (auth?.isLoading && !showForm) {
     return (
       <section className="hero-section min-h-[60vh] flex items-center justify-center relative">
         <div className="container mx-auto px-4 text-center z-10 pt-20">

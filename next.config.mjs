@@ -10,15 +10,32 @@ const nextConfig = {
     remotePatterns: [
       {
         protocol: 'https',
-        hostname: '**',
+        hostname: 'images.unsplash.com',
       },
-    ],
-    domains: [
-      'images.unsplash.com',
-      'www.sushiyakiresto.com',
-      'maps.gstatic.com',
-      'ssl.gstatic.com', 
-      'lh3.googleusercontent.com'
+      {
+        protocol: 'https',
+        hostname: 'www.sushiyakiresto.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'maps.gstatic.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'ssl.gstatic.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'lh3.googleusercontent.com',
+      },
+      {
+        protocol: 'https',
+        hostname: '*.ggpht.com',
+      },
+      {
+        protocol: 'https',
+        hostname: '*.googleusercontent.com',
+      },
     ],
     dangerouslyAllowSVG: true,
     contentDispositionType: 'attachment',
