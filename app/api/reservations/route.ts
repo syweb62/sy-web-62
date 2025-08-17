@@ -6,7 +6,8 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { name, email, phone, date, time, guests, specialRequests, user_id } = body
 
-    // Validate required fields
+    console.log("[v0] Received reservation request:", { name, email, phone, date, time, guests, user_id })
+
     if (!name || !phone || !date || !time || !guests) {
       return NextResponse.json({ error: "Missing required fields: name, phone, date, time, guests" }, { status: 400 })
     }
@@ -32,16 +33,28 @@ export async function POST(request: NextRequest) {
       date,
       time,
       people_count: guestCount,
-      user_id: user_id || null, // Allow null for guest reservations
+      user_id: user_id || null,
       created_at: new Date().toISOString(),
     }
+
+    console.log("[v0] Attempting to insert reservation:", reservationData)
+    if (email) console.log("[v0] Email provided (not stored):", email)
+    if (specialRequests) console.log("[v0] Special requests provided (not stored):", specialRequests)
 
     const { data, error } = await supabase.from("reservations").insert([reservationData]).select().single()
 
     if (error) {
-      console.error("Supabase reservation insert error:", error)
-      return NextResponse.json({ error: "Failed to create reservation. Please try again." }, { status: 500 })
+      console.error("[v0] Supabase reservation insert error:", error)
+      return NextResponse.json(
+        {
+          error: "Failed to create reservation. Please try again.",
+          details: error.message,
+        },
+        { status: 500 },
+      )
     }
+
+    console.log("[v0] Reservation created successfully:", data)
 
     return NextResponse.json(
       {
@@ -60,8 +73,14 @@ export async function POST(request: NextRequest) {
       { status: 201 },
     )
   } catch (error) {
-    console.error("Reservation API error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    console.error("[v0] Reservation API error:", error)
+    return NextResponse.json(
+      {
+        error: "Internal server error",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 },
+    )
   }
 }
 
@@ -69,6 +88,8 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const userId = searchParams.get("user_id")
+
+    console.log("[v0] Fetching reservations, user_id:", userId)
 
     let query = supabase.from("reservations").select("*").order("created_at", { ascending: false })
 
@@ -79,16 +100,30 @@ export async function GET(request: NextRequest) {
     const { data, error } = await query
 
     if (error) {
-      console.error("Supabase reservation fetch error:", error)
-      return NextResponse.json({ error: "Failed to fetch reservations" }, { status: 500 })
+      console.error("[v0] Supabase reservation fetch error:", error)
+      return NextResponse.json(
+        {
+          error: "Failed to fetch reservations",
+          details: error.message,
+        },
+        { status: 500 },
+      )
     }
+
+    console.log("[v0] Reservations fetched successfully:", data?.length || 0, "records")
 
     return NextResponse.json({
       success: true,
       reservations: data || [],
     })
   } catch (error) {
-    console.error("Reservation GET API error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    console.error("[v0] Reservation GET API error:", error)
+    return NextResponse.json(
+      {
+        error: "Internal server error",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 },
+    )
   }
 }
