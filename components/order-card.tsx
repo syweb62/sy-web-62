@@ -56,13 +56,16 @@ export function OrderCard({ order, onReorder }: OrderCardProps) {
 
   const formatDate = (dateString: string) => {
     try {
-      return new Date(dateString).toLocaleDateString("en-US", {
+      const date = new Date(dateString)
+      return new Intl.DateTimeFormat("en-BD", {
+        timeZone: "Asia/Dhaka",
         month: "short",
         day: "numeric",
         year: "numeric",
         hour: "2-digit",
         minute: "2-digit",
-      })
+        hour12: true,
+      }).format(date)
     } catch {
       return "Invalid Date"
     }
@@ -132,6 +135,7 @@ export function OrderCard({ order, onReorder }: OrderCardProps) {
                     item?.image ||
                     "/placeholder.svg?height=48&width=48&query=sushi%20item%20thumbnail" ||
                     "/placeholder.svg" ||
+                    "/placeholder.svg" ||
                     "/placeholder.svg"
                   }
                   alt={item?.name || "Item"}
@@ -183,6 +187,7 @@ export function OrderCard({ order, onReorder }: OrderCardProps) {
                       src={
                         item?.image ||
                         "/placeholder.svg?height=48&width=48&query=sushi%20item%20thumbnail" ||
+                        "/placeholder.svg" ||
                         "/placeholder.svg" ||
                         "/placeholder.svg"
                       }

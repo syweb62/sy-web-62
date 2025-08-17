@@ -12,6 +12,7 @@ import { OrderStatusBadge } from "@/components/order-status-badge"
 import { InvoiceButton } from "@/components/invoice-button"
 import { useOrderHistory, type OrderHistoryItem } from "@/hooks/use-order-history"
 import { useCart } from "@/hooks/use-cart"
+import { formatBangladeshTime } from "@/lib/supabase"
 
 function money(n?: number) {
   const v = typeof n === "number" && isFinite(n) ? n : 0
@@ -19,7 +20,14 @@ function money(n?: number) {
 }
 function fmtDate(s: string) {
   try {
-    return new Date(s).toLocaleString()
+    return formatBangladeshTime(new Date(s), {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    })
   } catch {
     return "—"
   }

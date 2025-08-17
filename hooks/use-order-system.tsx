@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react"
 import { useCart } from "@/hooks/use-cart"
+import { getBangladeshTime, formatBangladeshTime } from "@/lib/supabase"
 
 export interface OrderItem {
   id: string
@@ -38,8 +39,13 @@ export function useOrderSystem() {
           quantity: item.quantity || 1,
         })
 
-        // In a real app, this would make an API call to process the order
-        const orderId = `ORDER-${Date.now()}`
+        const bangladeshTime = getBangladeshTime()
+        const timestamp = bangladeshTime.getTime()
+        const orderId = `ORDER-${timestamp}`
+
+        console.log(`[v0] Order created at Bangladesh time: ${formatBangladeshTime(bangladeshTime)}`)
+        console.log(`[v0] Order ID: ${orderId}`)
+
         setOrderSuccess(orderId)
 
         // Auto-clear success message
@@ -78,7 +84,13 @@ export function useOrderSystem() {
         // Simulate order processing
         await new Promise((resolve) => setTimeout(resolve, 1500))
 
-        const orderId = `BULK-ORDER-${Date.now()}`
+        const bangladeshTime = getBangladeshTime()
+        const timestamp = bangladeshTime.getTime()
+        const orderId = `BULK-ORDER-${timestamp}`
+
+        console.log(`[v0] Bulk order created at Bangladesh time: ${formatBangladeshTime(bangladeshTime)}`)
+        console.log(`[v0] Bulk order ID: ${orderId}`)
+
         setOrderSuccess(orderId)
 
         setTimeout(() => {

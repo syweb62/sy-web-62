@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Search, Eye, Edit, Plus, RefreshCw } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { formatBangladeshTime } from "@/lib/supabase"
 
 interface Order {
   id: string
@@ -288,8 +289,22 @@ export default function OrdersPage() {
                       </TableCell>
                       <TableCell>
                         <div className="text-gray-300">
-                          <p>{order.formatted_date}</p>
-                          <p className="text-sm text-gray-400">{order.formatted_time}</p>
+                          <p>
+                            {order.formatted_date ||
+                              formatBangladeshTime(new Date(order.bangladesh_timestamp), {
+                                year: "numeric",
+                                month: "2-digit",
+                                day: "2-digit",
+                              })}
+                          </p>
+                          <p className="text-sm text-gray-400">
+                            {order.formatted_time ||
+                              formatBangladeshTime(new Date(order.bangladesh_timestamp), {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                                hour12: true,
+                              })}
+                          </p>
                         </div>
                       </TableCell>
                       <TableCell>
