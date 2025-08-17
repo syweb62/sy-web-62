@@ -14,6 +14,8 @@ const nextConfig = {
       },
     ],
     domains: [
+      'images.unsplash.com',
+      'www.sushiyakiresto.com',
       'maps.gstatic.com',
       'ssl.gstatic.com', 
       'lh3.googleusercontent.com'
