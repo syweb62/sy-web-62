@@ -1,0 +1,30 @@
+{
+  "name": "Sushi Yaki - Authentic Japanese Restaurant",
+  "short_name": "Sushi Yaki",
+  "description": "Experience the finest Japanese cuisine at Sushi Yaki in Bangladesh. Fresh sushi, traditional dishes, and exceptional service.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0f14",
+  "theme_color": "#ffd700",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "any",
+      "type": "image/x-icon"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ],
+  "categories": ["food", "restaurant", "business"],
+  "lang": "en-BD",
+  "dir": "ltr"
+}

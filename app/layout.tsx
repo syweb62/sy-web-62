@@ -139,7 +139,7 @@ export default function RootLayout({
             // Test Supabase connection when page loads
             if (typeof window !== 'undefined') {
               window.addEventListener('load', function() {
-                import('/lib/supabase.js').then(function(supabaseModule) {
+                import('/lib/supabase.ts').then(function(supabaseModule) {
                   if (supabaseModule.testSupabaseConnection) {
                     supabaseModule.testSupabaseConnection().then(function(result) {
                       if (result.status === 'connected') {
