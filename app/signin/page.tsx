@@ -245,18 +245,19 @@ export default function SignInPage() {
                     <label className="block text-sm font-medium text-gray-300">
                       Phone Number <span className="text-red-400">*</span>
                     </label>
-                    <div className="flex items-stretch min-h-[48px]">
-                      <div className="flex items-center px-2 bg-gray-700 border border-r-0 border-gray-600 rounded-l-md min-w-[60px] max-w-[60px] justify-center flex-shrink-0">
-                        <Phone className="h-6 w-6 text-gray-400 mr-1" />
-                        <div className="w-4 h-4 rounded-full relative overflow-hidden flex items-center justify-center bg-[rgba(14,133,11,1)] flex-shrink-0">
-                          <div className="absolute rounded-full bg-[rgba(185,6,6,1)] h-2 w-2"></div>
+                    <div className="flex">
+                      <div className="flex items-center px-3 bg-gray-700 border border-r-0 border-gray-600 rounded-l-md">
+                        <Phone className="h-4 w-4 text-gray-400 mr-2" />
+                        <div className="w-6 h-4 bg-gradient-to-b from-green-600 to-green-700 rounded-sm relative overflow-hidden">
+                          <div className="absolute inset-0 bg-gradient-to-b from-green-600 to-green-700"></div>
+                          <div className="absolute top-0 left-0 w-2.5 h-2.5 bg-red-600 rounded-full transform translate-x-1.5 translate-y-0.5"></div>
                         </div>
                       </div>
                       <input
                         type="tel"
                         value={formData.phone}
                         onChange={(e) => handleInputChange("phone", e.target.value)}
-                        className="flex-1 min-w-0 px-3 py-3 bg-gray-800/50 border border-gray-600 rounded-r-md text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gold focus:border-transparent resize-none overflow-hidden"
+                        className="flex-1 px-3 py-3 bg-gray-800/50 border border-gray-600 rounded-r-md text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gold focus:border-transparent"
                         placeholder="1712345678"
                         disabled={isLoading}
                       />

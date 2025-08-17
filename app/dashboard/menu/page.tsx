@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import Image from "next/image"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -8,138 +8,106 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Search, Plus, Edit, Trash2, Eye } from "lucide-react"
-import { supabase } from "@/lib/supabase"
-import { toast } from "@/hooks/use-toast"
-import { LoadingSpinner } from "@/components/loading-spinner"
-import Link from "next/link"
 
-interface MenuItem {
-  id: string
-  name: string
-  description: string
-  price: number
-  category: string
-  image_url: string
-  is_available: boolean
-  created_at: string
-  updated_at: string
-}
+// Mock menu items data
+const mockMenuItems = [
+  {
+    id: "item-1",
+    name: "Sushi Platter",
+    description: "Assortment of fresh nigiri and maki rolls with wasabi, ginger, and soy sauce.",
+    price: 24.99,
+    category: "sushi",
+    image: "https://images.unsplash.com/photo-1579584425555-c3ce17fd4351?q=80&w=600&h=400&auto=format&fit=crop",
+    status: "available",
+    ingredients: ["Fresh Fish", "Rice", "Nori", "Wasabi"],
+    allergens: ["Fish"],
+    calories: 450,
+  },
+  {
+    id: "item-2",
+    name: "Teriyaki Salmon",
+    description: "Grilled salmon glazed with our signature teriyaki sauce, served with steamed rice.",
+    price: 22.99,
+    category: "main",
+    image: "https://images.unsplash.com/photo-1569050467447-ce54b3bbc37d?q=80&w=600&h=400&auto=format&fit=crop",
+    status: "available",
+    ingredients: ["Salmon", "Teriyaki Sauce", "Rice", "Vegetables"],
+    allergens: ["Fish", "Soy"],
+    calories: 520,
+  },
+  {
+    id: "item-3",
+    name: "Ramen Bowl",
+    description: "Rich broth with ramen noodles, soft-boiled egg, chashu pork, and fresh vegetables.",
+    price: 18.99,
+    category: "noodles",
+    image: "https://images.unsplash.com/photo-1557872943-16a5ac26437e?q=80&w=600&h=400&auto=format&fit=crop",
+    status: "available",
+    ingredients: ["Ramen Noodles", "Pork", "Egg", "Vegetables", "Broth"],
+    allergens: ["Gluten", "Egg"],
+    calories: 680,
+  },
+  {
+    id: "item-4",
+    name: "Miso Soup",
+    description: "Traditional Japanese soup with miso paste, tofu, and seaweed.",
+    price: 4.99,
+    category: "appetizer",
+    image: "https://images.unsplash.com/photo-1606491956689-2ea866880c84?q=80&w=600&h=400&auto=format&fit=crop",
+    status: "unavailable",
+    ingredients: ["Miso Paste", "Tofu", "Seaweed", "Green Onions"],
+    allergens: ["Soy"],
+    calories: 120,
+  },
+]
 
 export default function MenuManagementPage() {
-  const [menuItems, setMenuItems] = useState<MenuItem[]>([])
-  const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [categoryFilter, setCategoryFilter] = useState("all")
   const [statusFilter, setStatusFilter] = useState("all")
 
-  useEffect(() => {
-    fetchMenuItems()
-  }, [])
-
-  const fetchMenuItems = async () => {
-    try {
-      const { data, error } = await supabase.from("menu_items").select("*").order("created_at", { ascending: false })
-
-      if (error) throw error
-      setMenuItems(data || [])
-    } catch (error) {
-      console.error("Error fetching menu items:", error)
-      toast({
-        title: "Error",
-        description: "Failed to load menu items",
-        variant: "destructive",
-      })
-    } finally {
-      setLoading(false)
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "available":
+        return "bg-green-900/50 text-green-300"
+      case "unavailable":
+        return "bg-red-900/50 text-red-300"
+      case "limited":
+        return "bg-yellow-900/50 text-yellow-300"
+      default:
+        return "bg-gray-900/50 text-gray-300"
     }
-  }
-
-  const deleteMenuItem = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this menu item?")) return
-
-    try {
-      const { error } = await supabase.from("menu_items").delete().eq("id", id)
-
-      if (error) throw error
-
-      setMenuItems(menuItems.filter((item) => item.id !== id))
-      toast({
-        title: "Success",
-        description: "Menu item deleted successfully",
-      })
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to delete menu item",
-        variant: "destructive",
-      })
-    }
-  }
-
-  const toggleAvailability = async (id: string, currentStatus: boolean) => {
-    try {
-      const { error } = await supabase.from("menu_items").update({ is_available: !currentStatus }).eq("id", id)
-
-      if (error) throw error
-
-      setMenuItems(menuItems.map((item) => (item.id === id ? { ...item, is_available: !currentStatus } : item)))
-      toast({
-        title: "Success",
-        description: "Menu item status updated",
-      })
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to update menu item",
-        variant: "destructive",
-      })
-    }
-  }
-
-  const getStatusColor = (isAvailable: boolean) => {
-    return isAvailable ? "bg-green-900/50 text-green-300" : "bg-red-900/50 text-red-300"
   }
 
   const getCategoryColor = (category: string) => {
-    switch (category.toLowerCase()) {
+    switch (category) {
       case "sushi":
         return "bg-purple-900/50 text-purple-300"
-      case "main course":
+      case "main":
         return "bg-blue-900/50 text-blue-300"
       case "noodles":
         return "bg-orange-900/50 text-orange-300"
       case "appetizer":
         return "bg-green-900/50 text-green-300"
-      case "desserts":
+      case "dessert":
         return "bg-pink-900/50 text-pink-300"
-      case "beverages":
+      case "beverage":
         return "bg-cyan-900/50 text-cyan-300"
       default:
         return "bg-gray-900/50 text-gray-300"
     }
   }
 
-  const filteredItems = menuItems.filter((item) => {
+  const filteredItems = mockMenuItems.filter((item) => {
     const matchesSearch =
       item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       item.description.toLowerCase().includes(searchTerm.toLowerCase())
 
-    const matchesCategory = categoryFilter === "all" || item.category.toLowerCase() === categoryFilter.toLowerCase()
-    const matchesStatus =
-      statusFilter === "all" ||
-      (statusFilter === "available" && item.is_available) ||
-      (statusFilter === "unavailable" && !item.is_available)
+    const matchesCategory = categoryFilter === "all" || item.category === categoryFilter
+    const matchesStatus = statusFilter === "all" || item.status === statusFilter
 
     return matchesSearch && matchesCategory && matchesStatus
   })
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-96">
-        <LoadingSpinner />
-      </div>
-    )
-  }
 
   return (
     <div className="space-y-6">
@@ -149,12 +117,10 @@ export default function MenuManagementPage() {
           <h1 className="text-3xl font-serif font-bold text-white">Menu Management</h1>
           <p className="text-gray-400 mt-1">Manage your restaurant's menu items and categories</p>
         </div>
-        <Link href="/dashboard/menu/new">
-          <Button className="bg-gold text-black hover:bg-gold/80">
-            <Plus size={16} className="mr-2" />
-            Add Menu Item
-          </Button>
-        </Link>
+        <Button className="bg-gold text-black hover:bg-gold/80">
+          <Plus size={16} className="mr-2" />
+          Add Menu Item
+        </Button>
       </div>
 
       {/* Filters */}
@@ -179,11 +145,11 @@ export default function MenuManagementPage() {
               <SelectContent>
                 <SelectItem value="all">All Categories</SelectItem>
                 <SelectItem value="sushi">Sushi</SelectItem>
-                <SelectItem value="main course">Main Course</SelectItem>
+                <SelectItem value="main">Main Dishes</SelectItem>
                 <SelectItem value="noodles">Noodles</SelectItem>
-                <SelectItem value="appetizer">Appetizer</SelectItem>
-                <SelectItem value="desserts">Desserts</SelectItem>
-                <SelectItem value="beverages">Beverages</SelectItem>
+                <SelectItem value="appetizer">Appetizers</SelectItem>
+                <SelectItem value="dessert">Desserts</SelectItem>
+                <SelectItem value="beverage">Beverages</SelectItem>
               </SelectContent>
             </Select>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -194,6 +160,7 @@ export default function MenuManagementPage() {
                 <SelectItem value="all">All Statuses</SelectItem>
                 <SelectItem value="available">Available</SelectItem>
                 <SelectItem value="unavailable">Unavailable</SelectItem>
+                <SelectItem value="limited">Limited</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -205,49 +172,40 @@ export default function MenuManagementPage() {
         {filteredItems.map((item) => (
           <Card key={item.id} className="bg-black/30 border-gray-800 overflow-hidden">
             <div className="relative h-48">
-              <Image
-                src={item.image_url || "/placeholder.svg?height=200&width=300&query=food"}
-                alt={item.name}
-                fill
-                className="object-cover"
-              />
+              <Image src={item.image || "/placeholder.svg"} alt={item.name} fill className="object-cover" />
               <div className="absolute top-2 right-2 flex gap-2">
-                <Badge
-                  className={getStatusColor(item.is_available)}
-                  onClick={() => toggleAvailability(item.id, item.is_available)}
-                  style={{ cursor: "pointer" }}
-                >
-                  {item.is_available ? "Available" : "Unavailable"}
-                </Badge>
+                <Badge className={getStatusColor(item.status)}>{item.status}</Badge>
                 <Badge className={getCategoryColor(item.category)}>{item.category}</Badge>
               </div>
             </div>
             <CardContent className="p-4">
               <div className="flex justify-between items-start mb-2">
                 <h3 className="font-serif text-lg font-semibold text-white">{item.name}</h3>
-                <span className="text-gold font-bold">৳{item.price}</span>
+                <span className="text-gold font-bold">${item.price}</span>
               </div>
-              <p className="text-gray-400 text-sm mb-4 line-clamp-2">{item.description}</p>
+              <p className="text-gray-400 text-sm mb-3 line-clamp-2">{item.description}</p>
+
+              <div className="space-y-2 mb-4">
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="text-gray-500">Calories:</span>
+                  <span className="text-gray-300">{item.calories}</span>
+                </div>
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="text-gray-500">Allergens:</span>
+                  <span className="text-gray-300">{item.allergens.join(", ")}</span>
+                </div>
+              </div>
 
               <div className="flex items-center gap-2">
-                <Link href={`/dashboard/menu/${item.id}`} className="flex-1">
-                  <Button variant="outline" size="sm" className="w-full bg-transparent">
-                    <Eye size={14} className="mr-1" />
-                    View
-                  </Button>
-                </Link>
-                <Link href={`/dashboard/menu/${item.id}/edit`} className="flex-1">
-                  <Button variant="outline" size="sm" className="w-full bg-transparent">
-                    <Edit size={14} className="mr-1" />
-                    Edit
-                  </Button>
-                </Link>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-red-400 hover:text-red-300 bg-transparent"
-                  onClick={() => deleteMenuItem(item.id)}
-                >
+                <Button variant="outline" size="sm" className="flex-1">
+                  <Eye size={14} className="mr-1" />
+                  View
+                </Button>
+                <Button variant="outline" size="sm" className="flex-1">
+                  <Edit size={14} className="mr-1" />
+                  Edit
+                </Button>
+                <Button variant="outline" size="sm" className="text-red-400 hover:text-red-300">
                   <Trash2 size={14} />
                 </Button>
               </div>
@@ -264,12 +222,10 @@ export default function MenuManagementPage() {
               <h3 className="text-lg font-medium mb-2">No menu items found</h3>
               <p>Try adjusting your search criteria or add a new menu item.</p>
             </div>
-            <Link href="/dashboard/menu/new">
-              <Button className="bg-gold text-black hover:bg-gold/80">
-                <Plus size={16} className="mr-2" />
-                Add Menu Item
-              </Button>
-            </Link>
+            <Button className="bg-gold text-black hover:bg-gold/80">
+              <Plus size={16} className="mr-2" />
+              Add Menu Item
+            </Button>
           </CardContent>
         </Card>
       )}
