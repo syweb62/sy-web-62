@@ -9,7 +9,8 @@ export default function ReservationsPage() {
     name: "",
     phone: "",
     date: "",
-    time: "",
+    hour: "",
+    minute: "",
     guests: 2,
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -19,6 +20,8 @@ export default function ReservationsPage() {
     e.preventDefault()
     setIsSubmitting(true)
     setMessage("")
+
+    const time = `${formData.hour}:${formData.minute}`
 
     try {
       const response = await fetch("/api/reservations", {
@@ -30,14 +33,14 @@ export default function ReservationsPage() {
           name: formData.name,
           phone: formData.phone,
           date: formData.date,
-          time: formData.time,
-          guests: formData.guests, // Changed from people_count to guests
+          time: time, // Use combined time
+          guests: formData.guests,
         }),
       })
 
       if (response.ok) {
         setMessage("Reservation confirmed! We'll contact you soon.")
-        setFormData({ name: "", phone: "", date: "", time: "", guests: 2 })
+        setFormData({ name: "", phone: "", date: "", hour: "", minute: "", guests: 2 })
       } else {
         const errorData = await response.json()
         setMessage(errorData.error || "Failed to make reservation. Please try again.")
@@ -94,47 +97,78 @@ export default function ReservationsPage() {
                 />
               </div>
 
+              <div className="relative">
+                <Calendar className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gold w-5 h-5" />
+                <input
+                  type="date"
+                  name="date"
+                  value={formData.date}
+                  onChange={handleChange}
+                  required
+                  min={new Date().toISOString().split("T")[0]}
+                  className="w-full pl-12 pr-4 py-4 bg-gray-900/50 border border-gray-800 rounded-lg text-white focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold transition-all"
+                />
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="relative">
-                  <Calendar className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gold w-5 h-5" />
-                  <input
-                    type="date"
-                    name="date"
-                    value={formData.date}
+                  <Clock className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gold w-5 h-5" />
+                  <select
+                    name="hour"
+                    value={formData.hour}
                     onChange={handleChange}
                     required
-                    min={new Date().toISOString().split("T")[0]}
-                    className="w-full pl-12 pr-4 py-4 bg-gray-900/50 border border-gray-800 rounded-lg text-white focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold transition-all"
-                  />
+                    className="w-full pl-12 pr-4 py-4 bg-gray-900/50 border border-gray-800 rounded-lg text-white focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold transition-all appearance-none"
+                  >
+                    <option value="" className="bg-gray-900">
+                      Hour
+                    </option>
+                    {Array.from({ length: 12 }, (_, i) => {
+                      const hour = String(i + 1).padStart(2, "0")
+                      return (
+                        <option key={hour} value={hour} className="bg-gray-900">
+                          {hour} PM
+                        </option>
+                      )
+                    })}
+                  </select>
                 </div>
 
                 <div className="relative">
                   <Clock className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gold w-5 h-5" />
-                  <input
-                    type="time"
-                    name="time"
-                    value={formData.time}
+                  <select
+                    name="minute"
+                    value={formData.minute}
                     onChange={handleChange}
                     required
-                    className="w-full pl-12 pr-4 py-4 bg-gray-900/50 border border-gray-800 rounded-lg text-white focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold transition-all"
-                  />
+                    className="w-full pl-12 pr-4 py-4 bg-gray-900/50 border border-gray-800 rounded-lg text-white focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold transition-all appearance-none"
+                  >
+                    <option value="" className="bg-gray-900">
+                      Minutes
+                    </option>
+                    <option value="00" className="bg-gray-900">
+                      :00
+                    </option>
+                    <option value="30" className="bg-gray-900">
+                      :30
+                    </option>
+                  </select>
                 </div>
               </div>
 
               <div className="relative">
                 <Users className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gold w-5 h-5" />
-                <select
+                <input
+                  type="number"
                   name="guests"
                   value={formData.guests}
                   onChange={handleChange}
-                  className="w-full pl-12 pr-4 py-4 bg-gray-900/50 border border-gray-800 rounded-lg text-white focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold transition-all appearance-none"
-                >
-                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
-                    <option key={num} value={num} className="bg-gray-900">
-                      {num} {num === 1 ? "Guest" : "Guests"}
-                    </option>
-                  ))}
-                </select>
+                  required
+                  min="1"
+                  max="20"
+                  placeholder="Number of Guests"
+                  className="w-full pl-12 pr-4 py-4 bg-gray-900/50 border border-gray-800 rounded-lg text-white placeholder-gray-500 focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold transition-all"
+                />
               </div>
             </div>
 
