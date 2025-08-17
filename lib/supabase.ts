@@ -1,6 +1,4 @@
-import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js"
-import { createBrowserClient, createServerClient } from "@supabase/ssr"
-import { cookies } from "next/headers"
+import { createClient, type User } from "@supabase/supabase-js"
 
 // Environment variables with fallbacks
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://pjoelkxkcwtzmbyswfhu.supabase.co"
@@ -28,47 +26,6 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     },
   },
 })
-
-// Client-side supabase client (browser)
-export function getSupabaseBrowserClient(): SupabaseClient {
-  return createBrowserClient(supabaseUrl, supabaseAnonKey, {
-    global: {
-      headers: {
-        "X-Client-Timezone": "Asia/Dhaka",
-      },
-    },
-  })
-}
-
-// Server-side supabase client
-export function getSupabaseClient(): SupabaseClient {
-  const cookieStore = cookies()
-
-  return createServerClient(supabaseUrl, supabaseAnonKey, {
-    cookies: {
-      getAll() {
-        return cookieStore.getAll()
-      },
-      setAll(cookiesToSet) {
-        try {
-          cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options))
-        } catch {
-          // The `setAll` method was called from a Server Component.
-          // This can be ignored if you have middleware refreshing
-          // user sessions.
-        }
-      },
-    },
-    global: {
-      headers: {
-        "X-Client-Timezone": "Asia/Dhaka",
-      },
-    },
-  })
-}
-
-// Added alias export for consistency with API routes
-export const createSupabaseServerClient = getSupabaseClient
 
 // Convert UTC timestamp to Bangladesh time
 export function convertToBangladeshTime(utcTimestamp: string | Date): Date {
@@ -172,10 +129,14 @@ export async function createOrderWithItems(orderData: any, orderItems: any[]) {
 // Test supabase connection
 export async function testSupabaseConnection() {
   try {
+    console.log("[v0] Testing Supabase connection...")
+    console.log("[v0] Supabase URL:", supabaseUrl)
+    console.log("[v0] Has anon key:", !!supabaseAnonKey)
+
     const { data, error } = await supabase.from("menu_items").select("id").limit(1)
 
     if (error) {
-      console.error("Supabase connection test failed:", error)
+      console.error("[v0] Supabase connection test failed:", error)
       return { status: "disconnected", error: error.message }
     }
 
@@ -183,8 +144,8 @@ export async function testSupabaseConnection() {
     const bangladeshTime = getBangladeshTime()
     const formattedTime = formatBangladeshTime(bangladeshTime)
 
-    console.log("Supabase connection test successful")
-    console.log("Bangladesh time:", formattedTime)
+    console.log("[v0] Supabase connection test successful")
+    console.log("[v0] Bangladesh time:", formattedTime)
 
     return {
       status: "connected",
@@ -195,7 +156,7 @@ export async function testSupabaseConnection() {
       },
     }
   } catch (error) {
-    console.error("Supabase connection test error:", error)
+    console.error("[v0] Supabase connection test error:", error)
     return { status: "disconnected", error: String(error) }
   }
 }

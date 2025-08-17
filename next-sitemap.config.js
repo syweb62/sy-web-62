@@ -1,6 +1,6 @@
 /** @type {import('next-sitemap').IConfig} */
 module.exports = {
-  siteUrl: process.env.SITE_URL || "https://sushiyaki.vercel.app",
+  siteUrl: process.env.SITE_URL || "https://sushiyakiresto.com",
   generateRobotsTxt: true,
   generateIndexSitemap: false,
   exclude: ["/api/*", "/dashboard/*", "/admin/*", "/account/*"],
@@ -12,7 +12,7 @@ module.exports = {
         disallow: ["/api/", "/dashboard/", "/admin/", "/account/"],
       },
     ],
-    additionalSitemaps: ["https://sushiyaki.vercel.app/sitemap.xml"],
+    additionalSitemaps: ["https://sushiyakiresto.com/sitemap.xml"],
   },
   transform: async (config, path) => {
     // Custom priority and changefreq for different pages

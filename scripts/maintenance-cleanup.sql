@@ -1,5 +1,5 @@
--- Database cleanup script to remove old/unused records
--- Note: VACUUM commands must be run outside of transaction blocks
+-- Database Maintenance and Cleanup Script
+-- Run this periodically to maintain database performance
 
 -- Clean up old sessions (older than 30 days)
 DELETE FROM auth.sessions 
@@ -23,9 +23,18 @@ DELETE FROM orders
 WHERE status = 'cancelled' 
 AND created_at < NOW() - INTERVAL '90 days';
 
--- Update statistics (can run in transaction)
+-- Update table statistics
 ANALYZE menu_items;
 ANALYZE orders;
 ANALYZE order_items;
 ANALYZE profiles;
 ANALYZE reservations;
+ANALYZE social_media_links;
+
+-- Success message
+DO $$
+BEGIN
+    RAISE NOTICE 'Database cleanup completed successfully!';
+    RAISE NOTICE 'Removed old sessions, expired tokens, and cancelled orders';
+    RAISE NOTICE 'Updated table statistics for better query performance';
+END $$;

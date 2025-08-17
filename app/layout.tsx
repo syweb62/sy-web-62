@@ -129,7 +129,37 @@ export default function RootLayout({
               process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
                 "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBqb2Vsa3hrY3d0em1ieXN3Zmh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ1NTMwMTksImV4cCI6MjA3MDEyOTAxOX0.xY2bVHrv_gl4iEHY79f_PC1OJxjHbHWYoqiSkrpi5n8",
             )};
-          } catch (e) { /* no-op */ }
+            
+            console.log('[v0] Environment variables loaded:', {
+              hasSupabaseUrl: !!window.__PUBLIC_ENV.NEXT_PUBLIC_SUPABASE_URL,
+              hasSupabaseKey: !!window.__PUBLIC_ENV.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+              supabaseUrl: window.__PUBLIC_ENV.NEXT_PUBLIC_SUPABASE_URL
+            });
+            
+            // Test Supabase connection when page loads
+            if (typeof window !== 'undefined') {
+              window.addEventListener('load', function() {
+                import('/lib/supabase.js').then(function(supabaseModule) {
+                  if (supabaseModule.testSupabaseConnection) {
+                    supabaseModule.testSupabaseConnection().then(function(result) {
+                      if (result.status === 'connected') {
+                        console.log('[v0] Supabase connection successful');
+                      } else {
+                        console.error('[v0] Supabase connection failed:', result.error);
+                        console.log('[v0] Running in disconnected mode');
+                      }
+                    }).catch(function(error) {
+                      console.error('[v0] Supabase connection test error:', error);
+                    });
+                  }
+                }).catch(function(error) {
+                  console.error('[v0] Failed to load Supabase module:', error);
+                });
+              });
+            }
+          } catch (e) { 
+            console.error('[v0] Environment setup error:', e);
+          }
         })();
       `,
         }}
