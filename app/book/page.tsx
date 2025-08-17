@@ -1,16 +1,16 @@
 "use client"
 
 import type React from "react"
-import { useAuth } from "@/hooks/use-auth"
 import { useState } from "react"
 import { Calendar, Clock, Users, Mail, CheckCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import type { LocationData } from "@/hooks/use-location"
+import { useAuth } from "@/hooks/use-auth"
 
 export default function BookTable() {
-  const { user } = useAuth()
+  const auth = useAuth()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isSubmitted, setIsSubmitted] = useState(false)
   const [formData, setFormData] = useState({
@@ -22,6 +22,12 @@ export default function BookTable() {
     guests: "",
     specialRequests: "",
     location: "",
+  })
+
+  console.log("[v0] BookTable component rendered, auth state:", {
+    hasUser: !!auth?.user,
+    isLoading: auth?.isLoading,
+    hasError: !!auth?.error,
   })
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -61,6 +67,8 @@ export default function BookTable() {
     e.preventDefault()
     setIsSubmitting(true)
 
+    console.log("[v0] Form submission started")
+
     try {
       const cleanPhone = formData.phone.replace(/\D/g, "").slice(-10)
       const formattedPhone = `+880${cleanPhone}`
@@ -73,8 +81,10 @@ export default function BookTable() {
         time: formData.time,
         guests: formData.guests,
         specialRequests: formData.specialRequests.trim(),
-        user_id: user?.id || null, // Include user ID if authenticated
+        user_id: auth?.user?.id || null, // Safe access to user ID
       }
+
+      console.log("[v0] Sending reservation data:", { ...reservationData, user_id: !!reservationData.user_id })
 
       const response = await fetch("/api/reservations", {
         method: "POST",
@@ -90,7 +100,7 @@ export default function BookTable() {
         throw new Error(result.error || "Failed to create reservation")
       }
 
-      console.log("Reservation created successfully:", result.reservation)
+      console.log("[v0] Reservation created successfully:", result.reservation)
       setIsSubmitted(true)
 
       // Reset form after 5 seconds
@@ -108,11 +118,22 @@ export default function BookTable() {
         })
       }, 5000)
     } catch (error) {
-      console.error("Reservation submission error:", error)
+      console.error("[v0] Reservation submission error:", error)
       alert(error instanceof Error ? error.message : "Failed to create reservation. Please try again.")
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  if (auth?.isLoading) {
+    return (
+      <section className="hero-section min-h-[60vh] flex items-center justify-center relative">
+        <div className="container mx-auto px-4 text-center z-10 pt-20">
+          <div className="w-8 h-8 border-2 border-gold border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-lg text-gray-200">Loading booking form...</p>
+        </div>
+      </section>
+    )
   }
 
   if (isSubmitted) {
