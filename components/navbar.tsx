@@ -575,7 +575,7 @@ const Navbar = () => {
                 </div>
               </button>
               {isUserMenuOpen && (
-                <div className="absolute right-0 mt-2 w-48 bg-darkBg/95 backdrop-blur-sm border border-gray-700 rounded-lg shadow-xl py-2 z-50">
+                <div className="absolute right-0 mt-2 w-48 bg-darkBg/95 backdrop-blur-sm border border-gray-700 rounded-lg shadow-xl py-2 z-[60] transform -translate-x-2">
                   <Link
                     href="/account/profile"
                     className="block px-4 py-3 text-sm text-white hover:bg-black/30 hover:text-gold transition-colors"

@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { useState, useEffect } from "react"
-import { MapPin, Edit, Save, X, User, Mail, Phone, Check, AlertCircle, ArrowLeft, Shield } from 'lucide-react'
+import { MapPin, Edit, Save, X, User, Mail, Phone, Check, AlertCircle, Shield } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { useRouter } from "next/navigation"
 import { ProfilePictureUpload } from "@/components/profile-picture-upload"
@@ -145,7 +145,7 @@ const ProfilePage = () => {
       await updateUser(updateData)
 
       // Update local state immediately to reflect changes
-      setFormData(prev => ({
+      setFormData((prev) => ({
         ...prev,
         name: updateData.full_name,
         email: updateData.email,
@@ -203,7 +203,7 @@ const ProfilePage = () => {
 
   const handleImageUpdate = (imageUrl: string) => {
     console.log("Image update called with:", imageUrl, "Edit mode:", isEditing)
-    
+
     setProfileImage(imageUrl)
     // Mark as having unsaved changes when image is updated
     if (isEditing) {
@@ -230,22 +230,7 @@ const ProfilePage = () => {
 
   return (
     <div className="bg-gray-900 min-h-screen">
-      {/* Header */}
-      <div className="bg-gray-800 border-b border-gray-700">
-        <div className="max-w-4xl mx-auto px-4 py-6">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => router.push("/")}
-              className="flex items-center gap-2 text-gray-400 hover:text-gold transition-colors"
-            >
-              <ArrowLeft size={20} />
-              <span className="hidden sm:inline">Back to Home</span>
-            </button>
-            <div className="h-6 w-px bg-gray-600"></div>
-            <h1 className="text-2xl font-bold text-white">My Profile</h1>
-          </div>
-        </div>
-      </div>
+      <div className="w-full h-16 bg-gray-900"></div>
 
       <div className="max-w-5xl mx-auto px-4 py-8">
         {/* Simplified header section */}
@@ -274,9 +259,7 @@ const ProfilePage = () => {
                 />
                 <h2 className="text-xl font-semibold text-white">{formData.name || user.full_name || "User"}</h2>
                 <p className="text-gray-400">{formData.email || user.email}</p>
-                {formData.phone && (
-                  <p className="text-gray-400 text-sm">{formData.phone}</p>
-                )}
+                {formData.phone && <p className="text-gray-400 text-sm">{formData.phone}</p>}
                 <div className="flex items-center justify-center gap-2 mt-2">
                   <Shield size={16} className="text-green-400" />
                   <span className="text-sm text-green-400">Verified Account</span>
