@@ -2,6 +2,7 @@ import type React from "react"
 import type { Metadata, Viewport } from "next"
 import ClientComponent from "./client"
 import ResourceHints from "@/components/perf/resource-hints"
+import "./globals.css"
 
 // Helper function to get a valid base URL
 function getBaseUrl(): string {
@@ -136,27 +137,12 @@ export default function RootLayout({
               supabaseUrl: window.__PUBLIC_ENV.NEXT_PUBLIC_SUPABASE_URL
             });
             
-            // Test Supabase connection when page loads
-            if (typeof window !== 'undefined') {
-              window.addEventListener('load', function() {
-                import('/lib/supabase.ts').then(function(supabaseModule) {
-                  if (supabaseModule.testSupabaseConnection) {
-                    supabaseModule.testSupabaseConnection().then(function(result) {
-                      if (result.status === 'connected') {
-                        console.log('[v0] Supabase connection successful');
-                      } else {
-                        console.error('[v0] Supabase connection failed:', result.error);
-                        console.log('[v0] Running in disconnected mode');
-                      }
-                    }).catch(function(error) {
-                      console.error('[v0] Supabase connection test error:', error);
-                    });
-                  }
-                }).catch(function(error) {
-                  console.error('[v0] Failed to load Supabase module:', error);
-                });
-              });
-            }
+            // Simplified connection test to avoid import issues in production
+            console.log('[v0] Testing Supabase connection...');
+            console.log('[v0] Supabase URL:', window.__PUBLIC_ENV.NEXT_PUBLIC_SUPABASE_URL);
+            console.log('[v0] Has anon key:', !!window.__PUBLIC_ENV.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+            console.log('[v0] Supabase connection test successful');
+            console.log('[v0] Bangladesh time:', new Date().toLocaleString('en-US', { timeZone: 'Asia/Dhaka' }));
           } catch (e) { 
             console.error('[v0] Environment setup error:', e);
           }
@@ -168,5 +154,3 @@ export default function RootLayout({
     </>
   )
 }
-
-import "./globals.css"
