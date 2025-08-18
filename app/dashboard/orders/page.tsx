@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Search, Eye, Edit, Plus, RefreshCw } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { formatBangladeshTime } from "@/lib/supabase"
+import { TimeBD } from "@/components/TimeBD"
 
 interface Order {
   id: string
@@ -18,9 +18,7 @@ interface Order {
   items: Array<{ name: string; quantity: number; price: number }>
   total_price: number
   status: string
-  formatted_date: string
-  formatted_time: string
-  bangladesh_timestamp: string
+  created_at: string // Using raw UTC timestamp instead of formatted fields
   order_type: string
   payment_method: string
 }
@@ -288,24 +286,7 @@ export default function OrdersPage() {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <div className="text-gray-300">
-                          <p>
-                            {order.formatted_date ||
-                              formatBangladeshTime(new Date(order.bangladesh_timestamp), {
-                                year: "numeric",
-                                month: "2-digit",
-                                day: "2-digit",
-                              })}
-                          </p>
-                          <p className="text-sm text-gray-400">
-                            {order.formatted_time ||
-                              formatBangladeshTime(new Date(order.bangladesh_timestamp), {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                                hour12: true,
-                              })}
-                          </p>
-                        </div>
+                        <TimeBD iso={order.created_at} className="text-gray-300" />
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">

@@ -12,25 +12,11 @@ import { OrderStatusBadge } from "@/components/order-status-badge"
 import { InvoiceButton } from "@/components/invoice-button"
 import { useOrderHistory, type OrderHistoryItem } from "@/hooks/use-order-history"
 import { useCart } from "@/hooks/use-cart"
-import { formatBangladeshTime } from "@/lib/supabase"
+import { TimeBD } from "@/components/TimeBD"
 
 function money(n?: number) {
   const v = typeof n === "number" && isFinite(n) ? n : 0
   return v.toFixed(2)
-}
-function fmtDate(s: string) {
-  try {
-    return formatBangladeshTime(new Date(s), {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: true,
-    })
-  } catch {
-    return "—"
-  }
 }
 function parseDate(value?: string) {
   if (!value) return undefined
@@ -249,7 +235,7 @@ export default function OrdersPage() {
                           <span className="text-gray-400">ID:</span>{" "}
                           <span className="font-mono text-gold">{o.order_id}</span>
                         </p>
-                        <p className="text-xs text-gray-400">{fmtDate(o.created_at)}</p>
+                        <TimeBD iso={o.created_at} className="text-xs text-gray-400" />
                       </div>
                     </div>
                     <div className="flex items-center gap-2">

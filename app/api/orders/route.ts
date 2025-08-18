@@ -47,43 +47,25 @@ export async function GET(request: NextRequest) {
     if (error) throw error
 
     const formattedOrders =
-      orders?.map((order) => {
-        const createdAt = new Date(order.created_at)
-        const bangladeshTime = new Intl.DateTimeFormat("en-BD", {
-          timeZone: "Asia/Dhaka",
-          year: "numeric",
-          month: "2-digit",
-          day: "2-digit",
-          hour: "2-digit",
-          minute: "2-digit",
-          hour12: true,
-        }).formatToParts(createdAt)
-
-        const date = `${bangladeshTime.find((p) => p.type === "day")?.value}/${bangladeshTime.find((p) => p.type === "month")?.value}/${bangladeshTime.find((p) => p.type === "year")?.value}`
-        const time = `${bangladeshTime.find((p) => p.type === "hour")?.value}:${bangladeshTime.find((p) => p.type === "minute")?.value} ${bangladeshTime.find((p) => p.type === "dayPeriod")?.value}`
-
-        return {
-          id: order.order_id,
-          customer: order.customer_name || "Guest",
-          email: order.phone || "N/A",
-          items:
-            order.order_items?.map((item: any) => ({
-              name: item.item_name,
-              quantity: item.quantity,
-              price: item.price_at_purchase,
-            })) || [],
-          total_price: order.total_price,
-          status: order.status,
-          formatted_date: date,
-          formatted_time: time,
-          bangladesh_timestamp: order.created_at,
-          order_type: "delivery", // Default for now
-          payment_method: order.payment_method || "cash",
-          address: order.address,
-          phone: order.phone,
-          message: order.message,
-        }
-      }) || []
+      orders?.map((order) => ({
+        id: order.order_id,
+        customer: order.customer_name || "Guest",
+        email: order.phone || "N/A",
+        items:
+          order.order_items?.map((item: any) => ({
+            name: item.item_name,
+            quantity: item.quantity,
+            price: item.price_at_purchase,
+          })) || [],
+        total_price: order.total_price,
+        status: order.status,
+        created_at: order.created_at, // Raw UTC timestamp for client-side conversion
+        order_type: "delivery",
+        payment_method: order.payment_method || "cash",
+        address: order.address,
+        phone: order.phone,
+        message: order.message,
+      })) || []
 
     return NextResponse.json({ orders: formattedOrders })
   } catch (error) {

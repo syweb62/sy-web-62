@@ -12,6 +12,7 @@ import { supabase } from "@/lib/supabase"
 import { toast } from "@/hooks/use-toast"
 import { LoadingSpinner } from "@/components/loading-spinner"
 import Link from "next/link"
+import { TimeBD } from "@/components/TimeBD"
 
 interface OrderDetails {
   order_id: string
@@ -142,16 +143,6 @@ export default function OrderDetailsPage() {
     )
   }
 
-  const bangladeshTime = new Intl.DateTimeFormat("en-BD", {
-    timeZone: "Asia/Dhaka",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true,
-  }).format(new Date(order.created_at))
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -239,7 +230,7 @@ export default function OrderDetailsPage() {
               )}
               <div className="flex items-center gap-3">
                 <Clock size={16} className="text-gray-400" />
-                <p className="text-gray-300">{bangladeshTime}</p>
+                <TimeBD iso={order.created_at} className="text-gray-300" />
               </div>
             </CardContent>
           </Card>

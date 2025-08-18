@@ -137,31 +137,10 @@ export default function RootLayout({
               supabaseUrl: window.__PUBLIC_ENV.NEXT_PUBLIC_SUPABASE_URL
             });
             
-            function getBangladeshTime() {
-              const now = new Date();
-              // Create a more accurate Bangladesh time formatter
-              const bangladeshTime = new Intl.DateTimeFormat('en-US', {
-                timeZone: 'Asia/Dhaka',
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit',
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit',
-                hour12: true
-              }).format(now);
-              return bangladeshTime;
-            }
-            
             console.log('[v0] Testing Supabase connection...');
             console.log('[v0] Supabase URL:', window.__PUBLIC_ENV.NEXT_PUBLIC_SUPABASE_URL);
             console.log('[v0] Has anon key:', !!window.__PUBLIC_ENV.NEXT_PUBLIC_SUPABASE_ANON_KEY);
             console.log('[v0] Supabase connection test successful');
-            console.log('[v0] Bangladesh time:', getBangladeshTime());
-            
-            setInterval(function() {
-              console.log('[v0] Bangladesh time update:', getBangladeshTime());
-            }, 30000);
             
           } catch (e) { 
             console.error('[v0] Environment setup error:', e);
