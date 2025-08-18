@@ -79,7 +79,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const clearError = useCallback(() => setError(null), [])
   const handleError = useCallback((err: unknown) => {
-    console.error("Auth error:", err)
+    if (err instanceof Error) {
+      // Don't log session-related errors as they're normal for public pages
+      if (!err.message.includes("session") && !err.message.includes("Session")) {
+        console.error("[v0] Auth error:", err.message)
+      }
+    } else {
+      console.error("[v0] Auth error:", err)
+    }
     setError(err as AuthError)
   }, [])
 
@@ -173,14 +180,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         // 1) Probe connectivity once up front
         const connectionResult = await testSupabaseConnection().catch((e) => {
-          console.warn("testSupabaseConnection failed:", e)
+          console.warn("[v0] testSupabaseConnection failed:", e)
           return { status: "disconnected" as const }
         })
         setConnectionStatus(connectionResult.status as "connected" | "disconnected" | "testing")
 
         // If client missing or no connectivity, stop here gracefully
         if (!supabase || connectionResult.status !== "connected") {
-          console.warn("Supabase not reachable; running in disconnected mode.")
+          console.warn("[v0] Supabase not reachable; running in disconnected mode.")
           clearTimeout(initTimeout)
           setIsLoading(false)
           return
@@ -191,7 +198,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const { data: sessionData, error: sessionError } = await withTimeout(supabase.auth.getSession(), 5000)
 
           if (sessionError) {
-            console.warn("getSession error:", sessionError.message)
+            console.warn("[v0] getSession info:", sessionError.message)
           }
 
           const current = sessionData?.session ?? null
@@ -199,10 +206,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
           if (current?.user) {
             await fetchUserProfile(current.user)
+          } else {
+            setUser(null)
           }
         } catch (sessErr) {
           console.warn(
-            "getSession failed (network/timeout); skipping profile fetch:",
+            "[v0] getSession failed (network/timeout); skipping profile fetch:",
             sessErr instanceof Error ? sessErr.message : sessErr,
           )
         }
@@ -462,6 +471,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch (err) {
         handleError(err)
         throw err
+      } finally {
+        setIsLoading(false)
       }
     },
     [user, clearError, handleError, connectionStatus],
@@ -489,6 +500,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 export function useAuth() {
   const context = useContext(AuthContext)
   if (context === undefined) {
+    console.error(
+      "[v0] useAuth hook called outside of AuthProvider. Make sure your component is wrapped with AuthProvider.",
+    )
     throw new Error("useAuth must be used within an AuthProvider")
   }
   return context
