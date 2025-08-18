@@ -119,14 +119,15 @@ export default function Contact() {
         {/* Live Map */}
         <div id="live-map" className="rounded-xl overflow-hidden">
           <iframe
-            src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3651.8944766665447!2d90.35746410000001!3d23.762803599999998!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3755bf89702ccc57%3A0x73d3aaec5a3a00b0!2sSushi%20Yaki%20Mohammadpur!5e0!3m2!1sen!2sbd!4v1692000000000!5m2!1sen!2sbd"
+            src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3651.8977845394447!2d90.35746407531677!3d23.762803578668508!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3755bf89702ccc57%3A0x73d3aaec5a3a00b0!2sSushi%20Yaki%20Mohammadpur!5e0!3m2!1sen!2sbd!4v1692345678901!5m2!1sen!2sbd"
             width="100%"
-            height="400"
+            height="384"
             style={{ border: 0 }}
             allowFullScreen
             loading="lazy"
             referrerPolicy="no-referrer-when-downgrade"
             title="Sushi Yaki Mohammadpur Location"
+            className="w-full h-96 rounded-xl"
           />
         </div>
       </div>

@@ -75,7 +75,7 @@ const nextConfig = {
               "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://maps.googleapis.com https://www.google.com https://*.gstatic.com https://www.googletagmanager.com https://www.google-analytics.com",
               "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://www.google-analytics.com",
               "img-src 'self' data: blob: https: https://maps.gstatic.com https://*.googleusercontent.com https://*.ggpht.com",
-              "frame-src 'self' https://www.google.com https://*.google.com https://*.gstatic.com https://calendar.google.com https://docs.google.com",
+              "frame-src 'self' https://www.google.com https://*.google.com https://maps.google.com https://*.gstatic.com https://calendar.google.com https://docs.google.com",
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "font-src 'self' https://fonts.gstatic.com",
               "object-src 'none'",
