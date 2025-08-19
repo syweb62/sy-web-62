@@ -480,7 +480,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   )
 
   const signInWithGoogle = useCallback(async () => {
+    console.log("[v0] Google OAuth button clicked - starting authentication flow")
+
     if (!supabase || connectionStatus !== "connected") {
+      console.log("[v0] Google OAuth failed - Supabase not connected:", { supabase: !!supabase, connectionStatus })
       throw new Error("Authentication service unavailable. Please try again later.")
     }
 
@@ -488,6 +491,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsLoading(true)
       clearError()
 
+      console.log("[v0] Calling Supabase signInWithOAuth for Google...")
       const { data, error } = await withTimeout(
         supabase.auth.signInWithOAuth({
           provider: "google",
@@ -498,12 +502,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         10000,
       )
 
+      console.log("[v0] Google OAuth response:", { data, error })
+
       if (error) {
+        console.error("[v0] Google OAuth error:", error)
         throw error
       }
 
+      console.log("[v0] Google OAuth initiated successfully, redirecting...")
       // OAuth redirect will handle the rest
     } catch (err) {
+      console.error("[v0] Google OAuth catch block:", err)
       handleError(err)
       throw err
     } finally {

@@ -362,7 +362,12 @@ export default function SignInPage() {
 
                 <Button
                   type="button"
-                  onClick={signInWithGoogle}
+                  onClick={() => {
+                    console.log("[v0] Google OAuth button clicked")
+                    signInWithGoogle().catch((err) => {
+                      console.error("[v0] Google OAuth button error:", err)
+                    })
+                  }}
                   disabled={isLoading}
                   className="w-full bg-white hover:bg-gray-50 text-gray-900 font-medium py-3 text-base transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed border border-gray-300 flex items-center justify-center space-x-3"
                 >

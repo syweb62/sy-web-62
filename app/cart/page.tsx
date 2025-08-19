@@ -27,6 +27,7 @@ import { CustomerInfoBanner } from "@/components/ui/customer-info-banner"
 import { validation } from "@/lib/validation"
 import { customerStorage } from "@/lib/customer-storage"
 import { supabase } from "@/lib/supabase"
+import { generateShortOrderId } from "@/lib/order-id-generator"
 
 const radioAccentStyle: React.CSSProperties = { accentColor: "#3b82f6" }
 
@@ -170,8 +171,16 @@ export default function Cart() {
     setIsCheckingOut(true)
 
     try {
+      const shortOrderId = generateShortOrderId()
+      console.log(
+        "[v0] Order created at Bangladesh time:",
+        new Date().toLocaleString("en-US", { timeZone: "Asia/Dhaka" }),
+      )
+      console.log("[v0] Order ID:", shortOrderId)
+
       // Prepare order data for Supabase
       const orderData = {
+        short_order_id: shortOrderId, // Add short ID for user display
         user_id: (user as any)?.id || null,
         customer_name: validation.sanitizeInput(formData.name),
         phone: formData.phone.replace(/\D/g, ""),
@@ -197,7 +206,7 @@ export default function Cart() {
 
         // Map cart items to order_items rows
         const orderItemsData = cartItems.map((item) => ({
-          order_id: order.order_id,
+          order_id: order.order_id, // Use database-generated UUID
           menu_item_id: null, // unknown UUID in cart; keep null to preserve FK integrity
           quantity: item.quantity,
           price_at_purchase: item.price,
@@ -216,10 +225,10 @@ export default function Cart() {
           console.error("Failed to save order items:", itemError)
         }
 
-        setOrderId(order.order_id)
+        setOrderId(order.short_order_id || shortOrderId)
       } else {
         // If Supabase not configured, still allow UX to complete
-        setOrderId(`ORD-${Date.now().toString().slice(-6)}-${Math.random().toString(36).substr(2, 4).toUpperCase()}`)
+        setOrderId(shortOrderId)
       }
 
       // Save customer data for future orders

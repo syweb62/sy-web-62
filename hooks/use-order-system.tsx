@@ -20,6 +20,12 @@ export interface OrderOptions {
   estimatedTime?: string
 }
 
+function generateShortOrderId(): string {
+  const timestamp = Date.now().toString().slice(-4) // Last 4 digits of timestamp
+  const random = Math.random().toString(36).substring(2, 4).toLowerCase() // 2 random chars
+  return `${timestamp}${random}` // Format like "1205e"
+}
+
 export function useOrderSystem() {
   const { addItem, items, totalItems, totalPrice } = useCart()
   const [orderSuccess, setOrderSuccess] = useState<string | null>(null)
@@ -40,8 +46,7 @@ export function useOrderSystem() {
         })
 
         const bangladeshTime = getBangladeshTime()
-        const timestamp = bangladeshTime.getTime()
-        const orderId = `ORDER-${timestamp}`
+        const orderId = generateShortOrderId()
 
         console.log(`[v0] Order created at Bangladesh time: ${formatBangladeshTime(bangladeshTime)}`)
         console.log(`[v0] Order ID: ${orderId}`)
@@ -85,8 +90,7 @@ export function useOrderSystem() {
         await new Promise((resolve) => setTimeout(resolve, 1500))
 
         const bangladeshTime = getBangladeshTime()
-        const timestamp = bangladeshTime.getTime()
-        const orderId = `BULK-ORDER-${timestamp}`
+        const orderId = generateShortOrderId()
 
         console.log(`[v0] Bulk order created at Bangladesh time: ${formatBangladeshTime(bangladeshTime)}`)
         console.log(`[v0] Bulk order ID: ${orderId}`)

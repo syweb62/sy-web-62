@@ -13,6 +13,7 @@ import { TimeBD } from "@/components/TimeBD"
 
 interface Order {
   id: string
+  short_order_id?: string
   customer: string
   email: string
   items: Array<{ name: string; quantity: number; price: number }>
@@ -251,7 +252,9 @@ export default function OrdersPage() {
                 ) : (
                   orders.map((order) => (
                     <TableRow key={order.id} className="border-gray-800">
-                      <TableCell className="font-medium text-white">{order.id}</TableCell>
+                      <TableCell className="font-medium text-white">
+                        {(order as any).short_order_id || order.id}
+                      </TableCell>
                       <TableCell>
                         <div>
                           <p className="text-white font-medium">{order.customer}</p>
