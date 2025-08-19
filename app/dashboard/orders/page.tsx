@@ -252,9 +252,7 @@ export default function OrdersPage() {
                 ) : (
                   orders.map((order) => (
                     <TableRow key={order.id} className="border-gray-800">
-                      <TableCell className="font-medium text-white">
-                        {(order as any).short_order_id || order.id}
-                      </TableCell>
+                      <TableCell className="font-medium text-white">{order.short_order_id || order.id}</TableCell>
                       <TableCell>
                         <div>
                           <p className="text-white font-medium">{order.customer}</p>

@@ -14,6 +14,7 @@ export async function GET(request: NextRequest) {
       .from("orders")
       .select(`
         order_id,
+        short_order_id,
         customer_name,
         phone,
         address,
@@ -49,6 +50,7 @@ export async function GET(request: NextRequest) {
     const formattedOrders =
       orders?.map((order) => ({
         id: order.order_id,
+        short_order_id: order.short_order_id, // Added short_order_id to response
         customer: order.customer_name || "Guest",
         email: order.phone || "N/A",
         items:

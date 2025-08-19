@@ -6,6 +6,7 @@ import { useAuth } from "@/hooks/use-auth"
 
 export interface OrderHistoryItem {
   order_id: string
+  short_order_id?: string
   customer_name: string
   phone: string
   address: string
@@ -51,7 +52,20 @@ export function useOrderHistory() {
       const { data, error: fetchError } = await supabase
         .from("orders")
         .select(`
-          *,
+          order_id,
+          short_order_id,
+          customer_name,
+          phone,
+          address,
+          payment_method,
+          status,
+          total_price,
+          subtotal,
+          discount,
+          vat,
+          delivery_charge,
+          message,
+          created_at,
           order_items (
             id,
             menu_item_id,
@@ -73,6 +87,7 @@ export function useOrderHistory() {
 
       const formattedOrders: OrderHistoryItem[] = (data || []).map((order: any) => ({
         order_id: order.order_id,
+        short_order_id: order.short_order_id, // explicitly mapping short_order_id
         customer_name: order.customer_name || "Unknown",
         phone: order.phone || "",
         address: order.address || "",

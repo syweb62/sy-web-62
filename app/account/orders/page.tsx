@@ -233,7 +233,7 @@ export default function OrdersPage() {
                       <div className="leading-tight">
                         <p className="font-medium">
                           <span className="text-gray-400">ID:</span>{" "}
-                          <span className="font-mono text-gold">{(o as any).short_order_id || o.order_id}</span>
+                          <span className="font-mono text-gold">{o.short_order_id || o.order_id}</span>
                         </p>
                         <TimeBD iso={o.created_at} className="text-xs text-gray-400" />
                       </div>
