@@ -17,6 +17,7 @@ interface AuthContextType {
     phone?: string,
     address?: string,
   ) => Promise<{ success: boolean; requiresSignIn?: boolean; user?: SupabaseUser } | void>
+  signInWithGoogle: () => Promise<void>
   signOut: () => Promise<void>
   updateUser: (userData: Partial<Profile>) => Promise<void>
   resetPassword: (email: string) => Promise<void>
@@ -478,6 +479,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [user, clearError, handleError, connectionStatus],
   )
 
+  const signInWithGoogle = useCallback(async () => {
+    if (!supabase || connectionStatus !== "connected") {
+      throw new Error("Authentication service unavailable. Please try again later.")
+    }
+
+    try {
+      setIsLoading(true)
+      clearError()
+
+      const { data, error } = await withTimeout(
+        supabase.auth.signInWithOAuth({
+          provider: "google",
+          options: {
+            redirectTo: `${window.location.origin}/auth/callback`,
+          },
+        }),
+        10000,
+      )
+
+      if (error) {
+        throw error
+      }
+
+      // OAuth redirect will handle the rest
+    } catch (err) {
+      handleError(err)
+      throw err
+    } finally {
+      setIsLoading(false)
+    }
+  }, [clearError, handleError, connectionStatus])
+
   const value: AuthContextType = {
     user,
     session,
@@ -485,6 +518,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     connectionStatus,
     signIn,
     signUp,
+    signInWithGoogle,
     signOut,
     updateUser,
     resetPassword,
