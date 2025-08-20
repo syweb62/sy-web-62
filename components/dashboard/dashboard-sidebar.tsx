@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/sidebar"
 import { useAuth } from "@/hooks/use-auth"
 import Image from "next/image"
+import { useState } from "react"
 
 const menuItems = [
   {
@@ -60,6 +61,26 @@ const menuItems = [
 export function DashboardSidebar() {
   const pathname = usePathname()
   const { user, signOut } = useAuth()
+  const [isSigningOut, setIsSigningOut] = useState(false)
+
+  const handleSignOut = async () => {
+    if (isSigningOut) return // Prevent multiple clicks
+
+    try {
+      setIsSigningOut(true)
+      console.log("[v0] Signout button clicked")
+      await signOut()
+      console.log("[v0] Signout completed successfully")
+      // Redirect to home page after successful signout
+      window.location.href = "/"
+    } catch (error) {
+      console.error("[v0] Signout failed:", error)
+      // Show user-friendly error message
+      alert("Sign out failed. Please try again.")
+    } finally {
+      setIsSigningOut(false)
+    }
+  }
 
   return (
     <Sidebar>
@@ -131,9 +152,9 @@ export function DashboardSidebar() {
             </div>
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <SidebarMenuButton onClick={signOut}>
+            <SidebarMenuButton onClick={handleSignOut} disabled={isSigningOut}>
               <LogOut />
-              <span>Sign Out</span>
+              <span>{isSigningOut ? "Signing Out..." : "Sign Out"}</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>

@@ -369,21 +369,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   )
 
   const signOut = useCallback(async () => {
-    if (!supabase || connectionStatus !== "connected") {
-      // Already "signed out" in a disconnected state
-      setUser(null)
-      setSession(null)
-      return
-    }
     try {
       setIsLoading(true)
       clearError()
+      console.log("[v0] Starting signout process...")
+
+      if (!supabase || connectionStatus !== "connected") {
+        console.log("[v0] Supabase disconnected - clearing local state")
+        setUser(null)
+        setSession(null)
+        return
+      }
+
+      const { data: sessionData } = await supabase.auth.getSession()
+      if (!sessionData.session) {
+        console.log("[v0] No active session found - user already signed out")
+        setUser(null)
+        setSession(null)
+        return
+      }
+
       const { error } = await withTimeout(supabase.auth.signOut(), 8000)
-      if (error) throw error
+      if (error) {
+        if (error.message.includes("Auth session missing")) {
+          console.log("[v0] Session already missing - treating as successful signout")
+          setUser(null)
+          setSession(null)
+          return
+        }
+        console.error("[v0] Supabase signout error:", error.message)
+        throw error
+      }
+      console.log("[v0] Supabase signout successful")
       setUser(null)
       setSession(null)
     } catch (err) {
+      if (err instanceof Error && err.message.includes("Auth session missing")) {
+        console.log("[v0] Session missing during signout - treating as successful")
+        setUser(null)
+        setSession(null)
+        return
+      }
+      console.error("[v0] Signout error:", err instanceof Error ? err.message : err)
       handleError(err)
+      throw err
     } finally {
       setIsLoading(false)
     }
