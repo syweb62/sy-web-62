@@ -10,40 +10,40 @@
   --secondary-color: 220, 38, 38;
   --teal-accent: 48, 200, 214;
 
-  /* Updated design tokens for minimal professional dashboard */
-  --background: #ffffff;
-  --foreground: #1f2937;
-  --card: #f1f5f9;
-  --card-foreground: #1f2937;
-  --popover: #ffffff;
-  --popover-foreground: #1f2937;
-  --primary: #1f2937;
-  --primary-foreground: #ffffff;
-  --secondary: #8b5cf6;
+  /* Updated design tokens for black and gold dashboard theme */
+  --background: #0a0f14;
+  --foreground: #ffffff;
+  --card: #1a1f24;
+  --card-foreground: #ffffff;
+  --popover: #1a1f24;
+  --popover-foreground: #ffffff;
+  --primary: #ffd700;
+  --primary-foreground: #000000;
+  --secondary: #2a2f34;
   --secondary-foreground: #ffffff;
   --muted: #6b7280;
-  --muted-foreground: #ffffff;
-  --accent: #8b5cf6;
-  --accent-foreground: #ffffff;
-  --destructive: #ea580c;
+  --muted-foreground: #d1d5db;
+  --accent: #ffd700;
+  --accent-foreground: #000000;
+  --destructive: #dc2626;
   --destructive-foreground: #ffffff;
-  --border: #d1d5db;
-  --input: #f1f5f9;
-  --ring: rgba(139, 92, 246, 0.5);
-  --chart-1: #8b5cf6;
-  --chart-2: #d97706;
-  --chart-3: #ea580c;
-  --chart-4: #4b5563;
+  --border: #374151;
+  --input: #2a2f34;
+  --ring: rgba(255, 215, 0, 0.5);
+  --chart-1: #ffd700;
+  --chart-2: #ffed4e;
+  --chart-3: #dc2626;
+  --chart-4: #6b7280;
   --chart-5: #f97316;
   --radius: 0.5rem;
-  --sidebar: #f1f5f9;
-  --sidebar-foreground: #1f2937;
-  --sidebar-primary: #ffffff;
-  --sidebar-primary-foreground: #1f2937;
-  --sidebar-accent: #8b5cf6;
+  --sidebar: #1a1f24;
+  --sidebar-foreground: #ffffff;
+  --sidebar-primary: #ffd700;
+  --sidebar-primary-foreground: #000000;
+  --sidebar-accent: #2a2f34;
   --sidebar-accent-foreground: #ffffff;
-  --sidebar-border: #d1d5db;
-  --sidebar-ring: rgba(139, 92, 246, 0.5);
+  --sidebar-border: #374151;
+  --sidebar-ring: rgba(255, 215, 0, 0.5);
 }
 
 /* Dashboard-specific styling */
@@ -56,6 +56,7 @@
   background: hsl(var(--card));
   color: hsl(var(--card-foreground));
   border: 1px solid hsl(var(--border));
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
 .dashboard-sidebar {
