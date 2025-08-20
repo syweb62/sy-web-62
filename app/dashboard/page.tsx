@@ -221,114 +221,137 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Dashboard Overview</h1>
-          <p className="text-gray-600 mt-1">Welcome back! Here's what's happening at Sushi Yaki today.</p>
+    <div className="space-y-8">
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+        <div className="space-y-1">
+          <h1 className="text-3xl lg:text-4xl font-bold text-gray-900 tracking-tight">Dashboard Overview</h1>
+          <p className="text-gray-600">Welcome back! Here's what's happening at Sushi Yaki today.</p>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
           {notifications.length > 0 && (
-            <div className="flex items-center gap-2 bg-red-50 text-red-600 px-3 py-1 rounded-full border border-red-200">
+            <div className="flex items-center gap-2 bg-red-50 text-red-600 px-4 py-2 rounded-full border border-red-200 text-sm font-medium">
               <Bell size={16} />
-              <span className="text-sm">{notifications.length} notifications</span>
+              <span>{notifications.length} notifications</span>
             </div>
           )}
-          <div className="flex items-center gap-2 text-sm text-gray-500 bg-white px-3 py-2 rounded-lg border">
+          <div className="flex items-center gap-2 text-sm text-gray-500 bg-white px-4 py-2 rounded-lg border shadow-sm">
             <Clock size={16} />
-            <span>{safeGetBangladeshTime()}</span>
+            <span className="font-medium">{safeGetBangladeshTime()}</span>
           </div>
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card className="dashboard-card hover:shadow-md transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">Today's Revenue</CardTitle>
-            <DollarSign className="h-4 w-4 text-purple-600" />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <Card className="bg-white border-0 shadow-sm hover:shadow-md transition-all duration-200 group">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+            <CardTitle className="text-sm font-semibold text-gray-600 uppercase tracking-wide">
+              Today's Revenue
+            </CardTitle>
+            <div className="p-2 bg-purple-50 rounded-lg group-hover:bg-purple-100 transition-colors">
+              <DollarSign className="h-5 w-5 text-purple-600" />
+            </div>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-gray-900">{safeFormatBangladeshiTaka(stats.revenue.today)}</div>
-            <div className="flex items-center text-xs text-green-600 mt-1">
-              <TrendingUp size={12} className="mr-1" />+{stats.revenue.growth}% from yesterday
+          <CardContent className="space-y-2">
+            <div className="text-3xl font-bold text-gray-900">{safeFormatBangladeshiTaka(stats.revenue.today)}</div>
+            <div className="flex items-center text-sm text-green-600 font-medium">
+              <TrendingUp size={14} className="mr-1" />+{stats.revenue.growth}% from yesterday
             </div>
           </CardContent>
         </Card>
 
-        <Card className="dashboard-card hover:shadow-md transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">Orders Today</CardTitle>
-            <ShoppingBag className="h-4 w-4 text-purple-600" />
+        <Card className="bg-white border-0 shadow-sm hover:shadow-md transition-all duration-200 group">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+            <CardTitle className="text-sm font-semibold text-gray-600 uppercase tracking-wide">Orders Today</CardTitle>
+            <div className="p-2 bg-purple-50 rounded-lg group-hover:bg-purple-100 transition-colors">
+              <ShoppingBag className="h-5 w-5 text-purple-600" />
+            </div>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-gray-900">{stats.orders.today}</div>
-            <div className="text-xs text-gray-500 mt-1">
-              {stats.orders.pending} pending • {stats.orders.completed} completed
+          <CardContent className="space-y-2">
+            <div className="text-3xl font-bold text-gray-900">{stats.orders.today}</div>
+            <div className="text-sm text-gray-500">
+              <span className="text-orange-600 font-medium">{stats.orders.pending} pending</span> •
+              <span className="text-green-600 font-medium ml-1">{stats.orders.completed} completed</span>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="dashboard-card hover:shadow-md transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">Total Customers</CardTitle>
-            <Users className="h-4 w-4 text-purple-600" />
+        <Card className="bg-white border-0 shadow-sm hover:shadow-md transition-all duration-200 group">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+            <CardTitle className="text-sm font-semibold text-gray-600 uppercase tracking-wide">
+              Total Customers
+            </CardTitle>
+            <div className="p-2 bg-purple-50 rounded-lg group-hover:bg-purple-100 transition-colors">
+              <Users className="h-5 w-5 text-purple-600" />
+            </div>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-gray-900">{stats.customers.total}</div>
-            <div className="text-xs text-gray-500 mt-1">{stats.customers.new} new this week</div>
+          <CardContent className="space-y-2">
+            <div className="text-3xl font-bold text-gray-900">{stats.customers.total}</div>
+            <div className="text-sm text-gray-500">
+              <span className="text-blue-600 font-medium">{stats.customers.new} new</span> this week
+            </div>
           </CardContent>
         </Card>
 
-        <Card className="dashboard-card hover:shadow-md transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">Reservations Today</CardTitle>
-            <Calendar className="h-4 w-4 text-purple-600" />
+        <Card className="bg-white border-0 shadow-sm hover:shadow-md transition-all duration-200 group">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+            <CardTitle className="text-sm font-semibold text-gray-600 uppercase tracking-wide">
+              Reservations Today
+            </CardTitle>
+            <div className="p-2 bg-purple-50 rounded-lg group-hover:bg-purple-100 transition-colors">
+              <Calendar className="h-5 w-5 text-purple-600" />
+            </div>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-gray-900">{stats.reservations.today}</div>
-            <div className="text-xs text-gray-500 mt-1">{stats.reservations.upcoming} upcoming this week</div>
+          <CardContent className="space-y-2">
+            <div className="text-3xl font-bold text-gray-900">{stats.reservations.today}</div>
+            <div className="text-sm text-gray-500">
+              <span className="text-purple-600 font-medium">{stats.reservations.upcoming} upcoming</span> this week
+            </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Recent Activity */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent Orders */}
-        <Card className="dashboard-card">
-          <CardHeader>
-            <CardTitle className="text-gray-900 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <ShoppingBag size={20} />
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+        {/* Recent Orders - Takes 2 columns on xl screens */}
+        <Card className="xl:col-span-2 bg-white border-0 shadow-sm">
+          <CardHeader className="pb-4">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-xl font-bold text-gray-900 flex items-center gap-3">
+                <div className="p-2 bg-purple-50 rounded-lg">
+                  <ShoppingBag size={20} className="text-purple-600" />
+                </div>
                 Recent Orders
-              </div>
+              </CardTitle>
               <Link href="/dashboard/orders">
                 <Button
                   variant="outline"
                   size="sm"
-                  className="text-purple-600 border-purple-200 hover:bg-purple-50 bg-transparent"
+                  className="text-purple-600 border-purple-200 hover:bg-purple-50 bg-transparent font-medium"
                 >
-                  <Eye size={16} className="mr-1" />
+                  <Eye size={16} className="mr-2" />
                   View All
                 </Button>
               </Link>
-            </CardTitle>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
               {recentOrders.length > 0 ? (
                 recentOrders.map((order) => (
-                  <div key={order.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="font-medium text-gray-900 font-mono text-sm">
+                  <div
+                    key={order.id}
+                    className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-100 hover:bg-gray-100 transition-colors"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-3 mb-2">
+                        <span className="font-mono text-sm font-bold text-gray-900 bg-white px-2 py-1 rounded border">
                           {order.short_order_id || order.id.slice(0, 8)}
                         </span>
-                        <Badge className={`${getStatusColor(order.status)} text-xs`}>{order.status}</Badge>
+                        <Badge className={`${getStatusColor(order.status)} text-xs font-medium border`}>
+                          {order.status}
+                        </Badge>
                       </div>
-                      <p className="text-sm text-gray-700 font-medium">{order.customer_name}</p>
-                      <p className="text-xs text-gray-500">
+                      <p className="text-base font-semibold text-gray-900 mb-1">{order.customer_name}</p>
+                      <p className="text-sm text-gray-600 truncate">
                         {order.order_items && Array.isArray(order.order_items) && order.order_items.length > 0
                           ? order.order_items
                               .filter((item) => item && item.item_name)
@@ -337,9 +360,11 @@ export default function Dashboard() {
                           : "No items"}
                       </p>
                     </div>
-                    <div className="text-right">
-                      <p className="font-semibold text-purple-600">{safeFormatBangladeshiTaka(order.total_price)}</p>
-                      <p className="text-xs text-gray-500">
+                    <div className="text-right ml-4">
+                      <p className="text-lg font-bold text-purple-600">
+                        {safeFormatBangladeshiTaka(order.total_price)}
+                      </p>
+                      <p className="text-sm text-gray-500">
                         {(() => {
                           try {
                             return new Date(order.created_at).toLocaleTimeString("en-US", {
@@ -356,56 +381,86 @@ export default function Dashboard() {
                   </div>
                 ))
               ) : (
-                <div className="text-center py-8 text-gray-500">
-                  <ShoppingBag size={48} className="mx-auto mb-4 opacity-30" />
-                  <p>No recent orders</p>
+                <div className="text-center py-12 text-gray-500">
+                  <div className="p-4 bg-gray-50 rounded-full w-20 h-20 mx-auto mb-4 flex items-center justify-center">
+                    <ShoppingBag size={32} className="opacity-30" />
+                  </div>
+                  <p className="text-lg font-medium">No recent orders</p>
+                  <p className="text-sm">Orders will appear here once customers start placing them.</p>
                 </div>
               )}
             </div>
           </CardContent>
         </Card>
 
-        {/* Quick Actions */}
-        <Card className="dashboard-card">
-          <CardHeader>
-            <CardTitle className="text-gray-900">Quick Actions</CardTitle>
+        <Card className="bg-white border-0 shadow-sm">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-xl font-bold text-gray-900 flex items-center gap-3">
+              <div className="p-2 bg-purple-50 rounded-lg">
+                <Plus size={20} className="text-purple-600" />
+              </div>
+              Quick Actions
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4">
               <Link href="/dashboard/orders">
                 <Button
                   variant="outline"
-                  className="h-20 w-full flex flex-col gap-2 hover:bg-purple-50 hover:border-purple-200 bg-transparent"
+                  className="h-16 w-full flex items-center gap-4 justify-start hover:bg-purple-50 hover:border-purple-200 bg-transparent border-gray-200 text-left p-4"
                 >
-                  <ShoppingBag size={20} className="text-purple-600" />
-                  <span className="text-sm">Manage Orders</span>
+                  <div className="p-2 bg-purple-50 rounded-lg">
+                    <ShoppingBag size={20} className="text-purple-600" />
+                  </div>
+                  <div>
+                    <div className="font-semibold text-gray-900">Manage Orders</div>
+                    <div className="text-sm text-gray-500">View and update order status</div>
+                  </div>
                 </Button>
               </Link>
+
               <Link href="/dashboard/reservations">
                 <Button
                   variant="outline"
-                  className="h-20 w-full flex flex-col gap-2 hover:bg-purple-50 hover:border-purple-200 bg-transparent"
+                  className="h-16 w-full flex items-center gap-4 justify-start hover:bg-purple-50 hover:border-purple-200 bg-transparent border-gray-200 text-left p-4"
                 >
-                  <Calendar size={20} className="text-purple-600" />
-                  <span className="text-sm">Reservations</span>
+                  <div className="p-2 bg-purple-50 rounded-lg">
+                    <Calendar size={20} className="text-purple-600" />
+                  </div>
+                  <div>
+                    <div className="font-semibold text-gray-900">Reservations</div>
+                    <div className="text-sm text-gray-500">Manage table bookings</div>
+                  </div>
                 </Button>
               </Link>
+
               <Link href="/dashboard/menu/new">
                 <Button
                   variant="outline"
-                  className="h-20 w-full flex flex-col gap-2 hover:bg-purple-50 hover:border-purple-200 bg-transparent"
+                  className="h-16 w-full flex items-center gap-4 justify-start hover:bg-purple-50 hover:border-purple-200 bg-transparent border-gray-200 text-left p-4"
                 >
-                  <Plus size={20} className="text-purple-600" />
-                  <span className="text-sm">Add Menu Item</span>
+                  <div className="p-2 bg-purple-50 rounded-lg">
+                    <Plus size={20} className="text-purple-600" />
+                  </div>
+                  <div>
+                    <div className="font-semibold text-gray-900">Add Menu Item</div>
+                    <div className="text-sm text-gray-500">Create new menu items</div>
+                  </div>
                 </Button>
               </Link>
+
               <Link href="/dashboard/analytics">
                 <Button
                   variant="outline"
-                  className="h-20 w-full flex flex-col gap-2 hover:bg-purple-50 hover:border-purple-200 bg-transparent"
+                  className="h-16 w-full flex items-center gap-4 justify-start hover:bg-purple-50 hover:border-purple-200 bg-transparent border-gray-200 text-left p-4"
                 >
-                  <BarChart3 size={20} className="text-purple-600" />
-                  <span className="text-sm">View Analytics</span>
+                  <div className="p-2 bg-purple-50 rounded-lg">
+                    <BarChart3 size={20} className="text-purple-600" />
+                  </div>
+                  <div>
+                    <div className="font-semibold text-gray-900">View Analytics</div>
+                    <div className="text-sm text-gray-500">Sales and performance data</div>
+                  </div>
                 </Button>
               </Link>
             </div>

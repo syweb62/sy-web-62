@@ -47,11 +47,13 @@ export default function DashboardLayout({
   console.log("[v0] Dashboard access granted for admin user")
   return (
     <SidebarProvider>
-      <div className="flex min-h-screen dashboard-layout">
+      <div className="flex min-h-screen bg-gray-50">
         <DashboardSidebar />
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 flex flex-col min-w-0">
           <DashboardHeader />
-          <main className="flex-1 p-6 bg-gray-50">{children}</main>
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-auto">
+            <div className="max-w-7xl mx-auto">{children}</div>
+          </main>
         </div>
       </div>
     </SidebarProvider>
