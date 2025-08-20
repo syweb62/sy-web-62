@@ -33,7 +33,7 @@ export default function DashboardLayout({
   if (loading) {
     console.log("[v0] Dashboard loading...")
     return (
-      <div className="flex min-h-screen items-center justify-center bg-darkBg">
+      <div className="flex min-h-screen items-center justify-center dashboard-layout">
         <LoadingSpinner />
       </div>
     )
@@ -47,11 +47,11 @@ export default function DashboardLayout({
   console.log("[v0] Dashboard access granted for admin user")
   return (
     <SidebarProvider>
-      <div className="flex min-h-screen bg-darkBg">
+      <div className="flex min-h-screen dashboard-layout">
         <DashboardSidebar />
         <div className="flex-1 flex flex-col">
           <DashboardHeader />
-          <main className="flex-1 p-6">{children}</main>
+          <main className="flex-1 p-6 bg-gray-50">{children}</main>
         </div>
       </div>
     </SidebarProvider>
