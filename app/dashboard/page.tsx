@@ -52,6 +52,7 @@ export default function Dashboard() {
   })
   const [recentOrders, setRecentOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const { notifications } = useNotificationSystem()
 
   useEffect(() => {
@@ -60,53 +61,90 @@ export default function Dashboard() {
 
   const fetchDashboardData = async () => {
     try {
+      setError(null)
+      console.log("[v0] Fetching dashboard data...")
+
       const ordersResponse = await fetch("/api/orders")
       if (ordersResponse.ok) {
         const ordersData = await ordersResponse.json()
-        const orders = Array.isArray(ordersData) ? ordersData : []
+
+        let orders: Order[] = []
+        if (Array.isArray(ordersData)) {
+          orders = ordersData
+        } else if (ordersData && Array.isArray(ordersData.data)) {
+          orders = ordersData.data
+        } else {
+          console.warn("[v0] Orders data is not an array:", ordersData)
+          orders = []
+        }
+
         console.log("[v0] Dashboard orders data:", orders.length, "orders")
 
-        setRecentOrders(orders.slice(0, 5)) // Show latest 5 orders
+        const safeOrders = orders.filter((order) => order && typeof order === "object")
+        setRecentOrders(safeOrders.slice(0, 5))
 
         const today = new Date().toDateString()
-        const todayOrders = orders.filter((order: Order) => new Date(order.created_at).toDateString() === today)
+        const todayOrders = safeOrders.filter((order: Order) => {
+          try {
+            return order.created_at && new Date(order.created_at).toDateString() === today
+          } catch {
+            return false
+          }
+        })
 
-        const pendingOrders = orders.filter(
+        const pendingOrders = safeOrders.filter(
           (order: Order) => order.status === "pending" || order.status === "confirmed",
         )
 
-        const completedOrders = orders.filter((order: Order) => order.status === "delivered")
+        const completedOrders = safeOrders.filter((order: Order) => order.status === "delivered")
 
-        const todayRevenue = todayOrders.reduce((sum: number, order: Order) => sum + (order.total_price || 0), 0)
+        const todayRevenue = todayOrders.reduce((sum: number, order: Order) => {
+          const price = typeof order.total_price === "number" ? order.total_price : 0
+          return sum + price
+        }, 0)
+
+        const totalRevenue = safeOrders.reduce((sum: number, order: Order) => {
+          const price = typeof order.total_price === "number" ? order.total_price : 0
+          return sum + price
+        }, 0)
+
+        const uniqueCustomers = new Set(
+          safeOrders
+            .filter((order) => order.customer_name && typeof order.customer_name === "string")
+            .map((order: Order) => order.customer_name),
+        )
 
         setStats({
           revenue: {
             today: todayRevenue,
-            thisMonth: orders.reduce((sum: number, order: Order) => sum + (order.total_price || 0), 0),
-            growth: 12.5, // This would be calculated based on historical data
+            thisMonth: totalRevenue,
+            growth: 12.5,
           },
           orders: {
             today: todayOrders.length,
             pending: pendingOrders.length,
             completed: completedOrders.length,
-            total: orders.length,
+            total: safeOrders.length,
           },
           customers: {
-            total: new Set(orders.filter((order) => order.customer_name).map((order: Order) => order.customer_name))
-              .size,
-            new: 5, // This would come from user registration data
+            total: uniqueCustomers.size,
+            new: 5,
           },
           reservations: {
-            today: 0, // This would come from reservations API
+            today: 0,
             upcoming: 0,
           },
         })
       } else {
-        console.error("[v0] Failed to fetch orders:", ordersResponse.status)
+        const errorMsg = `Failed to fetch orders: ${ordersResponse.status}`
+        console.error("[v0]", errorMsg)
+        setError(errorMsg)
         setRecentOrders([])
       }
     } catch (error) {
-      console.error("[v0] Error fetching dashboard data:", error)
+      const errorMsg = `Error fetching dashboard data: ${error}`
+      console.error("[v0]", errorMsg)
+      setError(errorMsg)
       setRecentOrders([])
     } finally {
       setLoading(false)
@@ -134,6 +172,17 @@ export default function Dashboard() {
 
   if (loading) {
     return <div className="flex justify-center items-center h-64 text-white">Loading dashboard...</div>
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col justify-center items-center h-64 text-white">
+        <p className="text-red-400 mb-4">Error loading dashboard: {error}</p>
+        <Button onClick={fetchDashboardData} variant="outline">
+          Try Again
+        </Button>
+      </div>
+    )
   }
 
   return (
@@ -233,8 +282,11 @@ export default function Dashboard() {
                       </div>
                       <p className="text-sm text-gray-400">{order.customer_name}</p>
                       <p className="text-xs text-gray-500">
-                        {Array.isArray(order.order_items)
-                          ? order.order_items.map((item) => `${item.quantity}x ${item.item_name}`).join(", ")
+                        {order.order_items && Array.isArray(order.order_items) && order.order_items.length > 0
+                          ? order.order_items
+                              .filter((item) => item && item.item_name)
+                              .map((item) => `${item.quantity || 1}x ${item.item_name}`)
+                              .join(", ")
                           : "No items"}
                       </p>
                     </div>
