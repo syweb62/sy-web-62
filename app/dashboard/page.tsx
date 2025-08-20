@@ -62,7 +62,10 @@ export default function Dashboard() {
     try {
       const ordersResponse = await fetch("/api/orders")
       if (ordersResponse.ok) {
-        const orders = await ordersResponse.json()
+        const ordersData = await ordersResponse.json()
+        const orders = Array.isArray(ordersData) ? ordersData : []
+        console.log("[v0] Dashboard orders data:", orders.length, "orders")
+
         setRecentOrders(orders.slice(0, 5)) // Show latest 5 orders
 
         const today = new Date().toDateString()
@@ -74,12 +77,12 @@ export default function Dashboard() {
 
         const completedOrders = orders.filter((order: Order) => order.status === "delivered")
 
-        const todayRevenue = todayOrders.reduce((sum: number, order: Order) => sum + order.total_price, 0)
+        const todayRevenue = todayOrders.reduce((sum: number, order: Order) => sum + (order.total_price || 0), 0)
 
         setStats({
           revenue: {
             today: todayRevenue,
-            thisMonth: orders.reduce((sum: number, order: Order) => sum + order.total_price, 0),
+            thisMonth: orders.reduce((sum: number, order: Order) => sum + (order.total_price || 0), 0),
             growth: 12.5, // This would be calculated based on historical data
           },
           orders: {
@@ -89,7 +92,8 @@ export default function Dashboard() {
             total: orders.length,
           },
           customers: {
-            total: new Set(orders.map((order: Order) => order.customer_name)).size,
+            total: new Set(orders.filter((order) => order.customer_name).map((order: Order) => order.customer_name))
+              .size,
             new: 5, // This would come from user registration data
           },
           reservations: {
@@ -97,9 +101,13 @@ export default function Dashboard() {
             upcoming: 0,
           },
         })
+      } else {
+        console.error("[v0] Failed to fetch orders:", ordersResponse.status)
+        setRecentOrders([])
       }
     } catch (error) {
-      console.error("Error fetching dashboard data:", error)
+      console.error("[v0] Error fetching dashboard data:", error)
+      setRecentOrders([])
     } finally {
       setLoading(false)
     }
@@ -213,32 +221,41 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {recentOrders.map((order) => (
-                <div key={order.id} className="flex items-center justify-between p-3 bg-gray-800/30 rounded-lg">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-medium text-white font-mono">
-                        {order.short_order_id || order.id.slice(0, 8)}
-                      </span>
-                      <Badge className={getStatusColor(order.status)}>{order.status}</Badge>
+              {recentOrders.length > 0 ? (
+                recentOrders.map((order) => (
+                  <div key={order.id} className="flex items-center justify-between p-3 bg-gray-800/30 rounded-lg">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-medium text-white font-mono">
+                          {order.short_order_id || order.id.slice(0, 8)}
+                        </span>
+                        <Badge className={getStatusColor(order.status)}>{order.status}</Badge>
+                      </div>
+                      <p className="text-sm text-gray-400">{order.customer_name}</p>
+                      <p className="text-xs text-gray-500">
+                        {Array.isArray(order.order_items)
+                          ? order.order_items.map((item) => `${item.quantity}x ${item.item_name}`).join(", ")
+                          : "No items"}
+                      </p>
                     </div>
-                    <p className="text-sm text-gray-400">{order.customer_name}</p>
-                    <p className="text-xs text-gray-500">
-                      {order.order_items.map((item) => `${item.quantity}x ${item.item_name}`).join(", ")}
-                    </p>
+                    <div className="text-right">
+                      <p className="font-medium text-gold">{formatBangladeshiTaka(order.total_price)}</p>
+                      <p className="text-xs text-gray-400">
+                        {new Date(order.created_at).toLocaleTimeString("en-US", {
+                          timeZone: "Asia/Dhaka",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </p>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="font-medium text-gold">{formatBangladeshiTaka(order.total_price)}</p>
-                    <p className="text-xs text-gray-400">
-                      {new Date(order.created_at).toLocaleTimeString("en-US", {
-                        timeZone: "Asia/Dhaka",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </p>
-                  </div>
+                ))
+              ) : (
+                <div className="text-center py-8 text-gray-400">
+                  <ShoppingBag size={48} className="mx-auto mb-4 opacity-50" />
+                  <p>No recent orders</p>
                 </div>
-              ))}
+              )}
             </div>
             <Button variant="outline" className="w-full mt-4 bg-transparent">
               View All Orders
