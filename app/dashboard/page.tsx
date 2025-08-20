@@ -5,8 +5,32 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { BarChart3, DollarSign, ShoppingBag, Users, TrendingUp, Calendar, Clock, Bell } from "lucide-react"
-import { useNotificationSystem } from "@/hooks/use-notification-system"
-import { formatBangladeshiTaka, getBangladeshTime } from "@/lib/bangladesh-utils"
+
+const safeFormatBangladeshiTaka = (amount: number): string => {
+  try {
+    if (typeof amount !== "number" || isNaN(amount)) return "৳0"
+    return `৳${amount.toLocaleString("en-BD")}`
+  } catch (error) {
+    console.warn("[v0] Error formatting currency:", error)
+    return `৳${amount || 0}`
+  }
+}
+
+const safeGetBangladeshTime = (): string => {
+  try {
+    return new Date().toLocaleString("en-US", {
+      timeZone: "Asia/Dhaka",
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    })
+  } catch (error) {
+    console.warn("[v0] Error getting Bangladesh time:", error)
+    return new Date().toLocaleString()
+  }
+}
 
 interface DashboardStats {
   revenue: {
@@ -53,7 +77,7 @@ export default function Dashboard() {
   const [recentOrders, setRecentOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const { notifications } = useNotificationSystem()
+  const [notifications] = useState<any[]>([])
 
   useEffect(() => {
     fetchDashboardData()
@@ -71,16 +95,26 @@ export default function Dashboard() {
         let orders: Order[] = []
         if (Array.isArray(ordersData)) {
           orders = ordersData
-        } else if (ordersData && Array.isArray(ordersData.data)) {
-          orders = ordersData.data
+        } else if (ordersData && typeof ordersData === "object") {
+          if (Array.isArray(ordersData.data)) {
+            orders = ordersData.data
+          } else if (Array.isArray(ordersData.orders)) {
+            orders = ordersData.orders
+          } else {
+            console.warn("[v0] Orders data structure unexpected:", ordersData)
+            orders = []
+          }
         } else {
-          console.warn("[v0] Orders data is not an array:", ordersData)
+          console.warn("[v0] Orders data is not valid:", ordersData)
           orders = []
         }
 
         console.log("[v0] Dashboard orders data:", orders.length, "orders")
 
-        const safeOrders = orders.filter((order) => order && typeof order === "object")
+        const safeOrders = orders.filter((order) => {
+          return order && typeof order === "object" && order.id && typeof order.total_price !== "undefined"
+        })
+
         setRecentOrders(safeOrders.slice(0, 5))
 
         const today = new Date().toDateString()
@@ -99,13 +133,13 @@ export default function Dashboard() {
         const completedOrders = safeOrders.filter((order: Order) => order.status === "delivered")
 
         const todayRevenue = todayOrders.reduce((sum: number, order: Order) => {
-          const price = typeof order.total_price === "number" ? order.total_price : 0
-          return sum + price
+          const price = Number.parseFloat(String(order.total_price)) || 0
+          return sum + (isNaN(price) ? 0 : price)
         }, 0)
 
         const totalRevenue = safeOrders.reduce((sum: number, order: Order) => {
-          const price = typeof order.total_price === "number" ? order.total_price : 0
-          return sum + price
+          const price = Number.parseFloat(String(order.total_price)) || 0
+          return sum + (isNaN(price) ? 0 : price)
         }, 0)
 
         const uniqueCustomers = new Set(
@@ -142,7 +176,7 @@ export default function Dashboard() {
         setRecentOrders([])
       }
     } catch (error) {
-      const errorMsg = `Error fetching dashboard data: ${error}`
+      const errorMsg = `Error fetching dashboard data: ${error instanceof Error ? error.message : String(error)}`
       console.error("[v0]", errorMsg)
       setError(errorMsg)
       setRecentOrders([])
@@ -202,7 +236,7 @@ export default function Dashboard() {
           )}
           <div className="flex items-center gap-2 text-sm text-gray-400">
             <Clock size={16} />
-            <span>{getBangladeshTime()}</span>
+            <span>{safeGetBangladeshTime()}</span>
           </div>
         </div>
       </div>
@@ -215,7 +249,7 @@ export default function Dashboard() {
             <DollarSign className="h-4 w-4 text-gold" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-white">{formatBangladeshiTaka(stats.revenue.today)}</div>
+            <div className="text-2xl font-bold text-white">{safeFormatBangladeshiTaka(stats.revenue.today)}</div>
             <div className="flex items-center text-xs text-green-400 mt-1">
               <TrendingUp size={12} className="mr-1" />+{stats.revenue.growth}% from yesterday
             </div>
@@ -291,13 +325,19 @@ export default function Dashboard() {
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="font-medium text-gold">{formatBangladeshiTaka(order.total_price)}</p>
+                      <p className="font-medium text-gold">{safeFormatBangladeshiTaka(order.total_price)}</p>
                       <p className="text-xs text-gray-400">
-                        {new Date(order.created_at).toLocaleTimeString("en-US", {
-                          timeZone: "Asia/Dhaka",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
+                        {(() => {
+                          try {
+                            return new Date(order.created_at).toLocaleTimeString("en-US", {
+                              timeZone: "Asia/Dhaka",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })
+                          } catch (error) {
+                            return "Invalid time"
+                          }
+                        })()}
                       </p>
                     </div>
                   </div>
