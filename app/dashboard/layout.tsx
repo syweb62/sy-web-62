@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-
+import { DashboardHeader } from "@/components/dashboard-header"
 import { useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/hooks/use-auth"
@@ -39,7 +39,10 @@ export default function DashboardLayout({
     <SidebarProvider>
       <div className="flex min-h-screen bg-darkBg">
         <DashboardSidebar />
-        <main className="flex-1 p-6">{children}</main>
+        <div className="flex-1 flex flex-col">
+          <DashboardHeader />
+          <main className="flex-1 p-6">{children}</main>
+        </div>
       </div>
     </SidebarProvider>
   )

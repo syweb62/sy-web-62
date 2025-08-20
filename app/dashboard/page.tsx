@@ -1,97 +1,131 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { BarChart3, DollarSign, ShoppingBag, Users, TrendingUp, Calendar, Clock } from "lucide-react"
+import { BarChart3, DollarSign, ShoppingBag, Users, TrendingUp, Calendar, Clock, Bell } from "lucide-react"
+import { useNotificationSystem } from "@/hooks/use-notification-system"
+import { formatBangladeshiTaka, getBangladeshTime } from "@/lib/bangladesh-utils"
 
-// Mock data - in a real app, this would come from your backend
-const dashboardData = {
+interface DashboardStats {
   revenue: {
-    today: 2847.5,
-    thisMonth: 45230.8,
-    growth: 12.5,
-  },
+    today: number
+    thisMonth: number
+    growth: number
+  }
   orders: {
-    today: 23,
-    pending: 5,
-    completed: 18,
-    total: 1247,
-  },
+    today: number
+    pending: number
+    completed: number
+    total: number
+  }
   customers: {
-    total: 892,
-    new: 12,
-    returning: 78,
-  },
+    total: number
+    new: number
+  }
   reservations: {
-    today: 15,
-    upcoming: 32,
-  },
+    today: number
+    upcoming: number
+  }
 }
 
-const recentOrders = [
-  {
-    id: "ORD-12345",
-    customer: "John Doe",
-    items: ["Sushi Platter", "Miso Soup"],
-    total: 34.99,
-    status: "preparing",
-    time: "10 mins ago",
-  },
-  {
-    id: "ORD-12346",
-    customer: "Sarah Johnson",
-    items: ["Teriyaki Salmon", "Green Tea"],
-    total: 28.5,
-    status: "ready",
-    time: "15 mins ago",
-  },
-  {
-    id: "ORD-12347",
-    customer: "Mike Chen",
-    items: ["Ramen Bowl", "Gyoza"],
-    total: 24.99,
-    status: "delivered",
-    time: "25 mins ago",
-  },
-]
-
-const upcomingReservations = [
-  {
-    id: "RES-001",
-    customer: "Emily Davis",
-    time: "7:30 PM",
-    guests: 4,
-    table: "Table 12",
-  },
-  {
-    id: "RES-002",
-    customer: "Robert Wilson",
-    time: "8:00 PM",
-    guests: 2,
-    table: "Table 5",
-  },
-  {
-    id: "RES-003",
-    customer: "Lisa Anderson",
-    time: "8:30 PM",
-    guests: 6,
-    table: "Table 8",
-  },
-]
+interface Order {
+  id: string
+  short_order_id?: string
+  customer_name: string
+  total_price: number
+  status: string
+  created_at: string
+  order_items: Array<{
+    item_name: string
+    quantity: number
+  }>
+}
 
 export default function Dashboard() {
+  const [stats, setStats] = useState<DashboardStats>({
+    revenue: { today: 0, thisMonth: 0, growth: 0 },
+    orders: { today: 0, pending: 0, completed: 0, total: 0 },
+    customers: { total: 0, new: 0 },
+    reservations: { today: 0, upcoming: 0 },
+  })
+  const [recentOrders, setRecentOrders] = useState<Order[]>([])
+  const [loading, setLoading] = useState(true)
+  const { notifications } = useNotificationSystem()
+
+  useEffect(() => {
+    fetchDashboardData()
+  }, [])
+
+  const fetchDashboardData = async () => {
+    try {
+      const ordersResponse = await fetch("/api/orders")
+      if (ordersResponse.ok) {
+        const orders = await ordersResponse.json()
+        setRecentOrders(orders.slice(0, 5)) // Show latest 5 orders
+
+        const today = new Date().toDateString()
+        const todayOrders = orders.filter((order: Order) => new Date(order.created_at).toDateString() === today)
+
+        const pendingOrders = orders.filter(
+          (order: Order) => order.status === "pending" || order.status === "confirmed",
+        )
+
+        const completedOrders = orders.filter((order: Order) => order.status === "delivered")
+
+        const todayRevenue = todayOrders.reduce((sum: number, order: Order) => sum + order.total_price, 0)
+
+        setStats({
+          revenue: {
+            today: todayRevenue,
+            thisMonth: orders.reduce((sum: number, order: Order) => sum + order.total_price, 0),
+            growth: 12.5, // This would be calculated based on historical data
+          },
+          orders: {
+            today: todayOrders.length,
+            pending: pendingOrders.length,
+            completed: completedOrders.length,
+            total: orders.length,
+          },
+          customers: {
+            total: new Set(orders.map((order: Order) => order.customer_name)).size,
+            new: 5, // This would come from user registration data
+          },
+          reservations: {
+            today: 0, // This would come from reservations API
+            upcoming: 0,
+          },
+        })
+      }
+    } catch (error) {
+      console.error("Error fetching dashboard data:", error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "preparing":
+      case "pending":
         return "bg-yellow-900/50 text-yellow-300"
+      case "confirmed":
+        return "bg-blue-900/50 text-blue-300"
+      case "preparing":
+        return "bg-orange-900/50 text-orange-300"
       case "ready":
         return "bg-green-900/50 text-green-300"
       case "delivered":
-        return "bg-blue-900/50 text-blue-300"
+        return "bg-gray-900/50 text-gray-300"
+      case "cancelled":
+        return "bg-red-900/50 text-red-300"
       default:
         return "bg-gray-900/50 text-gray-300"
     }
+  }
+
+  if (loading) {
+    return <div className="flex justify-center items-center h-64 text-white">Loading dashboard...</div>
   }
 
   return (
@@ -102,16 +136,17 @@ export default function Dashboard() {
           <h1 className="text-3xl font-serif font-bold text-white">Dashboard Overview</h1>
           <p className="text-gray-400 mt-1">Welcome back! Here's what's happening at Sushi Yaki today.</p>
         </div>
-        <div className="flex items-center gap-2 text-sm text-gray-400">
-          <Clock size={16} />
-          <span>
-            {new Date().toLocaleDateString("en-US", {
-              weekday: "long",
-              year: "numeric",
-              month: "long",
-              day: "numeric",
-            })}
-          </span>
+        <div className="flex items-center gap-4">
+          {notifications.length > 0 && (
+            <div className="flex items-center gap-2 bg-red-900/20 text-red-300 px-3 py-1 rounded-full">
+              <Bell size={16} />
+              <span className="text-sm">{notifications.length} notifications</span>
+            </div>
+          )}
+          <div className="flex items-center gap-2 text-sm text-gray-400">
+            <Clock size={16} />
+            <span>{getBangladeshTime()}</span>
+          </div>
         </div>
       </div>
 
@@ -123,9 +158,9 @@ export default function Dashboard() {
             <DollarSign className="h-4 w-4 text-gold" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-white">${dashboardData.revenue.today.toFixed(2)}</div>
+            <div className="text-2xl font-bold text-white">{formatBangladeshiTaka(stats.revenue.today)}</div>
             <div className="flex items-center text-xs text-green-400 mt-1">
-              <TrendingUp size={12} className="mr-1" />+{dashboardData.revenue.growth}% from yesterday
+              <TrendingUp size={12} className="mr-1" />+{stats.revenue.growth}% from yesterday
             </div>
           </CardContent>
         </Card>
@@ -136,9 +171,9 @@ export default function Dashboard() {
             <ShoppingBag className="h-4 w-4 text-gold" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-white">{dashboardData.orders.today}</div>
+            <div className="text-2xl font-bold text-white">{stats.orders.today}</div>
             <div className="text-xs text-gray-400 mt-1">
-              {dashboardData.orders.pending} pending • {dashboardData.orders.completed} completed
+              {stats.orders.pending} pending • {stats.orders.completed} completed
             </div>
           </CardContent>
         </Card>
@@ -149,8 +184,8 @@ export default function Dashboard() {
             <Users className="h-4 w-4 text-gold" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-white">{dashboardData.customers.total}</div>
-            <div className="text-xs text-gray-400 mt-1">{dashboardData.customers.new} new this week</div>
+            <div className="text-2xl font-bold text-white">{stats.customers.total}</div>
+            <div className="text-xs text-gray-400 mt-1">{stats.customers.new} new this week</div>
           </CardContent>
         </Card>
 
@@ -160,8 +195,8 @@ export default function Dashboard() {
             <Calendar className="h-4 w-4 text-gold" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-white">{dashboardData.reservations.today}</div>
-            <div className="text-xs text-gray-400 mt-1">{dashboardData.reservations.upcoming} upcoming this week</div>
+            <div className="text-2xl font-bold text-white">{stats.reservations.today}</div>
+            <div className="text-xs text-gray-400 mt-1">{stats.reservations.upcoming} upcoming this week</div>
           </CardContent>
         </Card>
       </div>
@@ -182,20 +217,30 @@ export default function Dashboard() {
                 <div key={order.id} className="flex items-center justify-between p-3 bg-gray-800/30 rounded-lg">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="font-medium text-white">{order.id}</span>
+                      <span className="font-medium text-white font-mono">
+                        {order.short_order_id || order.id.slice(0, 8)}
+                      </span>
                       <Badge className={getStatusColor(order.status)}>{order.status}</Badge>
                     </div>
-                    <p className="text-sm text-gray-400">{order.customer}</p>
-                    <p className="text-xs text-gray-500">{order.items.join(", ")}</p>
+                    <p className="text-sm text-gray-400">{order.customer_name}</p>
+                    <p className="text-xs text-gray-500">
+                      {order.order_items.map((item) => `${item.quantity}x ${item.item_name}`).join(", ")}
+                    </p>
                   </div>
                   <div className="text-right">
-                    <p className="font-medium text-gold">${order.total}</p>
-                    <p className="text-xs text-gray-400">{order.time}</p>
+                    <p className="font-medium text-gold">{formatBangladeshiTaka(order.total_price)}</p>
+                    <p className="text-xs text-gray-400">
+                      {new Date(order.created_at).toLocaleTimeString("en-US", {
+                        timeZone: "Asia/Dhaka",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </p>
                   </div>
                 </div>
               ))}
             </div>
-            <Button variant="outline" className="w-full mt-4">
+            <Button variant="outline" className="w-full mt-4 bg-transparent">
               View All Orders
             </Button>
           </CardContent>
@@ -211,24 +256,10 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {upcomingReservations.map((reservation) => (
-                <div key={reservation.id} className="flex items-center justify-between p-3 bg-gray-800/30 rounded-lg">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-medium text-white">{reservation.customer}</span>
-                      <Badge variant="outline" className="text-xs">
-                        {reservation.guests} guests
-                      </Badge>
-                    </div>
-                    <p className="text-sm text-gray-400">{reservation.table}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-medium text-gold">{reservation.time}</p>
-                  </div>
-                </div>
-              ))}
+              {/* Fetch real reservations data from API */}
+              {/* Placeholder for upcoming reservations data */}
             </div>
-            <Button variant="outline" className="w-full mt-4">
+            <Button variant="outline" className="w-full mt-4 bg-transparent">
               View All Reservations
             </Button>
           </CardContent>
@@ -242,19 +273,19 @@ export default function Dashboard() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Button variant="outline" className="h-20 flex flex-col gap-2">
+            <Button variant="outline" className="h-20 flex flex-col gap-2 bg-transparent">
               <ShoppingBag size={20} />
               <span>New Order</span>
             </Button>
-            <Button variant="outline" className="h-20 flex flex-col gap-2">
+            <Button variant="outline" className="h-20 flex flex-col gap-2 bg-transparent">
               <Calendar size={20} />
               <span>Add Reservation</span>
             </Button>
-            <Button variant="outline" className="h-20 flex flex-col gap-2">
+            <Button variant="outline" className="h-20 flex flex-col gap-2 bg-transparent">
               <Users size={20} />
               <span>Add Customer</span>
             </Button>
-            <Button variant="outline" className="h-20 flex flex-col gap-2">
+            <Button variant="outline" className="h-20 flex flex-col gap-2 bg-transparent">
               <BarChart3 size={20} />
               <span>View Reports</span>
             </Button>
