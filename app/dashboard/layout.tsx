@@ -18,12 +18,20 @@ export default function DashboardLayout({
   const router = useRouter()
 
   useEffect(() => {
+    console.log("[v0] Dashboard auth check:", {
+      user: user ? { email: user.email, role: user.role } : null,
+      loading,
+      isAdmin: user && (user.email === "admin@sushiyaki.com" || user.role === "admin"),
+    })
+
     if (!loading && (!user || (user.email !== "admin@sushiyaki.com" && user.role !== "admin"))) {
+      console.log("[v0] Redirecting to signin - not admin user")
       router.push("/signin?redirect=/dashboard")
     }
   }, [user, loading, router])
 
   if (loading) {
+    console.log("[v0] Dashboard loading...")
     return (
       <div className="flex min-h-screen items-center justify-center bg-darkBg">
         <LoadingSpinner />
@@ -32,9 +40,11 @@ export default function DashboardLayout({
   }
 
   if (!user || (user.email !== "admin@sushiyaki.com" && user.role !== "admin")) {
+    console.log("[v0] Dashboard access denied - redirecting to signin")
     return null
   }
 
+  console.log("[v0] Dashboard access granted for admin user")
   return (
     <SidebarProvider>
       <div className="flex min-h-screen bg-darkBg">

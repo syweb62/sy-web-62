@@ -66,7 +66,7 @@ const toFallbackProfile = (u: SupabaseUser): Profile => ({
   avatar_url: u.user_metadata?.avatar_url || "",
   phone: u.user_metadata?.phone || "",
   address: "",
-  role: "user",
+  role: u.email === "admin@sushiyaki.com" ? "admin" : "user",
   created_at: u.created_at,
   updated_at: u.updated_at || u.created_at,
 })
@@ -119,6 +119,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const profileWithName = {
             ...data,
             name: data.full_name || data.name || "User",
+            role: supabaseUser.email === "admin@sushiyaki.com" ? "admin" : data.role,
           }
           setUser(profileWithName)
           return profileWithName
@@ -131,7 +132,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           full_name: supabaseUser.user_metadata?.full_name || supabaseUser.user_metadata?.name || "New User",
           avatar_url: supabaseUser.user_metadata?.avatar_url || "",
           phone: supabaseUser.user_metadata?.phone || "",
-          role: "user" as const,
+          role: supabaseUser.email === "admin@sushiyaki.com" ? "admin" : ("user" as const),
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         }
@@ -260,6 +261,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           throw new Error("Invalid email format.")
         }
 
+        console.log("[v0] Attempting signin for:", email)
+
         const { data, error } = await withTimeout(
           supabase.auth.signInWithPassword({
             email: sanitizeInput(email),
@@ -269,6 +272,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         )
 
         if (error) {
+          console.error("[v0] Signin error:", error.message)
           if (error.message === "Email not confirmed") {
             throw new Error("Please confirm your email (check inbox) or contact support.")
           }
@@ -281,6 +285,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         if (data.session && data.user) {
+          console.log("[v0] Signin successful for:", data.user.email)
           setSession(data.session)
           await fetchUserProfile(data.user)
         }

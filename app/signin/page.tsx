@@ -103,14 +103,22 @@ export default function SignInPage() {
 
     try {
       if (isLogin) {
+        console.log("[v0] Attempting admin login with:", formData.email.trim().toLowerCase())
         await signIn(formData.email.trim().toLowerCase(), formData.password)
-        router.push("/")
+
+        if (formData.email.trim().toLowerCase() === "admin@sushiyaki.com") {
+          console.log("[v0] Admin login successful, redirecting to dashboard")
+          router.push("/dashboard")
+        } else {
+          console.log("[v0] Regular user login successful, redirecting to home")
+          router.push("/")
+        }
       } else {
         await signUp(formData.name.trim(), formData.email.trim().toLowerCase(), formData.password, formData.phone)
         router.push("/")
       }
     } catch (error) {
-      console.error("Authentication error:", error)
+      console.error("[v0] Authentication error:", error)
 
       if (error instanceof Error) {
         if (error.message.includes("Invalid login credentials")) {
