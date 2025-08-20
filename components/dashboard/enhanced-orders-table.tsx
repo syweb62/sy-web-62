@@ -31,7 +31,7 @@ export function EnhancedOrdersTable() {
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [loading, setLoading] = useState(true)
-  const { addNotification } = useNotificationSystem()
+  const { notifySystem } = useNotificationSystem()
 
   useEffect(() => {
     fetchOrders()
@@ -47,7 +47,7 @@ export function EnhancedOrdersTable() {
       }
     } catch (error) {
       console.error("Error fetching orders:", error)
-      addNotification("Error fetching orders", "error")
+      notifySystem("Error", "Failed to fetch orders", "high")
     } finally {
       setLoading(false)
     }
@@ -84,11 +84,11 @@ export function EnhancedOrdersTable() {
         setOrders((prev) =>
           prev.map((order) => (order.id === orderId ? { ...order, status: newStatus as any } : order)),
         )
-        addNotification(`Order status updated to ${newStatus}`, "success")
+        notifySystem("Success", `Order status updated to ${newStatus}`, "medium")
       }
     } catch (error) {
       console.error("Error updating order status:", error)
-      addNotification("Error updating order status", "error")
+      notifySystem("Error", "Failed to update order status", "high")
     }
   }
 

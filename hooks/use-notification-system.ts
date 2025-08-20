@@ -45,7 +45,6 @@ export function useNotificationSystem() {
     })
   }
 
-  // System notifications
   const notifySystem = (title: string, message: string, priority: "low" | "medium" | "high" = "medium") => {
     addNotification({
       type: "system",
