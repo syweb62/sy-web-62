@@ -6,6 +6,8 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { DollarSign, ShoppingBag, Users, TrendingUp, Calendar, Clock, Bell } from "lucide-react"
 import { useRouter } from "next/navigation"
+import { useRealtimeOrders } from "@/hooks/use-realtime-orders"
+import { useNotifications } from "@/context/notification-context"
 
 const safeFormatBangladeshiTaka = (amount: number): string => {
   try {
@@ -83,6 +85,9 @@ interface Reservation {
 
 export default function Dashboard() {
   const router = useRouter()
+  const { orders: allOrders, loading: ordersLoading } = useRealtimeOrders()
+  const { notifications, unreadCount } = useNotifications()
+
   const [stats, setStats] = useState<DashboardStats>({
     revenue: { today: 0, thisMonth: 0, growth: 0 },
     orders: { today: 0, pending: 0, completed: 0, total: 0 },
@@ -93,146 +98,127 @@ export default function Dashboard() {
   const [todayReservations, setTodayReservations] = useState<Reservation[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [notifications] = useState<any[]>([])
 
   useEffect(() => {
-    fetchDashboardData()
-  }, [])
+    if (!ordersLoading && allOrders.length >= 0) {
+      updateDashboardStats(allOrders)
+      fetchReservations()
+    }
+  }, [allOrders, ordersLoading])
 
-  const fetchDashboardData = async () => {
+  const updateDashboardStats = (orders: Order[]) => {
     try {
       setError(null)
-      console.log("[v0] Fetching dashboard data...")
+      console.log("[v0] Updating dashboard stats with real-time data...")
 
-      const [ordersResponse, reservationsResponse] = await Promise.all([
-        fetch("/api/orders"),
-        fetch("/api/reservations"),
-      ])
+      const safeOrders = orders.filter((order) => {
+        return order && typeof order === "object" && order.id && typeof order.total_price !== "undefined"
+      })
 
-      if (ordersResponse.ok) {
-        const ordersData = await ordersResponse.json()
+      setRecentOrders(safeOrders.slice(0, 5))
 
-        let orders: Order[] = []
-        if (Array.isArray(ordersData)) {
-          orders = ordersData
-        } else if (ordersData && typeof ordersData === "object") {
-          if (Array.isArray(ordersData.data)) {
-            orders = ordersData.data
-          } else if (Array.isArray(ordersData.orders)) {
-            orders = ordersData.orders
-          } else {
-            console.warn("[v0] Orders data structure unexpected:", ordersData)
-            orders = []
-          }
-        } else {
-          console.warn("[v0] Orders data is not valid:", ordersData)
-          orders = []
+      const today = new Date().toDateString()
+      const todayOrders = safeOrders.filter((order: Order) => {
+        try {
+          return order.created_at && new Date(order.created_at).toDateString() === today
+        } catch {
+          return false
         }
+      })
 
-        console.log("[v0] Dashboard orders data:", orders.length, "orders")
+      const pendingOrders = safeOrders.filter(
+        (order: Order) => order.status === "pending" || order.status === "confirmed",
+      )
 
-        const safeOrders = orders.filter((order) => {
-          return order && typeof order === "object" && order.id && typeof order.total_price !== "undefined"
-        })
+      const completedOrders = safeOrders.filter((order: Order) => order.status === "delivered")
 
-        setRecentOrders(safeOrders.slice(0, 5))
+      const todayRevenue = todayOrders.reduce((sum: number, order: Order) => {
+        const price = Number.parseFloat(String(order.total_price)) || 0
+        return sum + (isNaN(price) ? 0 : price)
+      }, 0)
 
-        const today = new Date().toDateString()
-        const todayOrders = safeOrders.filter((order: Order) => {
-          try {
-            return order.created_at && new Date(order.created_at).toDateString() === today
-          } catch {
-            return false
-          }
-        })
+      const totalRevenue = safeOrders.reduce((sum: number, order: Order) => {
+        const price = Number.parseFloat(String(order.total_price)) || 0
+        return sum + (isNaN(price) ? 0 : price)
+      }, 0)
 
-        const pendingOrders = safeOrders.filter(
-          (order: Order) => order.status === "pending" || order.status === "confirmed",
-        )
+      const uniqueCustomers = new Set(
+        safeOrders
+          .filter((order) => order.customer_name && typeof order.customer_name === "string")
+          .map((order: Order) => order.customer_name),
+      )
 
-        const completedOrders = safeOrders.filter((order: Order) => order.status === "delivered")
+      setStats((prev) => ({
+        ...prev,
+        revenue: {
+          today: todayRevenue,
+          thisMonth: totalRevenue,
+          growth: 12.5,
+        },
+        orders: {
+          today: todayOrders.length,
+          pending: pendingOrders.length,
+          completed: completedOrders.length,
+          total: safeOrders.length,
+        },
+        customers: {
+          total: uniqueCustomers.size,
+          new: 5,
+        },
+      }))
 
-        const todayRevenue = todayOrders.reduce((sum: number, order: Order) => {
-          const price = Number.parseFloat(String(order.total_price)) || 0
-          return sum + (isNaN(price) ? 0 : price)
-        }, 0)
-
-        const totalRevenue = safeOrders.reduce((sum: number, order: Order) => {
-          const price = Number.parseFloat(String(order.total_price)) || 0
-          return sum + (isNaN(price) ? 0 : price)
-        }, 0)
-
-        const uniqueCustomers = new Set(
-          safeOrders
-            .filter((order) => order.customer_name && typeof order.customer_name === "string")
-            .map((order: Order) => order.customer_name),
-        )
-
-        let reservations: Reservation[] = []
-        if (reservationsResponse.ok) {
-          const reservationsData = await reservationsResponse.json()
-          if (reservationsData.success && Array.isArray(reservationsData.reservations)) {
-            reservations = reservationsData.reservations
-          }
-        }
-
-        const todayReservationsFiltered = reservations.filter((reservation) => {
-          try {
-            return reservation.date === new Date().toISOString().split("T")[0]
-          } catch {
-            return false
-          }
-        })
-
-        const upcomingReservations = reservations.filter((reservation) => {
-          try {
-            const reservationDate = new Date(reservation.date)
-            const today = new Date()
-            const weekFromNow = new Date()
-            weekFromNow.setDate(today.getDate() + 7)
-            return reservationDate >= today && reservationDate <= weekFromNow
-          } catch {
-            return false
-          }
-        })
-
-        setTodayReservations(todayReservationsFiltered.slice(0, 5))
-
-        setStats({
-          revenue: {
-            today: todayRevenue,
-            thisMonth: totalRevenue,
-            growth: 12.5,
-          },
-          orders: {
-            today: todayOrders.length,
-            pending: pendingOrders.length,
-            completed: completedOrders.length,
-            total: safeOrders.length,
-          },
-          customers: {
-            total: uniqueCustomers.size,
-            new: 5,
-          },
-          reservations: {
-            today: todayReservationsFiltered.length,
-            upcoming: upcomingReservations.length,
-          },
-        })
-      } else {
-        const errorMsg = `Failed to fetch orders: ${ordersResponse.status}`
-        console.error("[v0]", errorMsg)
-        setError(errorMsg)
-        setRecentOrders([])
-      }
+      setLoading(false)
     } catch (error) {
-      const errorMsg = `Error fetching dashboard data: ${error instanceof Error ? error.message : String(error)}`
+      const errorMsg = `Error updating dashboard stats: ${error instanceof Error ? error.message : String(error)}`
       console.error("[v0]", errorMsg)
       setError(errorMsg)
-      setRecentOrders([])
-      setTodayReservations([])
-    } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchReservations = async () => {
+    try {
+      const reservationsResponse = await fetch("/api/reservations")
+
+      let reservations: Reservation[] = []
+      if (reservationsResponse.ok) {
+        const reservationsData = await reservationsResponse.json()
+        if (reservationsData.success && Array.isArray(reservationsData.reservations)) {
+          reservations = reservationsData.reservations
+        }
+      }
+
+      const todayReservationsFiltered = reservations.filter((reservation) => {
+        try {
+          return reservation.date === new Date().toISOString().split("T")[0]
+        } catch {
+          return false
+        }
+      })
+
+      const upcomingReservations = reservations.filter((reservation) => {
+        try {
+          const reservationDate = new Date(reservation.date)
+          const today = new Date()
+          const weekFromNow = new Date()
+          weekFromNow.setDate(today.getDate() + 7)
+          return reservationDate >= today && reservationDate <= weekFromNow
+        } catch {
+          return false
+        }
+      })
+
+      setTodayReservations(todayReservationsFiltered.slice(0, 5))
+
+      setStats((prev) => ({
+        ...prev,
+        reservations: {
+          today: todayReservationsFiltered.length,
+          upcoming: upcomingReservations.length,
+        },
+      }))
+    } catch (error) {
+      console.error("[v0] Error fetching reservations:", error)
     }
   }
 
@@ -263,7 +249,7 @@ export default function Dashboard() {
     return (
       <div className="flex flex-col justify-center items-center h-64 text-white">
         <p className="text-red-400 mb-4">Error loading dashboard: {error}</p>
-        <Button onClick={fetchDashboardData} variant="outline">
+        <Button onClick={() => updateDashboardStats(allOrders)} variant="outline">
           Try Again
         </Button>
       </div>
@@ -279,10 +265,10 @@ export default function Dashboard() {
           <p className="text-gray-400 mt-1">Welcome back! Here's what's happening at Sushi Yaki today.</p>
         </div>
         <div className="flex items-center gap-4">
-          {notifications.length > 0 && (
+          {unreadCount > 0 && (
             <div className="flex items-center gap-2 bg-red-900/20 text-red-300 px-3 py-1 rounded-full">
               <Bell size={16} />
-              <span className="text-sm">{notifications.length} notifications</span>
+              <span className="text-sm">{unreadCount} notifications</span>
             </div>
           )}
           <div className="flex items-center gap-2 text-sm text-gray-400">

@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Clock, Search, Filter, Printer, Eye } from "lucide-react"
 import { useNotificationSystem } from "@/hooks/use-notification-system"
+import { useRealtimeOrders } from "@/hooks/use-realtime-orders"
 import { formatBangladeshiTaka } from "@/lib/bangladesh-utils"
 
 interface Order {
@@ -15,7 +16,7 @@ interface Order {
   short_order_id?: string
   customer_name: string
   phone: string
-  address: string // Added address field
+  address: string
   total_price: number
   status: "pending" | "confirmed" | "preparing" | "ready" | "delivered" | "cancelled"
   created_at: string
@@ -27,17 +28,12 @@ interface Order {
 }
 
 export function EnhancedOrdersTable() {
-  const [orders, setOrders] = useState<Order[]>([])
+  const { orders, loading } = useRealtimeOrders()
   const [filteredOrders, setFilteredOrders] = useState<Order[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("all")
-  const [loading, setLoading] = useState(true)
-  const [timers, setTimers] = useState<{ [key: string]: number }>({}) // Added timer state
+  const [timers, setTimers] = useState<{ [key: string]: number }>({})
   const { notifySystem } = useNotificationSystem()
-
-  useEffect(() => {
-    fetchOrders()
-  }, [])
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -47,7 +43,7 @@ export function EnhancedOrdersTable() {
           if (order.status === "confirmed" || order.status === "preparing") {
             const created = new Date(order.created_at)
             const now = new Date()
-            const twentyMinutes = 20 * 60 * 1000 // 20 minutes in milliseconds
+            const twentyMinutes = 20 * 60 * 1000
             const elapsed = now.getTime() - created.getTime()
             const remaining = twentyMinutes - elapsed
             newTimers[order.id] = remaining
@@ -56,7 +52,6 @@ export function EnhancedOrdersTable() {
               notifySystem("Timer Alert", `Order ${order.short_order_id || order.id.slice(0, 8)} is overdue!`, "high")
             }
           } else {
-            // Clear timer for completed orders
             delete newTimers[order.id]
           }
         })
@@ -66,22 +61,6 @@ export function EnhancedOrdersTable() {
 
     return () => clearInterval(interval)
   }, [orders, notifySystem])
-
-  const fetchOrders = async () => {
-    try {
-      const response = await fetch("/api/orders")
-      if (response.ok) {
-        const data = await response.json()
-        setOrders(data)
-        setFilteredOrders(data)
-      }
-    } catch (error) {
-      console.error("Error fetching orders:", error)
-      notifySystem("Error", "Failed to fetch orders", "high")
-    } finally {
-      setLoading(false)
-    }
-  }
 
   useEffect(() => {
     let filtered = orders
@@ -116,12 +95,7 @@ export function EnhancedOrdersTable() {
       console.log("[v0] Status update response:", result)
 
       if (response.ok) {
-        setOrders((prev) =>
-          prev.map((order) => (order.id === orderId ? { ...order, status: newStatus as any } : order)),
-        )
         notifySystem("Success", `Order status updated to ${newStatus}`, "medium")
-
-        setTimeout(() => fetchOrders(), 1000)
       } else {
         throw new Error(result.error || "Failed to update order status")
       }
