@@ -5,10 +5,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Search, Users, UserCheck, UserX, Phone, MapPin } from "lucide-react"
-import { supabase } from "@/lib/supabase"
-import { toast } from "@/hooks/use-toast"
-import { LoadingSpinner } from "@/components/loading-spinner"
+import { Search, Users, UserCheck, UserX, Phone, MapPin, RefreshCw } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { createClient } from "@/lib/supabase"
+import { useToast } from "@/hooks/use-toast"
 
 interface Customer {
   id: string
@@ -28,6 +28,7 @@ export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
+  const { toast } = useToast()
 
   useEffect(() => {
     fetchCustomers()
@@ -35,7 +36,11 @@ export default function CustomersPage() {
 
   const fetchCustomers = async () => {
     try {
+      setLoading(true)
       console.log("[v0] Fetching customers from database...")
+
+      const supabase = createClient()
+
       const { data: profiles, error } = await supabase
         .from("profiles")
         .select(`
@@ -60,10 +65,11 @@ export default function CustomersPage() {
       const customersWithStats = await Promise.all(
         (profiles || []).map(async (profile) => {
           try {
+            // Query orders by customer_name and phone since there's no user_id field
             const { data: orders, error: ordersError } = await supabase
               .from("orders")
-              .select("total_price, created_at")
-              .eq("user_id", profile.id)
+              .select("total_price, created_at, customer_name, phone")
+              .or(`customer_name.eq.${profile.full_name || ""},phone.eq.${profile.phone || ""}`)
               .order("created_at", { ascending: false })
 
             if (ordersError) {
@@ -98,7 +104,7 @@ export default function CustomersPage() {
       console.error("[v0] Error in fetchCustomers:", error)
       toast({
         title: "Error",
-        description: "Failed to load customers",
+        description: "Failed to load customers. Please try again.",
         variant: "destructive",
       })
     } finally {
@@ -140,7 +146,7 @@ export default function CustomersPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-96">
-        <LoadingSpinner />
+        <div className="text-white">Loading customers...</div>
       </div>
     )
   }
@@ -153,6 +159,15 @@ export default function CustomersPage() {
           <h1 className="text-3xl font-serif font-bold text-white">Customer Management</h1>
           <p className="text-gray-400 mt-1">Manage customer accounts and view their activity</p>
         </div>
+        <Button
+          variant="outline"
+          onClick={fetchCustomers}
+          disabled={loading}
+          className="bg-gray-800/50 border-gray-700"
+        >
+          <RefreshCw size={16} className={`mr-2 ${loading ? "animate-spin" : ""}`} />
+          Refresh
+        </Button>
       </div>
 
       {/* Stats Cards */}
@@ -250,7 +265,7 @@ export default function CustomersPage() {
                 {filteredCustomers.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center text-gray-400 py-8">
-                      No customers found
+                      {searchTerm ? "No customers found matching your search" : "No customers found"}
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -262,7 +277,7 @@ export default function CustomersPage() {
                             {customer.avatar_url ? (
                               <img
                                 src={customer.avatar_url || "/placeholder.svg"}
-                                alt={customer.full_name}
+                                alt={customer.full_name || "Customer"}
                                 className="h-10 w-10 rounded-full object-cover"
                               />
                             ) : (

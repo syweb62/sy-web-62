@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Clock, Search, Filter, Printer, Eye } from "lucide-react"
-import { useNotificationSystem } from "@/hooks/use-notification-system"
+import { useNotifications } from "@/context/notification-context"
 import { useRealtimeOrders } from "@/hooks/use-realtime-orders"
 import { formatBangladeshiTaka } from "@/lib/bangladesh-utils"
 
@@ -27,13 +27,37 @@ interface Order {
   }>
 }
 
-export function EnhancedOrdersTable() {
-  const { orders, loading } = useRealtimeOrders()
+interface EnhancedOrdersTableProps {
+  orders?: Order[]
+  loading?: boolean
+  onRefresh?: () => void
+  onStatusUpdate?: (orderId: string, status: string) => void
+}
+
+export function EnhancedOrdersTable({
+  orders: propOrders,
+  loading: propLoading,
+  onRefresh,
+  onStatusUpdate,
+}: EnhancedOrdersTableProps) {
+  const { orders: realtimeOrders, loading: realtimeLoading } = useRealtimeOrders()
+  const orders = propOrders || realtimeOrders
+  const loading = propLoading !== undefined ? propLoading : realtimeLoading
+
   const [filteredOrders, setFilteredOrders] = useState<Order[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [timers, setTimers] = useState<{ [key: string]: number }>({})
-  const { notifySystem } = useNotificationSystem()
+  const { addNotification } = useNotifications()
+
+  const notifySystem = (title: string, message: string, priority: "low" | "medium" | "high") => {
+    addNotification({
+      type: "info",
+      title,
+      message,
+      priority,
+    })
+  }
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -60,7 +84,7 @@ export function EnhancedOrdersTable() {
     }, 1000)
 
     return () => clearInterval(interval)
-  }, [orders, notifySystem])
+  }, [orders])
 
   useEffect(() => {
     let filtered = orders
@@ -83,7 +107,7 @@ export function EnhancedOrdersTable() {
 
   const updateOrderStatus = async (orderId: string, newStatus: string) => {
     try {
-      console.log("[v0] Updating order status:", { orderId, newStatus })
+      console.log("[v0] Enhanced table updating order status:", { orderId, newStatus })
 
       const response = await fetch(`/api/orders/${orderId}`, {
         method: "PATCH",
@@ -92,15 +116,18 @@ export function EnhancedOrdersTable() {
       })
 
       const result = await response.json()
-      console.log("[v0] Status update response:", result)
+      console.log("[v0] Enhanced table status update response:", result)
 
       if (response.ok) {
         notifySystem("Success", `Order status updated to ${newStatus}`, "medium")
+        if (onStatusUpdate) {
+          onStatusUpdate(orderId, newStatus)
+        }
       } else {
         throw new Error(result.error || "Failed to update order status")
       }
     } catch (error) {
-      console.error("[v0] Error updating order status:", error)
+      console.error("[v0] Enhanced table error updating order status:", error)
       notifySystem("Error", "Failed to update order status", "high")
     }
   }

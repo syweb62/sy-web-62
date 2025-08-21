@@ -1,4 +1,4 @@
-import { createClient, type User } from "@supabase/supabase-js"
+import { createClient as createSupabaseClient, type User } from "@supabase/supabase-js"
 
 // Environment variables with fallbacks
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://pjoelkxkcwtzmbyswfhu.supabase.co"
@@ -10,8 +10,26 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error("Missing required Supabase environment variables")
 }
 
+export function createClient() {
+  return createSupabaseClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+    },
+    db: {
+      schema: "public",
+    },
+    global: {
+      headers: {
+        "X-Client-Timezone": "Asia/Dhaka",
+      },
+    },
+  })
+}
+
 // Create a single supabase client for interacting with your database
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+export const supabase = createSupabaseClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,

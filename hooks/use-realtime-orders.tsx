@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { supabase } from "@/lib/supabase"
+import { createClient } from "@/lib/supabase"
 import { useNotifications } from "@/context/notification-context"
 
 interface Order {
@@ -27,13 +27,17 @@ export function useRealtimeOrders() {
 
   const fetchOrders = useCallback(async () => {
     try {
+      console.log("[v0] Fetching orders from API...")
       const response = await fetch("/api/orders")
       if (response.ok) {
         const data = await response.json()
-        setOrders(data)
+        console.log("[v0] Orders API response:", data)
+        setOrders(data.orders || [])
+      } else {
+        console.error("[v0] Failed to fetch orders:", response.status)
       }
     } catch (error) {
-      console.error("Error fetching orders:", error)
+      console.error("[v0] Error fetching orders:", error)
     } finally {
       setLoading(false)
     }
@@ -41,6 +45,8 @@ export function useRealtimeOrders() {
 
   useEffect(() => {
     fetchOrders()
+
+    const supabase = createClient()
 
     const ordersSubscription = supabase
       .channel("orders-changes")
@@ -55,25 +61,23 @@ export function useRealtimeOrders() {
           console.log("[v0] Real-time order change:", payload)
 
           if (payload.eventType === "INSERT") {
-            // New order notification
             addNotification({
-              type: "order",
+              type: "info",
               title: "New Order Received",
-              message: `Order from ${payload.new.customer_name}`,
+              message: `Order from ${payload.new.customer_name || "Customer"}`,
               priority: "high",
-              data: payload.new,
             })
 
             // Refresh orders list
             fetchOrders()
           } else if (payload.eventType === "UPDATE") {
-            // Order status update
             setOrders((prev) =>
-              prev.map((order) => (order.id === payload.new.id ? { ...order, ...payload.new } : order)),
+              prev.map((order) =>
+                order.id === payload.new.order_id ? { ...order, status: payload.new.status, ...payload.new } : order,
+              ),
             )
           } else if (payload.eventType === "DELETE") {
-            // Order deleted
-            setOrders((prev) => prev.filter((order) => order.id !== payload.old.id))
+            setOrders((prev) => prev.filter((order) => order.id !== payload.old.order_id))
           }
         },
       )
@@ -89,6 +93,7 @@ export function useRealtimeOrders() {
           table: "order_items",
         },
         () => {
+          console.log("[v0] Order items changed, refreshing orders...")
           // Refresh orders when items change
           fetchOrders()
         },
@@ -96,6 +101,7 @@ export function useRealtimeOrders() {
       .subscribe()
 
     return () => {
+      console.log("[v0] Cleaning up real-time subscriptions...")
       ordersSubscription.unsubscribe()
       orderItemsSubscription.unsubscribe()
     }
