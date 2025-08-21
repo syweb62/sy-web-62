@@ -13,6 +13,7 @@ import { toast } from "@/hooks/use-toast"
 import { LoadingSpinner } from "@/components/loading-spinner"
 import { DatePickerWithRange } from "@/components/ui/date-picker"
 import type { DateRange } from "react-day-picker"
+import { jsPDF } from "jspdf"
 
 interface AnalyticsData {
   revenue: {
@@ -246,45 +247,140 @@ export default function AnalyticsPage() {
     fetchAnalyticsData()
   }
 
-  const exportData = () => {
+  const exportData = async () => {
     if (!data) return
 
     try {
-      const exportData = {
-        dateRange: customDateRange
-          ? `${customDateRange.from?.toISOString()} - ${customDateRange.to?.toISOString()}`
-          : dateRange,
-        generatedAt: new Date().toISOString(),
-        data,
+      // Fetch menu items with categories for proper categorization
+      const { data: menuItems, error: menuError } = await supabase.from("menu_items").select("name, category")
+
+      if (menuError) throw menuError
+
+      // Create category mapping
+      const categoryMap =
+        menuItems?.reduce(
+          (acc, item) => {
+            acc[item.name] = item.category || "Other"
+            return acc
+          },
+          {} as Record<string, string>,
+        ) || {}
+
+      // Group items by category
+      const categorizedItems = data.topItems.reduce(
+        (acc, item) => {
+          const category = categoryMap[item.name] || "Other"
+          if (!acc[category]) {
+            acc[category] = []
+          }
+          acc[category].push(item)
+          return acc
+        },
+        {} as Record<string, typeof data.topItems>,
+      )
+
+      // Calculate category totals
+      const categoryTotals = Object.entries(categorizedItems).map(([category, items]) => ({
+        category,
+        totalItems: items.reduce((sum, item) => sum + item.orders, 0),
+        totalRevenue: items.reduce((sum, item) => sum + item.revenue, 0),
+        items,
+      }))
+
+      // Generate PDF content using jsPDF
+      const doc = new jsPDF()
+
+      // PDF Header
+      doc.setFontSize(20)
+      doc.setFont("helvetica", "bold")
+      doc.text("Category-wise Item Sales Report", 20, 30)
+
+      doc.setFontSize(12)
+      doc.setFont("helvetica", "normal")
+      doc.text(`Generated: ${new Date().toLocaleDateString()}`, 20, 45)
+      doc.text(
+        `Period: ${customDateRange ? `${customDateRange.from?.toLocaleDateString()} - ${customDateRange.to?.toLocaleDateString()}` : dateRange}`,
+        20,
+        55,
+      )
+
+      let yPosition = 75
+
+      // Generate category-wise breakdown
+      categoryTotals.forEach((categoryData) => {
+        // Category header
+        doc.setFontSize(16)
+        doc.setFont("helvetica", "bold")
+        doc.text(`${categoryData.category.toUpperCase()} ITEMS -`, 20, yPosition)
+        yPosition += 15
+
+        // Category items
+        doc.setFontSize(11)
+        doc.setFont("helvetica", "normal")
+
+        categoryData.items.forEach((item) => {
+          const itemText = `${item.name.toLowerCase()}`
+          const quantityText = `${item.orders}p`
+          const revenueText = `৳${item.revenue.toFixed(0)}/-`
+
+          doc.text(itemText, 30, yPosition)
+          doc.text("-", 120, yPosition)
+          doc.text(quantityText, 130, yPosition)
+          doc.text("-", 160, yPosition)
+          doc.text(revenueText, 170, yPosition)
+          yPosition += 10
+        })
+
+        // Category total
+        doc.setFont("helvetica", "bold")
+        doc.text("_".repeat(50), 30, yPosition)
+        yPosition += 8
+        doc.text(`Total = ${categoryData.totalItems}p`, 30, yPosition)
+        doc.text("-", 160, yPosition)
+        doc.text(`৳${categoryData.totalRevenue.toFixed(0)}/-`, 170, yPosition)
+        yPosition += 20
+
+        // Check if we need a new page
+        if (yPosition > 250) {
+          doc.addPage()
+          yPosition = 30
+        }
+      })
+
+      // Add summary at the end
+      if (yPosition > 200) {
+        doc.addPage()
+        yPosition = 30
       }
 
-      const csvContent = [
-        ["Metric", "Value"],
-        ["Total Revenue", `৳${data.revenue.total.toFixed(2)}`],
-        ["Total Orders", data.orders.total.toString()],
-        ["Total Customers", data.customers.total.toString()],
-        ["Average Order Value", `৳${data.performance.avgOrderValue.toFixed(2)}`],
-        ["Customer Lifetime Value", `৳${data.performance.customerLifetimeValue.toFixed(2)}`],
-        ...data.topItems.map((item) => [`${item.name} (Orders)`, item.orders.toString()]),
-        ...data.topItems.map((item) => [`${item.name} (Revenue)`, `৳${item.revenue.toFixed(2)}`]),
-      ]
-        .map((row) => row.join(","))
-        .join("\n")
+      doc.setFontSize(14)
+      doc.setFont("helvetica", "bold")
+      doc.text("SUMMARY", 20, yPosition)
+      yPosition += 15
 
-      const blob = new Blob([csvContent], { type: "text/csv" })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement("a")
-      a.href = url
-      a.download = `sushi-yaki-analytics-${new Date().toISOString().split("T")[0]}.csv`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
+      doc.setFontSize(11)
+      doc.setFont("helvetica", "normal")
+      doc.text(`Total Revenue: ৳${data.revenue.total.toFixed(2)}`, 20, yPosition)
+      yPosition += 10
+      doc.text(`Total Orders: ${data.orders.total}`, 20, yPosition)
+      yPosition += 10
+      doc.text(`Total Customers: ${data.customers.total}`, 20, yPosition)
+      yPosition += 10
+      doc.text(`Average Order Value: ৳${data.performance.avgOrderValue.toFixed(2)}`, 20, yPosition)
+
+      // Save the PDF
+      const fileName = `sushi-yaki-category-sales-${new Date().toISOString().split("T")[0]}.pdf`
+      doc.save(fileName)
+
+      toast({
+        title: "Export Successful",
+        description: "Category-wise sales report has been downloaded as PDF",
+      })
     } catch (error) {
       console.error("Export failed:", error)
       toast({
         title: "Export Failed",
-        description: "Failed to export analytics data",
+        description: "Failed to export analytics data. Please try again.",
         variant: "destructive",
       })
     }
@@ -339,7 +435,7 @@ export default function AnalyticsPage() {
           </Button>
           <Button onClick={exportData} className="bg-gold text-black hover:bg-gold/80">
             <Download size={16} className="mr-2" />
-            Export CSV
+            Export PDF
           </Button>
         </div>
       </div>

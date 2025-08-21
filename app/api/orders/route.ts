@@ -50,7 +50,21 @@ export async function GET(request: NextRequest) {
     const formattedOrders =
       orders?.map((order) => ({
         id: order.order_id,
-        short_order_id: order.short_order_id, // Added short_order_id to response
+        short_order_id: order.short_order_id,
+        customer_name: order.customer_name || "Guest",
+        phone: order.phone || "N/A",
+        address: order.address || "No address provided",
+        total_price: order.total_price,
+        status: order.status,
+        created_at: order.created_at,
+        order_items:
+          order.order_items?.map((item: any) => ({
+            item_name: item.item_name,
+            quantity: item.quantity,
+            price_at_purchase: item.price_at_purchase,
+          })) || [],
+        payment_method: order.payment_method || "cash",
+        message: order.message,
         customer: order.customer_name || "Guest",
         email: order.phone || "N/A",
         items:
@@ -59,17 +73,10 @@ export async function GET(request: NextRequest) {
             quantity: item.quantity,
             price: item.price_at_purchase,
           })) || [],
-        total_price: order.total_price,
-        status: order.status,
-        created_at: order.created_at, // Raw UTC timestamp for client-side conversion
         order_type: "delivery",
-        payment_method: order.payment_method || "cash",
-        address: order.address,
-        phone: order.phone,
-        message: order.message,
       })) || []
 
-    return NextResponse.json({ orders: formattedOrders })
+    return NextResponse.json(formattedOrders)
   } catch (error) {
     console.error("Orders API error:", error)
     return NextResponse.json(

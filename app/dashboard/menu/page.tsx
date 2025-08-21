@@ -152,7 +152,7 @@ export default function MenuManagementPage() {
         <Link href="/dashboard/menu/new">
           <Button className="bg-gold text-black hover:bg-gold/80">
             <Plus size={16} className="mr-2" />
-            Add Menu Item
+            Add New Item
           </Button>
         </Link>
       </div>
@@ -265,12 +265,6 @@ export default function MenuManagementPage() {
               <h3 className="text-lg font-medium mb-2">No menu items found</h3>
               <p>Try adjusting your search criteria or add a new menu item.</p>
             </div>
-            <Link href="/dashboard/menu/new">
-              <Button className="bg-gold text-black hover:bg-gold/80">
-                <Plus size={16} className="mr-2" />
-                Add Menu Item
-              </Button>
-            </Link>
           </CardContent>
         </Card>
       )}

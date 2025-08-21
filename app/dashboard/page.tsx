@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { DollarSign, ShoppingBag, Users, TrendingUp, Calendar, Clock, Bell } from "lucide-react"
+import { useRouter } from "next/navigation"
 
 const safeFormatBangladeshiTaka = (amount: number): string => {
   try {
@@ -67,7 +68,21 @@ interface Order {
   }>
 }
 
+interface Reservation {
+  reservation_id: string
+  name: string
+  phone: string
+  date: string
+  time: string
+  people_count: number
+  status: string
+  table: string
+  notes: string
+  created_at: string
+}
+
 export default function Dashboard() {
+  const router = useRouter()
   const [stats, setStats] = useState<DashboardStats>({
     revenue: { today: 0, thisMonth: 0, growth: 0 },
     orders: { today: 0, pending: 0, completed: 0, total: 0 },
@@ -75,6 +90,7 @@ export default function Dashboard() {
     reservations: { today: 0, upcoming: 0 },
   })
   const [recentOrders, setRecentOrders] = useState<Order[]>([])
+  const [todayReservations, setTodayReservations] = useState<Reservation[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [notifications] = useState<any[]>([])
@@ -88,7 +104,11 @@ export default function Dashboard() {
       setError(null)
       console.log("[v0] Fetching dashboard data...")
 
-      const ordersResponse = await fetch("/api/orders")
+      const [ordersResponse, reservationsResponse] = await Promise.all([
+        fetch("/api/orders"),
+        fetch("/api/reservations"),
+      ])
+
       if (ordersResponse.ok) {
         const ordersData = await ordersResponse.json()
 
@@ -148,6 +168,36 @@ export default function Dashboard() {
             .map((order: Order) => order.customer_name),
         )
 
+        let reservations: Reservation[] = []
+        if (reservationsResponse.ok) {
+          const reservationsData = await reservationsResponse.json()
+          if (reservationsData.success && Array.isArray(reservationsData.reservations)) {
+            reservations = reservationsData.reservations
+          }
+        }
+
+        const todayReservationsFiltered = reservations.filter((reservation) => {
+          try {
+            return reservation.date === new Date().toISOString().split("T")[0]
+          } catch {
+            return false
+          }
+        })
+
+        const upcomingReservations = reservations.filter((reservation) => {
+          try {
+            const reservationDate = new Date(reservation.date)
+            const today = new Date()
+            const weekFromNow = new Date()
+            weekFromNow.setDate(today.getDate() + 7)
+            return reservationDate >= today && reservationDate <= weekFromNow
+          } catch {
+            return false
+          }
+        })
+
+        setTodayReservations(todayReservationsFiltered.slice(0, 5))
+
         setStats({
           revenue: {
             today: todayRevenue,
@@ -165,8 +215,8 @@ export default function Dashboard() {
             new: 5,
           },
           reservations: {
-            today: 0,
-            upcoming: 0,
+            today: todayReservationsFiltered.length,
+            upcoming: upcomingReservations.length,
           },
         })
       } else {
@@ -180,6 +230,7 @@ export default function Dashboard() {
       console.error("[v0]", errorMsg)
       setError(errorMsg)
       setRecentOrders([])
+      setTodayReservations([])
     } finally {
       setLoading(false)
     }
@@ -349,13 +400,17 @@ export default function Dashboard() {
                 </div>
               )}
             </div>
-            <Button variant="outline" className="w-full mt-4 bg-transparent">
+            <Button
+              variant="outline"
+              className="w-full mt-4 bg-transparent"
+              onClick={() => router.push("/dashboard/orders")}
+            >
               View All Orders
             </Button>
           </CardContent>
         </Card>
 
-        {/* Upcoming Reservations */}
+        {/* Today's Reservations */}
         <Card className="bg-black/30 border-gray-800">
           <CardHeader>
             <CardTitle className="text-white flex items-center gap-2">
@@ -365,10 +420,40 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {/* Fetch real reservations data from API */}
-              {/* Placeholder for upcoming reservations data */}
+              {todayReservations.length > 0 ? (
+                todayReservations.map((reservation) => (
+                  <div
+                    key={reservation.reservation_id}
+                    className="flex items-center justify-between p-3 bg-gray-800/30 rounded-lg"
+                  >
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-medium text-white">{reservation.name}</span>
+                        <Badge className={getStatusColor(reservation.status)}>{reservation.status}</Badge>
+                      </div>
+                      <p className="text-sm text-gray-400">{reservation.phone}</p>
+                      <p className="text-xs text-gray-500">
+                        {reservation.people_count} guests • Table {reservation.table}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-medium text-gold">{reservation.time}</p>
+                      <p className="text-xs text-gray-400">{reservation.date}</p>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-8 text-gray-400">
+                  <Calendar size={48} className="mx-auto mb-4 opacity-50" />
+                  <p>No reservations today</p>
+                </div>
+              )}
             </div>
-            <Button variant="outline" className="w-full mt-4 bg-transparent">
+            <Button
+              variant="outline"
+              className="w-full mt-4 bg-transparent"
+              onClick={() => router.push("/dashboard/reservations")}
+            >
               View All Reservations
             </Button>
           </CardContent>

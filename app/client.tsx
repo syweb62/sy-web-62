@@ -20,6 +20,7 @@ import { Suspense, useEffect } from "react"
 import LoadingFallback from "@/components/loading-fallback"
 import { performanceMonitor } from "@/lib/performance-monitor"
 import { Toaster } from "sonner"
+import { usePathname } from "next/navigation"
 
 const playfair = Playfair_Display({
   subsets: ["latin"],
@@ -43,6 +44,9 @@ export default function ClientComponent({
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  const pathname = usePathname()
+  const isDashboardPage = pathname?.startsWith("/dashboard")
+
   useEffect(() => {
     // Initialize performance monitoring
     performanceMonitor.init()
@@ -101,17 +105,21 @@ export default function ClientComponent({
                         Skip to main content
                       </a>
 
-                      <Suspense fallback={<div className="h-16 bg-slate-900" />}>
-                        <Navbar />
-                      </Suspense>
+                      {!isDashboardPage && (
+                        <Suspense fallback={<div className="h-16 bg-slate-900" />}>
+                          <Navbar />
+                        </Suspense>
+                      )}
 
                       <main className="flex-1" id="main-content" role="main">
                         <Suspense fallback={<LoadingFallback />}>{children}</Suspense>
                       </main>
 
-                      <Suspense fallback={<div className="h-32 bg-slate-900" />}>
-                        <Footer />
-                      </Suspense>
+                      {!isDashboardPage && (
+                        <Suspense fallback={<div className="h-32 bg-slate-900" />}>
+                          <Footer />
+                        </Suspense>
+                      )}
                     </div>
 
                     {/* Scroll to Top Button */}

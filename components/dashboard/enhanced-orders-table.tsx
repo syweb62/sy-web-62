@@ -15,6 +15,7 @@ interface Order {
   short_order_id?: string
   customer_name: string
   phone: string
+  address: string // Added address field
   total_price: number
   status: "pending" | "confirmed" | "preparing" | "ready" | "delivered" | "cancelled"
   created_at: string
@@ -31,11 +32,33 @@ export function EnhancedOrdersTable() {
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [loading, setLoading] = useState(true)
+  const [timers, setTimers] = useState<{ [key: string]: number }>({}) // Added timer state
   const { notifySystem } = useNotificationSystem()
 
   useEffect(() => {
     fetchOrders()
   }, [])
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTimers((prev) => {
+        const newTimers = { ...prev }
+        orders.forEach((order) => {
+          if (order.status === "confirmed" || order.status === "preparing") {
+            const created = new Date(order.created_at)
+            const now = new Date()
+            const twentyMinutes = 20 * 60 * 1000
+            const elapsed = now.getTime() - created.getTime()
+            const remaining = twentyMinutes - elapsed
+            newTimers[order.id] = remaining
+          }
+        })
+        return newTimers
+      })
+    }, 1000)
+
+    return () => clearInterval(interval)
+  }, [orders])
 
   const fetchOrders = async () => {
     try {
@@ -92,18 +115,68 @@ export function EnhancedOrdersTable() {
     }
   }
 
-  const getTimeRemaining = (createdAt: string) => {
-    const created = new Date(createdAt)
-    const now = new Date()
-    const twentyMinutes = 20 * 60 * 1000
-    const elapsed = now.getTime() - created.getTime()
-    const remaining = twentyMinutes - elapsed
+  const getTimeRemaining = (orderId: string) => {
+    const remaining = timers[orderId] || 0
 
-    if (remaining <= 0) return "Overdue"
+    if (remaining <= 0) {
+      const overdue = Math.abs(remaining)
+      const minutes = Math.floor(overdue / 60000)
+      const seconds = Math.floor((overdue % 60000) / 1000)
+      return `-${minutes}:${seconds.toString().padStart(2, "0")}`
+    }
 
     const minutes = Math.floor(remaining / 60000)
     const seconds = Math.floor((remaining % 60000) / 1000)
     return `${minutes}:${seconds.toString().padStart(2, "0")}`
+  }
+
+  const handlePrint = (order: Order) => {
+    const printContent = `
+      SUSHI YAKI RESTAURANT
+      =====================
+      Order ID: ${order.short_order_id || order.id.slice(0, 8)}
+      Date: ${new Date(order.created_at).toLocaleString()}
+      
+      Customer: ${order.customer_name}
+      Phone: ${order.phone}
+      Address: ${order.address}
+      
+      ITEMS:
+      ${order.order_items
+        .map(
+          (item) =>
+            `${item.quantity}x ${item.item_name} - ${formatBangladeshiTaka(item.price_at_purchase * item.quantity)}`,
+        )
+        .join("\n")}
+      
+      =====================
+      TOTAL: ${formatBangladeshiTaka(order.total_price)}
+      =====================
+    `
+
+    const printWindow = window.open("", "_blank")
+    if (printWindow) {
+      printWindow.document.write(`
+        <html>
+          <head>
+            <title>Order ${order.short_order_id || order.id.slice(0, 8)}</title>
+            <style>
+              body { font-family: monospace; font-size: 12px; margin: 20px; }
+              pre { white-space: pre-wrap; }
+            </style>
+          </head>
+          <body>
+            <pre>${printContent}</pre>
+            <script>window.print(); window.close();</script>
+          </body>
+        </html>
+      `)
+      printWindow.document.close()
+    }
+  }
+
+  const handleViewOrder = (order: Order) => {
+    window.open(`/dashboard/orders/${order.id}`, "_blank")
   }
 
   const getStatusColor = (status: string) => {
@@ -171,18 +244,20 @@ export function EnhancedOrdersTable() {
                   <Badge className={getStatusColor(order.status)}>{order.status.toUpperCase()}</Badge>
                   <span className="font-mono text-sm">ID: {order.short_order_id || order.id.slice(0, 8)}</span>
                   {(order.status === "confirmed" || order.status === "preparing") && (
-                    <div className="flex items-center gap-1 text-orange-600">
+                    <div
+                      className={`flex items-center gap-1 ${timers[order.id] <= 0 ? "text-red-600" : "text-orange-600"}`}
+                    >
                       <Clock className="h-4 w-4" />
-                      <span className="text-sm font-mono">{getTimeRemaining(order.created_at)}</span>
+                      <span className="text-sm font-mono">{getTimeRemaining(order.id)}</span>
                     </div>
                   )}
                 </div>
                 <div className="flex gap-2">
-                  <Button variant="outline" size="sm">
+                  <Button variant="outline" size="sm" onClick={() => handleViewOrder(order)}>
                     <Eye className="h-4 w-4 mr-1" />
                     View
                   </Button>
-                  <Button variant="outline" size="sm">
+                  <Button variant="outline" size="sm" onClick={() => handlePrint(order)}>
                     <Printer className="h-4 w-4 mr-1" />
                     Print
                   </Button>
@@ -194,6 +269,7 @@ export function EnhancedOrdersTable() {
                   <p className="text-sm text-gray-600">Customer</p>
                   <p className="font-medium">{order.customer_name}</p>
                   <p className="text-sm text-gray-500">{order.phone}</p>
+                  <p className="text-sm text-gray-500">{order.address}</p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-600">Items</p>

@@ -335,15 +335,15 @@ export default function SettingsPage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="twitter" className="text-gray-300">
-                      Twitter
+                    <Label htmlFor="whatsapp" className="text-gray-300">
+                      WhatsApp
                     </Label>
                     <Input
-                      id="twitter"
+                      id="whatsapp"
                       value={restaurantSettings.socialLinks.twitter}
                       onChange={(e) => updateSocialLink("twitter", e.target.value)}
                       className="bg-gray-800/50 border-gray-700 text-white"
-                      placeholder="https://twitter.com/yourpage"
+                      placeholder="https://wa.me/yourphonenumber"
                     />
                   </div>
                 </div>
