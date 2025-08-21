@@ -76,7 +76,7 @@ export async function GET(request: NextRequest) {
         order_type: "delivery",
       })) || []
 
-    return NextResponse.json(formattedOrders)
+    return NextResponse.json({ orders: formattedOrders })
   } catch (error) {
     console.error("Orders API error:", error)
     return NextResponse.json(

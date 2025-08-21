@@ -1,15 +1,13 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Search, Eye, Edit, Plus, RefreshCw } from "lucide-react"
+import { EnhancedOrdersTable } from "@/components/dashboard/enhanced-orders-table"
+import { Search, Plus, RefreshCw } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { TimeBD } from "@/components/TimeBD"
 
 interface Order {
   id: string
@@ -178,7 +176,7 @@ export default function OrdersPage() {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
                 <Input
-                  placeholder="Search orders by ID, customer, or email..."
+                  placeholder="Search orders by ID, customer, or phone..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10 bg-gray-800/50 border-gray-700"
@@ -214,108 +212,12 @@ export default function OrdersPage() {
       </Card>
 
       {/* Orders Table */}
-      <Card className="bg-black/30 border-gray-800">
-        <CardHeader>
-          <CardTitle className="text-white">
-            Orders ({orders.length}) {loading && <span className="text-sm text-gray-400">- Loading...</span>}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="border-gray-800">
-                  <TableHead className="text-gray-400">Order ID</TableHead>
-                  <TableHead className="text-gray-400">Customer</TableHead>
-                  <TableHead className="text-gray-400">Items</TableHead>
-                  <TableHead className="text-gray-400">Total</TableHead>
-                  <TableHead className="text-gray-400">Status</TableHead>
-                  <TableHead className="text-gray-400">Type</TableHead>
-                  <TableHead className="text-gray-400">Payment</TableHead>
-                  <TableHead className="text-gray-400">Date & Time (BD)</TableHead>
-                  <TableHead className="text-gray-400">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loading ? (
-                  <TableRow>
-                    <TableCell colSpan={9} className="text-center text-gray-400 py-8">
-                      Loading orders...
-                    </TableCell>
-                  </TableRow>
-                ) : orders.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={9} className="text-center text-gray-400 py-8">
-                      No orders found
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  orders.map((order) => (
-                    <TableRow key={order.id} className="border-gray-800">
-                      <TableCell className="font-medium text-white">{order.short_order_id || order.id}</TableCell>
-                      <TableCell>
-                        <div>
-                          <p className="text-white font-medium">{order.customer}</p>
-                          <p className="text-gray-400 text-sm">{order.email}</p>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="text-gray-300">
-                          {order.items.map((item, index) => (
-                            <div key={index} className="text-sm">
-                              {item.name} x{item.quantity}
-                            </div>
-                          ))}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-gold font-medium">
-                        ৳{order.total_price?.toFixed(2) || "0.00"}
-                      </TableCell>
-                      <TableCell>
-                        <Badge className={getStatusColor(order.status)}>{order.status}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge className={getTypeColor(order.order_type)}>{order.order_type}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge className={getPaymentMethodColor(order.payment_method)}>
-                          {order.payment_method === "bkash"
-                            ? "bKash"
-                            : order.payment_method === "cash"
-                              ? "Cash"
-                              : order.payment_method}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <TimeBD iso={order.created_at} className="text-gray-300" />
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Button variant="outline" size="sm">
-                            <Eye size={14} />
-                          </Button>
-                          <Select onValueChange={(value) => updateOrderStatus(order.id, value)}>
-                            <SelectTrigger className="w-20 h-8">
-                              <Edit size={14} />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="pending">Pending</SelectItem>
-                              <SelectItem value="preparing">Preparing</SelectItem>
-                              <SelectItem value="ready">Ready</SelectItem>
-                              <SelectItem value="delivered">Delivered</SelectItem>
-                              <SelectItem value="cancelled">Cancelled</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
+      <EnhancedOrdersTable
+        orders={orders}
+        loading={loading}
+        onRefresh={fetchOrders}
+        onStatusUpdate={updateOrderStatus}
+      />
     </div>
   )
 }

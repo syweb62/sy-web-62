@@ -35,6 +35,7 @@ export default function CustomersPage() {
 
   const fetchCustomers = async () => {
     try {
+      console.log("[v0] Fetching customers from database...")
       const { data: profiles, error } = await supabase
         .from("profiles")
         .select(`
@@ -49,32 +50,52 @@ export default function CustomersPage() {
         `)
         .order("created_at", { ascending: false })
 
-      if (error) throw error
+      if (error) {
+        console.error("[v0] Error fetching profiles:", error)
+        throw error
+      }
 
-      // Get order statistics for each customer
+      console.log("[v0] Fetched profiles:", profiles?.length || 0)
+
       const customersWithStats = await Promise.all(
         (profiles || []).map(async (profile) => {
-          const { data: orders } = await supabase
-            .from("orders")
-            .select("total_price, created_at")
-            .eq("user_id", profile.id)
+          try {
+            const { data: orders, error: ordersError } = await supabase
+              .from("orders")
+              .select("total_price, created_at")
+              .eq("user_id", profile.id)
+              .order("created_at", { ascending: false })
 
-          const totalOrders = orders?.length || 0
-          const totalSpent = orders?.reduce((sum, order) => sum + (order.total_price || 0), 0) || 0
-          const lastOrderDate = orders?.[0]?.created_at
+            if (ordersError) {
+              console.warn("[v0] Error fetching orders for customer:", profile.id, ordersError)
+            }
 
-          return {
-            ...profile,
-            total_orders: totalOrders,
-            total_spent: totalSpent,
-            last_order_date: lastOrderDate,
+            const totalOrders = orders?.length || 0
+            const totalSpent = orders?.reduce((sum, order) => sum + (order.total_price || 0), 0) || 0
+            const lastOrderDate = orders?.[0]?.created_at
+
+            return {
+              ...profile,
+              total_orders: totalOrders,
+              total_spent: totalSpent,
+              last_order_date: lastOrderDate,
+            }
+          } catch (customerError) {
+            console.warn("[v0] Error processing customer stats:", profile.id, customerError)
+            return {
+              ...profile,
+              total_orders: 0,
+              total_spent: 0,
+              last_order_date: null,
+            }
           }
         }),
       )
 
+      console.log("[v0] Processed customers with stats:", customersWithStats.length)
       setCustomers(customersWithStats)
     } catch (error) {
-      console.error("Error fetching customers:", error)
+      console.error("[v0] Error in fetchCustomers:", error)
       toast({
         title: "Error",
         description: "Failed to load customers",
