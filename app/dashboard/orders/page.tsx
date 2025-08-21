@@ -6,97 +6,64 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { EnhancedOrdersTable } from "@/components/dashboard/enhanced-orders-table"
-import { Search, Plus, RefreshCw } from "lucide-react"
-import { useToast } from "@/hooks/use-toast"
-
-interface Order {
-  id: string
-  short_order_id?: string
-  customer: string
-  email: string
-  items: Array<{ name: string; quantity: number; price: number }>
-  total_price: number
-  status: string
-  created_at: string // Using raw UTC timestamp instead of formatted fields
-  order_type: string
-  payment_method: string
-}
+import { Search, RefreshCw } from "lucide-react"
+import { createClient } from "@/lib/supabase"
 
 export default function OrdersPage() {
-  const [orders, setOrders] = useState<Order[]>([])
+  const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
-  const [typeFilter, setTypeFilter] = useState("all")
-  const { toast } = useToast()
 
   const fetchOrders = async () => {
     try {
       setLoading(true)
-      const params = new URLSearchParams()
-      if (statusFilter !== "all") params.append("status", statusFilter)
-      if (typeFilter !== "all") params.append("type", typeFilter)
-      if (searchTerm) params.append("search", searchTerm)
+      const supabase = createClient()
 
-      const response = await fetch(`/api/orders?${params.toString()}`)
-      const data = await response.json()
+      let query = supabase
+        .from("orders")
+        .select(`
+          order_id,
+          short_order_id,
+          customer_name,
+          phone,
+          address,
+          payment_method,
+          total_price,
+          status,
+          created_at,
+          order_items (
+            item_name,
+            quantity,
+            price_at_purchase
+          )
+        `)
+        .order("created_at", { ascending: false })
 
-      if (response.ok) {
-        setOrders(data.orders || [])
-      } else {
-        toast({
-          title: "Error",
-          description: data.error || "Failed to fetch orders",
-          variant: "destructive",
-        })
+      if (statusFilter !== "all") {
+        query = query.eq("status", statusFilter)
       }
+
+      if (searchTerm) {
+        query = query.or(
+          `customer_name.ilike.%${searchTerm}%,phone.ilike.%${searchTerm}%,short_order_id.ilike.%${searchTerm}%`,
+        )
+      }
+
+      const { data, error } = await query
+
+      if (error) throw error
+      setOrders(data || [])
     } catch (error) {
-      console.error("Error fetching orders:", error)
-      toast({
-        title: "Error",
-        description: "Failed to fetch orders",
-        variant: "destructive",
-      })
+      console.error("[v0] Error fetching orders:", error)
     } finally {
       setLoading(false)
     }
   }
 
-  const updateOrderStatus = async (orderId: string, newStatus: string) => {
-    try {
-      console.log("[v0] Updating order status from orders page:", { orderId, newStatus })
-
-      const response = await fetch(`/api/orders/${orderId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: newStatus }),
-      })
-
-      const result = await response.json()
-      console.log("[v0] Orders page status update response:", result)
-
-      if (response.ok) {
-        toast({
-          title: "Success",
-          description: "Order status updated successfully",
-        })
-        await fetchOrders()
-      } else {
-        throw new Error(result.error || "Failed to update order")
-      }
-    } catch (error) {
-      console.error("[v0] Error updating order from orders page:", error)
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to update order",
-        variant: "destructive",
-      })
-    }
-  }
-
   useEffect(() => {
     fetchOrders()
-  }, [statusFilter, typeFilter])
+  }, [statusFilter])
 
   useEffect(() => {
     const timeoutId = setTimeout(() => {
@@ -105,71 +72,41 @@ export default function OrdersPage() {
     return () => clearTimeout(timeoutId)
   }, [searchTerm])
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "pending":
-        return "bg-gray-900/50 text-gray-300"
-      case "preparing":
-        return "bg-yellow-900/50 text-yellow-300"
-      case "ready":
-        return "bg-green-900/50 text-green-300"
-      case "delivered":
-        return "bg-blue-900/50 text-blue-300"
-      case "cancelled":
-        return "bg-red-900/50 text-red-300"
-      default:
-        return "bg-gray-900/50 text-gray-300"
-    }
-  }
+  useEffect(() => {
+    const supabase = createClient()
 
-  const getTypeColor = (type: string) => {
-    switch (type) {
-      case "dine-in":
-        return "bg-purple-900/50 text-purple-300"
-      case "takeout":
-        return "bg-orange-900/50 text-orange-300"
-      case "delivery":
-        return "bg-blue-900/50 text-blue-300"
-      default:
-        return "bg-gray-900/50 text-gray-300"
-    }
-  }
+    const subscription = supabase
+      .channel("orders-changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, (payload) => {
+        console.log("[v0] Real-time order change detected:", payload)
+        fetchOrders()
+      })
+      .subscribe()
 
-  const getPaymentMethodColor = (method: string) => {
-    switch (method) {
-      case "bkash":
-        return "bg-pink-900/50 text-pink-300"
-      case "cash":
-        return "bg-green-900/50 text-green-300"
-      case "pickup":
-        return "bg-orange-900/50 text-orange-300"
-      default:
-        return "bg-gray-900/50 text-gray-300"
+    return () => {
+      subscription.unsubscribe()
     }
-  }
+  }, [])
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
+    <div className="space-y-6 p-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-serif font-bold text-white">Orders Management</h1>
-          <p className="text-gray-400 mt-1">Manage and track all customer orders (Bangladesh Time)</p>
+          <h1 className="text-3xl font-bold text-white">Orders Management</h1>
+          <p className="text-gray-400 mt-1">Manage and track all customer orders</p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={fetchOrders} disabled={loading} className="bg-gray-800/50 border-gray-700">
-            <RefreshCw size={16} className={`mr-2 ${loading ? "animate-spin" : ""}`} />
-            Refresh
-          </Button>
-          <Button className="bg-gold text-black hover:bg-gold/80">
-            <Plus size={16} className="mr-2" />
-            New Order
-          </Button>
-        </div>
+        <Button
+          variant="outline"
+          onClick={fetchOrders}
+          disabled={loading}
+          className="bg-gray-800 border-gray-700 text-white hover:bg-gray-700"
+        >
+          <RefreshCw size={16} className={`mr-2 ${loading ? "animate-spin" : ""}`} />
+          Refresh
+        </Button>
       </div>
 
-      {/* Filters */}
-      <Card className="bg-black/30 border-gray-800">
+      <Card className="bg-gray-800 border-gray-700">
         <CardContent className="p-6">
           <div className="flex flex-col md:flex-row gap-4">
             <div className="flex-1">
@@ -179,45 +116,40 @@ export default function OrdersPage() {
                   placeholder="Search orders by ID, customer, or phone..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 bg-gray-800/50 border-gray-700"
+                  className="pl-10 bg-gray-900 border-gray-600 text-white placeholder:text-gray-400"
                 />
               </div>
             </div>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-full md:w-48 bg-gray-800/50 border-gray-700">
+              <SelectTrigger className="w-full md:w-48 bg-gray-900 border-gray-600 text-white">
                 <SelectValue placeholder="Filter by status" />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Statuses</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="preparing">Preparing</SelectItem>
-                <SelectItem value="ready">Ready</SelectItem>
-                <SelectItem value="delivered">Delivered</SelectItem>
-                <SelectItem value="cancelled">Cancelled</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={typeFilter} onValueChange={setTypeFilter}>
-              <SelectTrigger className="w-full md:w-48 bg-gray-800/50 border-gray-700">
-                <SelectValue placeholder="Filter by type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Types</SelectItem>
-                <SelectItem value="dine-in">Dine In</SelectItem>
-                <SelectItem value="takeout">Takeout</SelectItem>
-                <SelectItem value="delivery">Delivery</SelectItem>
+              <SelectContent className="bg-gray-900 border-gray-700">
+                <SelectItem value="all" className="text-white">
+                  All Statuses
+                </SelectItem>
+                <SelectItem value="pending" className="text-white">
+                  Pending
+                </SelectItem>
+                <SelectItem value="preparing" className="text-white">
+                  Preparing
+                </SelectItem>
+                <SelectItem value="ready" className="text-white">
+                  Ready
+                </SelectItem>
+                <SelectItem value="completed" className="text-white">
+                  Completed
+                </SelectItem>
+                <SelectItem value="cancelled" className="text-white">
+                  Cancelled
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>
         </CardContent>
       </Card>
 
-      {/* Orders Table */}
-      <EnhancedOrdersTable
-        orders={orders}
-        loading={loading}
-        onRefresh={fetchOrders}
-        onStatusUpdate={updateOrderStatus}
-      />
+      <EnhancedOrdersTable orders={orders} loading={loading} onRefresh={fetchOrders} />
     </div>
   )
 }
