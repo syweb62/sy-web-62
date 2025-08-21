@@ -20,6 +20,9 @@ interface Reservation {
   people_count: number
   user_id: string | null
   created_at: string
+  status: string
+  table: string
+  notes: string
 }
 
 export default function ReservationsPage() {
@@ -81,20 +84,39 @@ export default function ReservationsPage() {
       const tomorrow = new Date()
       tomorrow.setDate(tomorrow.getDate() + 1)
       matchesDate = reservation.date === tomorrow.toISOString().split("T")[0]
+    } else if (dateFilter === "week") {
+      const today = new Date()
+      const startOfWeek = new Date(today.setDate(today.getDate() - today.getDay()))
+      const endOfWeek = new Date(startOfWeek)
+      endOfWeek.setDate(endOfWeek.getDate() + 6)
+      matchesDate =
+        reservation.date >= startOfWeek.toISOString().split("T")[0] &&
+        reservation.date <= endOfWeek.toISOString().split("T")[0]
     }
 
-    return matchesSearch && matchesDate
+    let matchesStatus = true
+    if (statusFilter !== "all") {
+      matchesStatus = reservation.status === statusFilter
+    }
+
+    return matchesSearch && matchesDate && matchesStatus
   })
 
   return (
-    <div className="space-y-6">
+    <div className="h-full w-full space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-serif font-bold text-white">Reservations</h1>
           <p className="text-gray-400 mt-1">Manage table reservations and bookings</p>
         </div>
-        <Button className="bg-gold text-black hover:bg-gold/80">
+        <Button
+          className="bg-gold text-black hover:bg-gold/80"
+          onClick={() => {
+            // For now, redirect to booking page - can be enhanced later with modal
+            window.open("/book", "_blank")
+          }}
+        >
           <Plus size={16} className="mr-2" />
           New Reservation
         </Button>
@@ -197,12 +219,12 @@ export default function ReservationsPage() {
       </Card>
 
       {/* Reservations Table */}
-      <Card className="bg-black/30 border-gray-800">
+      <Card className="bg-black/30 border-gray-800 flex-1">
         <CardHeader>
           <CardTitle className="text-white">Reservations ({filteredReservations.length})</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
+        <CardContent className="h-full">
+          <div className="overflow-x-auto h-full">
             <Table>
               <TableHeader>
                 <TableRow className="border-gray-800">
@@ -246,11 +268,11 @@ export default function ReservationsPage() {
                         </div>
                       </TableCell>
                       <TableCell className="text-white">{reservation.people_count}</TableCell>
-                      <TableCell className="text-gold">Table TBD</TableCell>
+                      <TableCell className="text-gold">{reservation.table}</TableCell>
                       <TableCell>
-                        <Badge className="bg-green-900/50 text-green-300">confirmed</Badge>
+                        <Badge className={getStatusColor(reservation.status)}>{reservation.status}</Badge>
                       </TableCell>
-                      <TableCell className="text-gray-300">—</TableCell>
+                      <TableCell className="text-gray-300">{reservation.notes}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <Button variant="outline" size="sm">

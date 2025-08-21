@@ -66,7 +66,7 @@ const toFallbackProfile = (u: SupabaseUser): Profile => ({
   avatar_url: u.user_metadata?.avatar_url || "",
   phone: u.user_metadata?.phone || "",
   address: "",
-  role: u.email === "admin@sushiyaki.com" ? "admin" : "user",
+  role: u.email === "admin@sushiyaki.com" ? "admin" : u.email === "manager@sushiyaki.com" ? "manager" : "user",
   created_at: u.created_at,
   updated_at: u.updated_at || u.created_at,
 })
@@ -119,7 +119,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const profileWithName = {
             ...data,
             name: data.full_name || data.name || "User",
-            role: supabaseUser.email === "admin@sushiyaki.com" ? "admin" : data.role,
+            role:
+              supabaseUser.email === "admin@sushiyaki.com"
+                ? "admin"
+                : supabaseUser.email === "manager@sushiyaki.com"
+                  ? "manager"
+                  : data.role,
           }
           setUser(profileWithName)
           return profileWithName
@@ -132,7 +137,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           full_name: supabaseUser.user_metadata?.full_name || supabaseUser.user_metadata?.name || "New User",
           avatar_url: supabaseUser.user_metadata?.avatar_url || "",
           phone: supabaseUser.user_metadata?.phone || "",
-          role: supabaseUser.email === "admin@sushiyaki.com" ? "admin" : ("user" as const),
+          role:
+            supabaseUser.email === "admin@sushiyaki.com"
+              ? "admin"
+              : supabaseUser.email === "manager@sushiyaki.com"
+                ? "manager"
+                : ("user" as const),
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         }

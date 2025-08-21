@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { BarChart3, DollarSign, ShoppingBag, Users, TrendingUp, Calendar, Clock, Bell } from "lucide-react"
+import { DollarSign, ShoppingBag, Users, TrendingUp, Calendar, Clock, Bell } from "lucide-react"
 
 const safeFormatBangladeshiTaka = (amount: number): string => {
   try {
@@ -374,49 +374,6 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
-
-      {/* Quick Actions */}
-      <Card className="bg-black/30 border-gray-800">
-        <CardHeader>
-          <CardTitle className="text-white">Quick Actions</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Button
-              variant="outline"
-              className="h-20 flex flex-col gap-2 bg-transparent"
-              onClick={() => (window.location.href = "/dashboard/orders")}
-            >
-              <ShoppingBag size={20} />
-              <span>View Orders</span>
-            </Button>
-            <Button
-              variant="outline"
-              className="h-20 flex flex-col gap-2 bg-transparent"
-              onClick={() => (window.location.href = "/dashboard/reservations")}
-            >
-              <Calendar size={20} />
-              <span>Reservations</span>
-            </Button>
-            <Button
-              variant="outline"
-              className="h-20 flex flex-col gap-2 bg-transparent"
-              onClick={() => (window.location.href = "/dashboard/customers")}
-            >
-              <Users size={20} />
-              <span>Customers</span>
-            </Button>
-            <Button
-              variant="outline"
-              className="h-20 flex flex-col gap-2 bg-transparent"
-              onClick={() => (window.location.href = "/dashboard/analytics")}
-            >
-              <BarChart3 size={20} />
-              <span>Analytics</span>
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   )
 }

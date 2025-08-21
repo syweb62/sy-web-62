@@ -7,10 +7,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line, PieChart, Pie, Cell } from "recharts"
-import { TrendingUp, TrendingDown, DollarSign, ShoppingBag, Users, Calendar, Download, RefreshCw } from "lucide-react"
+import { TrendingUp, TrendingDown, DollarSign, ShoppingBag, Users, Download, RefreshCw } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { toast } from "@/hooks/use-toast"
 import { LoadingSpinner } from "@/components/loading-spinner"
+import { DatePickerWithRange } from "@/components/ui/date-picker"
+import type { DateRange } from "react-day-picker"
 
 interface AnalyticsData {
   revenue: {
@@ -61,20 +63,26 @@ export default function AnalyticsPage() {
   const [loading, setLoading] = useState(true)
   const [dateRange, setDateRange] = useState("30d")
   const [refreshing, setRefreshing] = useState(false)
+  const [customDateRange, setCustomDateRange] = useState<DateRange | undefined>()
 
   useEffect(() => {
     fetchAnalyticsData()
-  }, [dateRange])
+  }, [dateRange, customDateRange])
 
   const fetchAnalyticsData = async () => {
     try {
       setLoading(true)
 
-      // Calculate date range
-      const endDate = new Date()
-      const startDate = new Date()
-      const days = dateRange === "7d" ? 7 : dateRange === "30d" ? 30 : 90
-      startDate.setDate(endDate.getDate() - days)
+      let startDate: Date, endDate: Date
+      if (customDateRange && customDateRange.from && customDateRange.to) {
+        startDate = customDateRange.from
+        endDate = customDateRange.to
+      } else {
+        endDate = new Date()
+        startDate = new Date()
+        const days = dateRange === "7d" ? 7 : dateRange === "30d" ? 30 : 90
+        startDate.setDate(endDate.getDate() - days)
+      }
 
       // Fetch orders data
       const { data: orders, error: ordersError } = await supabase
@@ -105,7 +113,7 @@ export default function AnalyticsPage() {
       if (customersError) throw customersError
 
       // Process data
-      const processedData = processAnalyticsData(orders || [], customers || [], days)
+      const processedData = processAnalyticsData(orders || [], customers || [], startDate, endDate)
       setData(processedData)
     } catch (error) {
       console.error("Error fetching analytics:", error)
@@ -120,27 +128,28 @@ export default function AnalyticsPage() {
     }
   }
 
-  const processAnalyticsData = (orders: any[], customers: any[], days: number): AnalyticsData => {
+  const processAnalyticsData = (orders: any[], customers: any[], startDate: Date, endDate: Date): AnalyticsData => {
     // Revenue calculations
     const totalRevenue = orders.reduce((sum, order) => sum + (order.total_price || 0), 0)
     const previousPeriodOrders = orders.filter((order) => {
       const orderDate = new Date(order.created_at)
-      const cutoffDate = new Date()
-      cutoffDate.setDate(cutoffDate.getDate() - days)
-      return orderDate < cutoffDate
+      return orderDate < startDate
     })
     const previousRevenue = previousPeriodOrders.reduce((sum, order) => sum + (order.total_price || 0), 0)
     const revenueGrowth = previousRevenue > 0 ? ((totalRevenue - previousRevenue) / previousRevenue) * 100 : 0
 
     // Daily revenue
-    const dailyRevenue = Array.from({ length: days }, (_, i) => {
-      const date = new Date()
-      date.setDate(date.getDate() - (days - 1 - i))
-      const dateStr = date.toISOString().split("T")[0]
-      const dayOrders = orders.filter((order) => order.created_at.startsWith(dateStr))
-      const amount = dayOrders.reduce((sum, order) => sum + (order.total_price || 0), 0)
-      return { date: date.toLocaleDateString("en-US", { month: "short", day: "numeric" }), amount }
-    })
+    const dailyRevenue = Array.from(
+      { length: (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24) + 1 },
+      (_, i) => {
+        const date = new Date(startDate)
+        date.setDate(startDate.getDate() + i)
+        const dateStr = date.toISOString().split("T")[0]
+        const dayOrders = orders.filter((order) => order.created_at.startsWith(dateStr))
+        const amount = dayOrders.reduce((sum, order) => sum + (order.total_price || 0), 0)
+        return { date: date.toLocaleDateString("en-US", { month: "short", day: "numeric" }), amount }
+      },
+    )
 
     // Orders by status
     const ordersByStatus = orders.reduce(
@@ -157,13 +166,16 @@ export default function AnalyticsPage() {
     }))
 
     // Daily orders
-    const dailyOrders = Array.from({ length: days }, (_, i) => {
-      const date = new Date()
-      date.setDate(date.getDate() - (days - 1 - i))
-      const dateStr = date.toISOString().split("T")[0]
-      const count = orders.filter((order) => order.created_at.startsWith(dateStr)).length
-      return { date: date.toLocaleDateString("en-US", { month: "short", day: "numeric" }), count }
-    })
+    const dailyOrders = Array.from(
+      { length: (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24) + 1 },
+      (_, i) => {
+        const date = new Date(startDate)
+        date.setDate(startDate.getDate() + i)
+        const dateStr = date.toISOString().split("T")[0]
+        const count = orders.filter((order) => order.created_at.startsWith(dateStr)).length
+        return { date: date.toLocaleDateString("en-US", { month: "short", day: "numeric" }), count }
+      },
+    )
 
     // Top items
     const itemCounts = orders
@@ -190,9 +202,7 @@ export default function AnalyticsPage() {
     const totalCustomers = customers.length
     const newCustomers = customers.filter((customer) => {
       const customerDate = new Date(customer.created_at)
-      const cutoffDate = new Date()
-      cutoffDate.setDate(cutoffDate.getDate() - days)
-      return customerDate >= cutoffDate
+      return customerDate >= startDate
     }).length
 
     const returningCustomers = orders.filter((order) => order.user_id).length - newCustomers
@@ -239,21 +249,45 @@ export default function AnalyticsPage() {
   const exportData = () => {
     if (!data) return
 
-    const exportData = {
-      dateRange,
-      generatedAt: new Date().toISOString(),
-      data,
-    }
+    try {
+      const exportData = {
+        dateRange: customDateRange
+          ? `${customDateRange.from?.toISOString()} - ${customDateRange.to?.toISOString()}`
+          : dateRange,
+        generatedAt: new Date().toISOString(),
+        data,
+      }
 
-    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = `sushi-yaki-analytics-${dateRange}-${new Date().toISOString().split("T")[0]}.json`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
+      const csvContent = [
+        ["Metric", "Value"],
+        ["Total Revenue", `৳${data.revenue.total.toFixed(2)}`],
+        ["Total Orders", data.orders.total.toString()],
+        ["Total Customers", data.customers.total.toString()],
+        ["Average Order Value", `৳${data.performance.avgOrderValue.toFixed(2)}`],
+        ["Customer Lifetime Value", `৳${data.performance.customerLifetimeValue.toFixed(2)}`],
+        ...data.topItems.map((item) => [`${item.name} (Orders)`, item.orders.toString()]),
+        ...data.topItems.map((item) => [`${item.name} (Revenue)`, `৳${item.revenue.toFixed(2)}`]),
+      ]
+        .map((row) => row.join(","))
+        .join("\n")
+
+      const blob = new Blob([csvContent], { type: "text/csv" })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `sushi-yaki-analytics-${new Date().toISOString().split("T")[0]}.csv`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error("Export failed:", error)
+      toast({
+        title: "Export Failed",
+        description: "Failed to export analytics data",
+        variant: "destructive",
+      })
+    }
   }
 
   if (loading) {
@@ -276,7 +310,7 @@ export default function AnalyticsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="h-screen w-full space-y-6 overflow-auto">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -284,6 +318,11 @@ export default function AnalyticsPage() {
           <p className="text-gray-400 mt-1">Comprehensive business insights and performance metrics</p>
         </div>
         <div className="flex items-center gap-4">
+          <DatePickerWithRange
+            date={customDateRange}
+            onDateChange={setCustomDateRange}
+            className="bg-gray-800/50 border-gray-700"
+          />
           <Select value={dateRange} onValueChange={setDateRange}>
             <SelectTrigger className="w-32 bg-gray-800/50 border-gray-700">
               <SelectValue />
@@ -300,13 +339,13 @@ export default function AnalyticsPage() {
           </Button>
           <Button onClick={exportData} className="bg-gold text-black hover:bg-gold/80">
             <Download size={16} className="mr-2" />
-            Export
+            Export CSV
           </Button>
         </div>
       </div>
 
       {/* Key Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <Card className="bg-black/30 border-gray-800">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-gray-400">Total Revenue</CardTitle>
@@ -351,17 +390,6 @@ export default function AnalyticsPage() {
               <TrendingUp size={12} className="mr-1 inline" />
               {data.customers.new} new customers
             </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-black/30 border-gray-800">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-400">Conversion Rate</CardTitle>
-            <Calendar className="h-4 w-4 text-gold" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-white">{data.performance.conversionRate.toFixed(1)}%</div>
-            <div className="text-xs text-gray-400 mt-1">CLV: ৳{data.performance.customerLifetimeValue.toFixed(2)}</div>
           </CardContent>
         </Card>
       </div>
@@ -502,10 +530,6 @@ export default function AnalyticsPage() {
                 <div className="flex justify-between items-center">
                   <span className="text-gray-400">Avg Order Value</span>
                   <span className="text-gold font-medium">৳{data.performance.avgOrderValue.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-400">Conversion Rate</span>
-                  <span className="text-green-400 font-medium">{data.performance.conversionRate.toFixed(1)}%</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-gray-400">Customer LTV</span>

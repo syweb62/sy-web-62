@@ -7,6 +7,7 @@ import { Eye, EyeOff, Mail, Lock, User, Phone, Info } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/hooks/use-auth"
 import { useRouter } from "next/navigation"
+import { useSearchParams } from "next/navigation"
 
 interface FormErrors {
   email?: string
@@ -33,17 +34,17 @@ export default function SignInPage() {
 
   const { signIn, signUp, signInWithGoogle, user, isLoading: authLoading } = useAuth()
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const redirectTo = searchParams.get("redirect") || "/"
 
-  // Redirect if already authenticated
   useEffect(() => {
     if (user && !authLoading) {
-      router.push("/")
+      router.push(redirectTo)
     }
-  }, [user, authLoading, router])
+  }, [user, authLoading, router, redirectTo])
 
   const handleInputChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
-    // Clear specific error when user starts typing
     if (errors[field as keyof FormErrors]) {
       setErrors((prev) => ({ ...prev, [field]: undefined }))
     }
@@ -52,21 +53,18 @@ export default function SignInPage() {
   const validateForm = (): boolean => {
     const newErrors: FormErrors = {}
 
-    // Email validation
     if (!formData.email.trim()) {
       newErrors.email = "Email is required"
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
       newErrors.email = "Please enter a valid email address"
     }
 
-    // Password validation
     if (!formData.password) {
       newErrors.password = "Password is required"
     } else if (formData.password.length < 6) {
       newErrors.password = "Password must be at least 6 characters"
     }
 
-    // Additional validations for signup
     if (!isLogin) {
       if (!formData.name.trim()) {
         newErrors.name = "Full name is required"
@@ -107,15 +105,15 @@ export default function SignInPage() {
         await signIn(formData.email.trim().toLowerCase(), formData.password)
 
         if (formData.email.trim().toLowerCase() === "admin@sushiyaki.com") {
-          console.log("[v0] Admin login successful, redirecting to dashboard")
-          router.push("/dashboard")
+          console.log("[v0] Admin login successful, redirecting to:", redirectTo === "/" ? "/dashboard" : redirectTo)
+          router.push(redirectTo === "/" ? "/dashboard" : redirectTo)
         } else {
-          console.log("[v0] Regular user login successful, redirecting to home")
-          router.push("/")
+          console.log("[v0] Regular user login successful, redirecting to:", redirectTo)
+          router.push(redirectTo)
         }
       } else {
         await signUp(formData.name.trim(), formData.email.trim().toLowerCase(), formData.password, formData.phone)
-        router.push("/")
+        router.push(redirectTo)
       }
     } catch (error) {
       console.error("[v0] Authentication error:", error)
@@ -144,14 +142,12 @@ export default function SignInPage() {
     setShowConfirmPassword(false)
   }
 
-  // Don't render if user is already authenticated
   if (user && !authLoading) {
     return null
   }
 
   return (
     <>
-      {/* Hero Section */}
       <section className="hero-section min-h-[40vh] flex items-center justify-center relative">
         <div className="container mx-auto px-4 text-center z-10 pt-20">
           <h1 className="text-4xl md:text-5xl font-serif font-bold mb-6">
@@ -165,11 +161,9 @@ export default function SignInPage() {
         </div>
       </section>
 
-      {/* Form Section */}
       <section className="py-20 bg-darkBg">
         <div className="container mx-auto px-4">
           <div className="max-w-lg mx-auto">
-            {/* Info Box */}
             <div className="mb-8 p-6 bg-blue-900/30 border border-blue-700/50 rounded-lg">
               <div className="flex items-start gap-3">
                 <Info className="h-6 w-6 text-blue-400 mt-0.5 flex-shrink-0" />
@@ -186,7 +180,6 @@ export default function SignInPage() {
               </div>
             </div>
 
-            {/* Form Card */}
             <div className="bg-black/40 p-8 rounded-lg border border-gray-800 backdrop-blur-sm">
               <div className="text-center mb-8">
                 <h2 className="text-2xl font-bold text-white mb-2">
@@ -199,7 +192,6 @@ export default function SignInPage() {
                 </p>
               </div>
 
-              {/* General Error */}
               {errors.general && (
                 <div className="mb-6 p-4 bg-red-900/50 border border-red-700 rounded-md text-red-200">
                   <p className="text-sm">{errors.general}</p>
@@ -207,7 +199,6 @@ export default function SignInPage() {
               )}
 
               <form onSubmit={handleSubmit} className="space-y-6">
-                {/* Name Field (Signup only) */}
                 {!isLogin && (
                   <div className="space-y-2">
                     <label className="block text-sm font-medium text-gray-300">
@@ -228,7 +219,6 @@ export default function SignInPage() {
                   </div>
                 )}
 
-                {/* Email Field */}
                 <div className="space-y-2">
                   <label className="block text-sm font-medium text-gray-300">
                     Email Address <span className="text-red-400">*</span>
@@ -247,7 +237,6 @@ export default function SignInPage() {
                   {errors.email && <p className="text-sm text-red-400">{errors.email}</p>}
                 </div>
 
-                {/* Phone Field (Signup only) */}
                 {!isLogin && (
                   <div className="space-y-2">
                     <label className="block text-sm font-medium text-gray-300">
@@ -273,7 +262,6 @@ export default function SignInPage() {
                   </div>
                 )}
 
-                {/* Password Field */}
                 <div className="space-y-2">
                   <label className="block text-sm font-medium text-gray-300">
                     Password <span className="text-red-400">*</span>
@@ -300,7 +288,6 @@ export default function SignInPage() {
                   {errors.password && <p className="text-sm text-red-400">{errors.password}</p>}
                 </div>
 
-                {/* Confirm Password Field (Signup only) */}
                 {!isLogin && (
                   <div className="space-y-2">
                     <label className="block text-sm font-medium text-gray-300">
@@ -329,7 +316,6 @@ export default function SignInPage() {
                   </div>
                 )}
 
-                {/* Forgot Password Link (Login only) */}
                 {isLogin && (
                   <div className="text-right">
                     <button
@@ -342,7 +328,6 @@ export default function SignInPage() {
                   </div>
                 )}
 
-                {/* Submit Button */}
                 <Button
                   type="submit"
                   disabled={isLoading}
@@ -358,7 +343,6 @@ export default function SignInPage() {
                   )}
                 </Button>
 
-                {/* Google OAuth Section */}
                 <div className="relative">
                   <div className="absolute inset-0 flex items-center">
                     <div className="w-full border-t border-gray-600"></div>
@@ -400,7 +384,6 @@ export default function SignInPage() {
                   <span>{isLogin ? "Sign in with Google" : "Sign up with Google"}</span>
                 </Button>
 
-                {/* Toggle Mode */}
                 <div className="text-center pt-4">
                   <p className="text-gray-400">
                     {isLogin ? "Don't have an account?" : "Already have an account?"}{" "}

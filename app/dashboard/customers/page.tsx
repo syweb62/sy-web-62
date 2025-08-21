@@ -3,15 +3,12 @@
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Search, Eye, Edit, Plus, Users, UserCheck, UserX, Phone, MapPin } from "lucide-react"
+import { Search, Users, UserCheck, UserX, Phone, MapPin } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { toast } from "@/hooks/use-toast"
 import { LoadingSpinner } from "@/components/loading-spinner"
-import Link from "next/link"
 
 interface Customer {
   id: string
@@ -31,8 +28,6 @@ export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
-  const [roleFilter, setRoleFilter] = useState("all")
-  const [statusFilter, setStatusFilter] = useState("all")
 
   useEffect(() => {
     fetchCustomers()
@@ -90,39 +85,6 @@ export default function CustomersPage() {
     }
   }
 
-  const updateCustomerRole = async (customerId: string, newRole: string) => {
-    try {
-      const { error } = await supabase.from("profiles").update({ role: newRole }).eq("id", customerId)
-
-      if (error) throw error
-
-      setCustomers(
-        customers.map((customer) => (customer.id === customerId ? { ...customer, role: newRole } : customer)),
-      )
-      toast({
-        title: "Success",
-        description: "Customer role updated successfully",
-      })
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to update customer role",
-        variant: "destructive",
-      })
-    }
-  }
-
-  const getRoleColor = (role: string) => {
-    switch (role) {
-      case "admin":
-        return "bg-red-900/50 text-red-300"
-      case "manager":
-        return "bg-blue-900/50 text-blue-300"
-      default:
-        return "bg-gray-900/50 text-gray-300"
-    }
-  }
-
   const getStatusColor = (customer: Customer) => {
     const daysSinceLastOrder = customer.last_order_date
       ? Math.floor((Date.now() - new Date(customer.last_order_date).getTime()) / (1000 * 60 * 60 * 24))
@@ -151,15 +113,7 @@ export default function CustomersPage() {
       customer.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
       customer.phone?.includes(searchTerm)
 
-    const matchesRole = roleFilter === "all" || customer.role === roleFilter
-
-    const matchesStatus =
-      statusFilter === "all" ||
-      (statusFilter === "active" && getStatusText(customer) === "Active") ||
-      (statusFilter === "inactive" && getStatusText(customer) === "Inactive") ||
-      (statusFilter === "new" && getStatusText(customer) === "New")
-
-    return matchesSearch && matchesRole && matchesStatus
+    return matchesSearch
   })
 
   if (loading) {
@@ -171,17 +125,13 @@ export default function CustomersPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="h-screen w-full space-y-6 overflow-auto">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-serif font-bold text-white">Customer Management</h1>
           <p className="text-gray-400 mt-1">Manage customer accounts and view their activity</p>
         </div>
-        <Button className="bg-gold text-black hover:bg-gold/80">
-          <Plus size={16} className="mr-2" />
-          Add Customer
-        </Button>
       </div>
 
       {/* Stats Cards */}
@@ -253,28 +203,6 @@ export default function CustomersPage() {
                 />
               </div>
             </div>
-            <Select value={roleFilter} onValueChange={setRoleFilter}>
-              <SelectTrigger className="w-full md:w-48 bg-gray-800/50 border-gray-700">
-                <SelectValue placeholder="Filter by role" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Roles</SelectItem>
-                <SelectItem value="user">User</SelectItem>
-                <SelectItem value="manager">Manager</SelectItem>
-                <SelectItem value="admin">Admin</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-full md:w-48 bg-gray-800/50 border-gray-700">
-                <SelectValue placeholder="Filter by status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="inactive">Inactive</SelectItem>
-                <SelectItem value="new">New</SelectItem>
-              </SelectContent>
-            </Select>
           </div>
         </CardContent>
       </Card>
@@ -291,18 +219,16 @@ export default function CustomersPage() {
                 <TableRow className="border-gray-800">
                   <TableHead className="text-gray-400">Customer</TableHead>
                   <TableHead className="text-gray-400">Contact</TableHead>
-                  <TableHead className="text-gray-400">Role</TableHead>
                   <TableHead className="text-gray-400">Status</TableHead>
                   <TableHead className="text-gray-400">Orders</TableHead>
                   <TableHead className="text-gray-400">Total Spent</TableHead>
                   <TableHead className="text-gray-400">Joined</TableHead>
-                  <TableHead className="text-gray-400">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredCustomers.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center text-gray-400 py-8">
+                    <TableCell colSpan={6} className="text-center text-gray-400 py-8">
                       No customers found
                     </TableCell>
                   </TableRow>
@@ -345,21 +271,6 @@ export default function CustomersPage() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Select
-                          value={customer.role || "user"}
-                          onValueChange={(value) => updateCustomerRole(customer.id, value)}
-                        >
-                          <SelectTrigger className="w-24 h-8">
-                            <Badge className={getRoleColor(customer.role)}>{customer.role || "user"}</Badge>
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="user">User</SelectItem>
-                            <SelectItem value="manager">Manager</SelectItem>
-                            <SelectItem value="admin">Admin</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </TableCell>
-                      <TableCell>
                         <Badge className={getStatusColor(customer)}>{getStatusText(customer)}</Badge>
                       </TableCell>
                       <TableCell className="text-white">{customer.total_orders || 0}</TableCell>
@@ -368,18 +279,6 @@ export default function CustomersPage() {
                       </TableCell>
                       <TableCell className="text-gray-300">
                         {new Date(customer.created_at).toLocaleDateString()}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Link href={`/dashboard/customers/${customer.id}`}>
-                            <Button variant="outline" size="sm" className="bg-transparent">
-                              <Eye size={14} />
-                            </Button>
-                          </Link>
-                          <Button variant="outline" size="sm" className="bg-transparent">
-                            <Edit size={14} />
-                          </Button>
-                        </div>
                       </TableCell>
                     </TableRow>
                   ))

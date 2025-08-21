@@ -22,10 +22,18 @@ export default function DashboardLayout({
       user: user ? { email: user.email, role: user.role } : null,
       loading,
       isAdmin: user && (user.email === "admin@sushiyaki.com" || user.role === "admin"),
+      isManager: user && (user.email === "manager@sushiyaki.com" || user.role === "manager"),
     })
 
-    if (!loading && (!user || (user.email !== "admin@sushiyaki.com" && user.role !== "admin"))) {
-      console.log("[v0] Redirecting to signin - not admin user")
+    if (
+      !loading &&
+      (!user ||
+        (user.email !== "admin@sushiyaki.com" &&
+          user.email !== "manager@sushiyaki.com" &&
+          user.role !== "admin" &&
+          user.role !== "manager"))
+    ) {
+      console.log("[v0] Redirecting to signin - not admin or manager user")
       router.push("/signin?redirect=/dashboard")
     }
   }, [user, loading, router])
@@ -39,19 +47,25 @@ export default function DashboardLayout({
     )
   }
 
-  if (!user || (user.email !== "admin@sushiyaki.com" && user.role !== "admin")) {
+  if (
+    !user ||
+    (user.email !== "admin@sushiyaki.com" &&
+      user.email !== "manager@sushiyaki.com" &&
+      user.role !== "admin" &&
+      user.role !== "manager")
+  ) {
     console.log("[v0] Dashboard access denied - redirecting to signin")
     return null
   }
 
-  console.log("[v0] Dashboard access granted for admin user")
+  console.log("[v0] Dashboard access granted for admin/manager user")
   return (
     <SidebarProvider>
-      <div className="flex min-h-screen bg-darkBg">
-        <DashboardSidebar />
-        <div className="flex-1 flex flex-col">
+      <div className="flex h-screen w-full bg-darkBg overflow-hidden">
+        <DashboardSidebar userRole={user.role} />
+        <div className="flex-1 flex flex-col min-w-0">
           <DashboardHeader />
-          <main className="flex-1 p-6">{children}</main>
+          <main className="flex-1 p-6 overflow-auto">{children}</main>
         </div>
       </div>
     </SidebarProvider>

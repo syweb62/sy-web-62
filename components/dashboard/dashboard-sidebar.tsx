@@ -25,43 +25,59 @@ const menuItems = [
     title: "Overview",
     url: "/dashboard",
     icon: BarChart3,
+    roles: ["admin", "manager"], // Added roles array to control access
   },
   {
     title: "Orders",
     url: "/dashboard/orders",
     icon: ShoppingBag,
+    roles: ["admin", "manager"], // Manager can access orders
   },
   {
     title: "Menu Management",
     url: "/dashboard/menu",
     icon: MenuIcon,
+    roles: ["admin"], // Only admin can access menu management
   },
   {
     title: "Reservations",
     url: "/dashboard/reservations",
     icon: Calendar,
+    roles: ["admin", "manager"], // Manager can access reservations
   },
   {
     title: "Customers",
     url: "/dashboard/customers",
     icon: Users,
+    roles: ["admin"], // Only admin can access customers
   },
   {
     title: "Analytics",
     url: "/dashboard/analytics",
     icon: BarChart3,
+    roles: ["admin"], // Only admin can access analytics
   },
   {
     title: "Settings",
     url: "/dashboard/settings",
     icon: Settings,
+    roles: ["admin"], // Only admin can access settings
   },
 ]
 
-export function DashboardSidebar() {
+interface DashboardSidebarProps {
+  userRole?: string
+}
+
+export function DashboardSidebar({ userRole }: DashboardSidebarProps) {
   const pathname = usePathname()
   const { user, signOut } = useAuth()
   const [isSigningOut, setIsSigningOut] = useState(false)
+
+  const filteredMenuItems = menuItems.filter((item) => {
+    const currentUserRole = userRole || user?.role || "user"
+    return item.roles.includes(currentUserRole)
+  })
 
   const handleSignOut = async () => {
     if (isSigningOut) return // Prevent multiple clicks
@@ -82,6 +98,11 @@ export function DashboardSidebar() {
     }
   }
 
+  const getRoleDisplayText = () => {
+    const currentUserRole = userRole || user?.role || "user"
+    return currentUserRole === "manager" ? "Manager" : "Administrator"
+  }
+
   return (
     <Sidebar>
       <SidebarHeader className="border-b border-gray-800">
@@ -99,7 +120,7 @@ export function DashboardSidebar() {
           <SidebarGroupLabel>Navigation</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {menuItems.map((item) => (
+              {filteredMenuItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild isActive={pathname === item.url}>
                     <Link href={item.url}>
@@ -113,29 +134,31 @@ export function DashboardSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        <SidebarGroup>
-          <SidebarGroupLabel>Quick Actions</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild>
-                  <Link href="/">
-                    <Home />
-                    <span>View Website</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild>
-                  <Link href="/dashboard/menu/new">
-                    <ChefHat />
-                    <span>Add Menu Item</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {(userRole === "admin" || user?.role === "admin") && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Quick Actions</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild>
+                    <Link href="/">
+                      <Home />
+                      <span>View Website</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild>
+                    <Link href="/dashboard/menu/new">
+                      <ChefHat />
+                      <span>Add Menu Item</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
       </SidebarContent>
 
       <SidebarFooter className="border-t border-gray-800">
@@ -147,7 +170,7 @@ export function DashboardSidebar() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate">{user?.name}</p>
-                <p className="text-xs text-gray-400">Administrator</p>
+                <p className="text-xs text-gray-400">{getRoleDisplayText()}</p>
               </div>
             </div>
           </SidebarMenuItem>

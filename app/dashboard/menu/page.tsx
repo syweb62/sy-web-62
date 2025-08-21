@@ -212,13 +212,14 @@ export default function MenuManagementPage() {
                 className="object-cover"
               />
               <div className="absolute top-2 right-2 flex gap-2">
-                <Badge
-                  className={getStatusColor(item.is_available)}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className={`${getStatusColor(item.is_available)} border-none text-xs px-2 py-1 h-auto`}
                   onClick={() => toggleAvailability(item.id, item.is_available)}
-                  style={{ cursor: "pointer" }}
                 >
                   {item.is_available ? "Available" : "Unavailable"}
-                </Badge>
+                </Button>
                 <Badge className={getCategoryColor(item.category)}>{item.category}</Badge>
               </div>
             </div>
@@ -230,7 +231,7 @@ export default function MenuManagementPage() {
               <p className="text-gray-400 text-sm mb-4 line-clamp-2">{item.description}</p>
 
               <div className="flex items-center gap-2">
-                <Link href={`/dashboard/menu/${item.id}`} className="flex-1">
+                <Link href={`/dashboard/menu/${item.id}/edit`} className="flex-1">
                   <Button variant="outline" size="sm" className="w-full bg-transparent">
                     <Eye size={14} className="mr-1" />
                     View
