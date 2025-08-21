@@ -47,10 +47,17 @@ export function EnhancedOrdersTable() {
           if (order.status === "confirmed" || order.status === "preparing") {
             const created = new Date(order.created_at)
             const now = new Date()
-            const twentyMinutes = 20 * 60 * 1000
+            const twentyMinutes = 20 * 60 * 1000 // 20 minutes in milliseconds
             const elapsed = now.getTime() - created.getTime()
             const remaining = twentyMinutes - elapsed
             newTimers[order.id] = remaining
+
+            if (remaining <= 0 && prev[order.id] > 0) {
+              notifySystem("Timer Alert", `Order ${order.short_order_id || order.id.slice(0, 8)} is overdue!`, "high")
+            }
+          } else {
+            // Clear timer for completed orders
+            delete newTimers[order.id]
           }
         })
         return newTimers
@@ -58,7 +65,7 @@ export function EnhancedOrdersTable() {
     }, 1000)
 
     return () => clearInterval(interval)
-  }, [orders])
+  }, [orders, notifySystem])
 
   const fetchOrders = async () => {
     try {
@@ -97,20 +104,29 @@ export function EnhancedOrdersTable() {
 
   const updateOrderStatus = async (orderId: string, newStatus: string) => {
     try {
+      console.log("[v0] Updating order status:", { orderId, newStatus })
+
       const response = await fetch(`/api/orders/${orderId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: newStatus }),
       })
 
+      const result = await response.json()
+      console.log("[v0] Status update response:", result)
+
       if (response.ok) {
         setOrders((prev) =>
           prev.map((order) => (order.id === orderId ? { ...order, status: newStatus as any } : order)),
         )
         notifySystem("Success", `Order status updated to ${newStatus}`, "medium")
+
+        setTimeout(() => fetchOrders(), 1000)
+      } else {
+        throw new Error(result.error || "Failed to update order status")
       }
     } catch (error) {
-      console.error("Error updating order status:", error)
+      console.error("[v0] Error updating order status:", error)
       notifySystem("Error", "Failed to update order status", "high")
     }
   }

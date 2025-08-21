@@ -66,31 +66,31 @@ export default function OrdersPage() {
 
   const updateOrderStatus = async (orderId: string, newStatus: string) => {
     try {
-      const response = await fetch("/api/orders", {
+      console.log("[v0] Updating order status from orders page:", { orderId, newStatus })
+
+      const response = await fetch(`/api/orders/${orderId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderId, status: newStatus }),
+        body: JSON.stringify({ status: newStatus }),
       })
+
+      const result = await response.json()
+      console.log("[v0] Orders page status update response:", result)
 
       if (response.ok) {
         toast({
           title: "Success",
           description: "Order status updated successfully",
         })
-        fetchOrders() // Refresh the list
+        await fetchOrders()
       } else {
-        const data = await response.json()
-        toast({
-          title: "Error",
-          description: data.error || "Failed to update order",
-          variant: "destructive",
-        })
+        throw new Error(result.error || "Failed to update order")
       }
     } catch (error) {
-      console.error("Error updating order:", error)
+      console.error("[v0] Error updating order from orders page:", error)
       toast({
         title: "Error",
-        description: "Failed to update order",
+        description: error instanceof Error ? error.message : "Failed to update order",
         variant: "destructive",
       })
     }
