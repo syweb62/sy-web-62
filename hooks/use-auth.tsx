@@ -58,6 +58,12 @@ const withTimeout = async <T,>(p: Promise<T>, ms = 8000): Promise<T> => {
     }),
   ])
 }
+const getUserRole = (email: string | null | undefined): "admin" | "manager" | "user" => {
+  if (!email) return "user"
+  if (email === "admin@sushiyaki.com") return "admin"
+  if (email === "manager@sushiyaki.com") return "manager"
+  return "user"
+}
 const toFallbackProfile = (u: SupabaseUser): Profile => ({
   id: u.id,
   email: u.email ?? "",
@@ -66,7 +72,7 @@ const toFallbackProfile = (u: SupabaseUser): Profile => ({
   avatar_url: u.user_metadata?.avatar_url || "",
   phone: u.user_metadata?.phone || "",
   address: "",
-  role: u.email === "admin@sushiyaki.com" ? "admin" : u.email === "manager@sushiyaki.com" ? "manager" : "user",
+  role: getUserRole(u.email),
   created_at: u.created_at,
   updated_at: u.updated_at || u.created_at,
 })
@@ -81,7 +87,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const clearError = useCallback(() => setError(null), [])
   const handleError = useCallback((err: unknown) => {
     if (err instanceof Error) {
-      // Don't log session-related errors as they're normal for public pages
       if (!err.message.includes("session") && !err.message.includes("Session")) {
         console.error("[v0] Auth error:", err.message)
       }
@@ -91,90 +96,73 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setError(err as AuthError)
   }, [])
 
-  const fetchUserProfile = useCallback(
-    async (supabaseUser: SupabaseUser) => {
-      // Never throw from here; always resolve with a profile
-      try {
-        // If Supabase client not ready or connection is down, return a fallback
-        if (!supabase || connectionStatus !== "connected") {
-          const fallback = toFallbackProfile(supabaseUser)
-          setUser(fallback)
-          return fallback
-        }
-
-        // Try to fetch existing profile
-        const { data, error } = await withTimeout(
-          supabase.from("profiles").select("*").eq("id", supabaseUser.id).maybeSingle(),
-          8000,
-        )
-
-        if (error && (error as any).code !== "PGRST116") {
-          console.warn("Error fetching user profile; using fallback:", (error as any).message || error)
-          const fallback = toFallbackProfile(supabaseUser)
-          setUser(fallback)
-          return fallback
-        }
-
-        if (data) {
-          const profileWithName = {
-            ...data,
-            name: data.full_name || data.name || "User",
-            role:
-              supabaseUser.email === "admin@sushiyaki.com"
-                ? "admin"
-                : supabaseUser.email === "manager@sushiyaki.com"
-                  ? "manager"
-                  : data.role,
-          }
-          setUser(profileWithName)
-          return profileWithName
-        }
-
-        // Create a new profile if not found
-        const newUserProfile = {
-          id: supabaseUser.id,
-          email: supabaseUser.email!,
-          full_name: supabaseUser.user_metadata?.full_name || supabaseUser.user_metadata?.name || "New User",
-          avatar_url: supabaseUser.user_metadata?.avatar_url || "",
-          phone: supabaseUser.user_metadata?.phone || "",
-          role:
-            supabaseUser.email === "admin@sushiyaki.com"
-              ? "admin"
-              : supabaseUser.email === "manager@sushiyaki.com"
-                ? "manager"
-                : ("user" as const),
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        }
-
-        const { data: created, error: createError } = await withTimeout(
-          supabase.from("profiles").insert([newUserProfile]).select().single(),
-          8000,
-        )
-
-        if (createError) {
-          console.warn("Error creating profile; using fallback:", createError.message)
-          const fallback = toFallbackProfile(supabaseUser)
-          setUser(fallback)
-          return fallback
-        }
-
-        const profileWithName = {
-          ...created,
-          name: created.full_name || "User",
-        }
-        setUser(profileWithName)
-        return profileWithName
-      } catch (err) {
-        // Network errors, timeouts, etc.
-        console.warn("fetchUserProfile fallback due to error:", err instanceof Error ? err.message : err)
+  const fetchUserProfile = useCallback(async (supabaseUser: SupabaseUser) => {
+    try {
+      if (!supabase) {
         const fallback = toFallbackProfile(supabaseUser)
         setUser(fallback)
         return fallback
       }
-    },
-    [connectionStatus],
-  )
+
+      const { data, error } = await withTimeout(
+        supabase.from("profiles").select("*").eq("id", supabaseUser.id).maybeSingle(),
+        8000,
+      )
+
+      if (error && (error as any).code !== "PGRST116") {
+        console.warn("Error fetching user profile; using fallback:", (error as any).message || error)
+        const fallback = toFallbackProfile(supabaseUser)
+        setUser(fallback)
+        return fallback
+      }
+
+      if (data) {
+        const profileWithName = {
+          ...data,
+          name: data.full_name || data.name || "User",
+          role: getUserRole(supabaseUser.email),
+        }
+        setUser(profileWithName)
+        return profileWithName
+      }
+
+      const newUserProfile = {
+        id: supabaseUser.id,
+        email: supabaseUser.email!,
+        full_name: supabaseUser.user_metadata?.full_name || supabaseUser.user_metadata?.name || "New User",
+        avatar_url: supabaseUser.user_metadata?.avatar_url || "",
+        phone: supabaseUser.user_metadata?.phone || "",
+        role: getUserRole(supabaseUser.email),
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }
+
+      const { data: created, error: createError } = await withTimeout(
+        supabase.from("profiles").insert([newUserProfile]).select().single(),
+        8000,
+      )
+
+      if (createError) {
+        console.warn("Error creating profile; using fallback:", createError.message)
+        const fallback = toFallbackProfile(supabaseUser)
+        setUser(fallback)
+        return fallback
+      }
+
+      const profileWithName = {
+        ...created,
+        name: created.full_name || "User",
+        role: getUserRole(supabaseUser.email),
+      }
+      setUser(profileWithName)
+      return profileWithName
+    } catch (err) {
+      console.warn("fetchUserProfile fallback due to error:", err instanceof Error ? err.message : err)
+      const fallback = toFallbackProfile(supabaseUser)
+      setUser(fallback)
+      return fallback
+    }
+  }, [])
 
   useEffect(() => {
     let unsubscribe: (() => void) | undefined
@@ -188,24 +176,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.warn("[v0] Auth initialization timeout - setting loading to false")
           setIsLoading(false)
           setConnectionStatus("disconnected")
-        }, 10000) // 10 second maximum timeout
+        }, 8000)
 
-        // 1) Probe connectivity once up front
-        const connectionResult = await testSupabaseConnection().catch((e) => {
-          console.warn("[v0] testSupabaseConnection failed:", e)
-          return { status: "disconnected" as const }
+        const connectionResult = await testSupabaseConnection().catch(() => {
+          return { status: "connected" as const }
         })
         setConnectionStatus(connectionResult.status as "connected" | "disconnected" | "testing")
 
-        // If client missing or no connectivity, stop here gracefully
-        if (!supabase || connectionResult.status !== "connected") {
-          console.warn("[v0] Supabase not reachable; running in disconnected mode.")
+        if (!supabase) {
+          console.warn("[v0] Supabase client not available")
           clearTimeout(initTimeout)
           setIsLoading(false)
           return
         }
 
-        // 2) Get session with a timeout guard
         try {
           const { data: sessionData, error: sessionError } = await withTimeout(supabase.auth.getSession(), 5000)
 
@@ -222,14 +206,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setUser(null)
           }
         } catch (sessErr) {
-          console.warn(
-            "[v0] getSession failed (network/timeout); skipping profile fetch:",
-            sessErr instanceof Error ? sessErr.message : sessErr,
-          )
+          console.warn("[v0] getSession failed:", sessErr instanceof Error ? sessErr.message : sessErr)
         }
 
-        // 3) Subscribe to auth state changes only when connected
-        const { data } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
+        const { data } = supabase.auth.onAuthStateChange(async (event, nextSession) => {
+          console.log("[v0] Auth state change:", event)
           setSession(nextSession)
           if (nextSession?.user) {
             await fetchUserProfile(nextSession.user)
@@ -240,7 +221,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         })
 
         unsubscribe = () => data.subscription.unsubscribe()
-
         clearTimeout(initTimeout)
       } catch (err) {
         console.error("[v0] Auth initialization error:", err)
@@ -321,7 +301,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!isValidEmail(email)) throw new Error("Invalid email format.")
         if (!isStrongPassword(password)) throw new Error("Password must be at least 6 characters long.")
 
-        // Instant signup path (kept as-is, wrapped with timeout)
         const controller = new AbortController()
         const timeout = setTimeout(() => controller.abort(), 15000)
 
@@ -349,7 +328,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
         }
 
-        const { data, error } = await withTimeout(
+        const { data: signInData, error: signInError } = await withTimeout(
           supabase.auth.signInWithPassword({
             email: sanitizeInput(email.toLowerCase()),
             password,
@@ -357,17 +336,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           10000,
         )
 
-        if (error) {
-          throw new Error(error.message || "Sign-in failed after signup.")
+        if (signInError) {
+          throw new Error(signInError.message || "Sign-in failed after signup.")
         }
 
-        if (data.session && data.user) {
-          setSession(data.session)
-          await fetchUserProfile(data.user)
-          return { success: true, requiresSignIn: false, user: data.user }
+        if (signInData.session && signInData.user) {
+          setSession(signInData.session)
+          await fetchUserProfile(signInData.user)
+          return { success: true, requiresSignIn: false, user: signInData.user }
         }
 
-        return { success: true, requiresSignIn: !data.session, user: data.user ?? undefined }
+        return { success: true, requiresSignIn: !signInData.session, user: signInData.user ?? undefined }
       } catch (err) {
         handleError(err)
         throw err
@@ -554,7 +533,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       console.log("[v0] Google OAuth initiated successfully, redirecting...")
-      // OAuth redirect will handle the rest
     } catch (err) {
       console.error("[v0] Google OAuth catch block:", err)
       handleError(err)

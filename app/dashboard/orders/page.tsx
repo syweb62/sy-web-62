@@ -15,7 +15,8 @@ export default function OrdersPage() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
-  const { user, isAdmin, isManager } = useAuth()
+  const [connectionStatus, setConnectionStatus] = useState<"connected" | "disconnected" | "connecting">("connecting")
+  const { user } = useAuth()
 
   const fetchOrders = async () => {
     try {
@@ -34,6 +35,7 @@ export default function OrdersPage() {
           total_price,
           status,
           created_at,
+          updated_at,
           order_items (
             item_name,
             quantity,
@@ -54,14 +56,55 @@ export default function OrdersPage() {
 
       const { data, error } = await query
 
-      if (error) throw error
+      if (error) {
+        console.error("[v0] Error fetching orders:", error)
+        setConnectionStatus("disconnected")
+        throw error
+      }
+
       setOrders(data || [])
+      setConnectionStatus("connected")
+      console.log("[v0] Orders fetched successfully:", data?.length || 0)
     } catch (error) {
       console.error("[v0] Error fetching orders:", error)
+      setConnectionStatus("disconnected")
     } finally {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    const supabase = createClient()
+
+    const subscription = supabase
+      .channel("orders-changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, (payload) => {
+        console.log("[v0] Real-time order change detected:", payload)
+        setConnectionStatus("connected")
+
+        // Refresh orders on any change
+        fetchOrders()
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "order_items" }, (payload) => {
+        console.log("[v0] Real-time order items change detected:", payload)
+
+        // Refresh orders when items change
+        fetchOrders()
+      })
+      .subscribe((status) => {
+        console.log("[v0] Real-time subscription status:", status)
+        if (status === "SUBSCRIBED") {
+          setConnectionStatus("connected")
+        } else if (status === "CHANNEL_ERROR") {
+          setConnectionStatus("disconnected")
+        }
+      })
+
+    return () => {
+      console.log("[v0] Cleaning up real-time subscription")
+      subscription.unsubscribe()
+    }
+  }, [])
 
   useEffect(() => {
     fetchOrders()
@@ -74,26 +117,19 @@ export default function OrdersPage() {
     return () => clearTimeout(timeoutId)
   }, [searchTerm])
 
-  useEffect(() => {
-    const supabase = createClient()
+  const handleStatusUpdate = (orderId: string, newStatus: string) => {
+    console.log(`[v0] Status update requested: ${orderId} -> ${newStatus}`)
 
-    const subscription = supabase
-      .channel("orders-changes")
-      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, (payload) => {
-        console.log("[v0] Real-time order change detected:", payload)
-        fetchOrders()
-      })
-      .subscribe()
+    // Optimistically update local state
+    setOrders((prevOrders) =>
+      prevOrders.map((order) =>
+        order.order_id === orderId ? { ...order, status: newStatus, updated_at: new Date().toISOString() } : order,
+      ),
+    )
+  }
 
-    return () => {
-      subscription.unsubscribe()
-    }
-  }, [])
-
-  const getUserRole = () => {
-    if (isAdmin) return "admin"
-    if (isManager) return "manager"
-    return "manager" // default fallback
+  const getUserRole = (): "admin" | "manager" => {
+    return user?.role === "admin" ? "admin" : "manager"
   }
 
   return (
@@ -103,15 +139,43 @@ export default function OrdersPage() {
           <h1 className="text-3xl font-bold text-white">Orders Management</h1>
           <p className="text-gray-400 mt-1">Manage and track all customer orders</p>
         </div>
-        <Button
-          variant="outline"
-          onClick={fetchOrders}
-          disabled={loading}
-          className="bg-gray-800 border-gray-700 text-white hover:bg-gray-700"
-        >
-          <RefreshCw size={16} className={`mr-2 ${loading ? "animate-spin" : ""}`} />
-          Refresh
-        </Button>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 text-sm">
+            <div
+              className={`w-2 h-2 rounded-full ${
+                connectionStatus === "connected"
+                  ? "bg-green-500 animate-pulse"
+                  : connectionStatus === "connecting"
+                    ? "bg-yellow-500 animate-pulse"
+                    : "bg-red-500"
+              }`}
+            ></div>
+            <span
+              className={
+                connectionStatus === "connected"
+                  ? "text-green-400"
+                  : connectionStatus === "connecting"
+                    ? "text-yellow-400"
+                    : "text-red-400"
+              }
+            >
+              {connectionStatus === "connected"
+                ? "Real-time Connected"
+                : connectionStatus === "connecting"
+                  ? "Connecting..."
+                  : "Disconnected"}
+            </span>
+          </div>
+          <Button
+            variant="outline"
+            onClick={fetchOrders}
+            disabled={loading}
+            className="bg-gray-800 border-gray-700 text-white hover:bg-gray-700"
+          >
+            <RefreshCw size={16} className={`mr-2 ${loading ? "animate-spin" : ""}`} />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       <Card className="bg-gray-800 border-gray-700">
@@ -157,7 +221,13 @@ export default function OrdersPage() {
         </CardContent>
       </Card>
 
-      <EnhancedOrdersTable orders={orders} loading={loading} onRefresh={fetchOrders} userRole={getUserRole()} />
+      <EnhancedOrdersTable
+        orders={orders}
+        loading={loading}
+        onRefresh={fetchOrders}
+        onStatusUpdate={handleStatusUpdate}
+        userRole={getUserRole()}
+      />
     </div>
   )
 }
