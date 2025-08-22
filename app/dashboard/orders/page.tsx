@@ -8,12 +8,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { EnhancedOrdersTable } from "@/components/dashboard/enhanced-orders-table"
 import { Search, RefreshCw } from "lucide-react"
 import { createClient } from "@/lib/supabase"
+import { useAuth } from "@/hooks/use-auth"
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
+  const { user, isAdmin, isManager } = useAuth()
 
   const fetchOrders = async () => {
     try {
@@ -88,6 +90,12 @@ export default function OrdersPage() {
     }
   }, [])
 
+  const getUserRole = () => {
+    if (isAdmin) return "admin"
+    if (isManager) return "manager"
+    return "manager" // default fallback
+  }
+
   return (
     <div className="space-y-6 p-6">
       <div className="flex items-center justify-between">
@@ -149,7 +157,7 @@ export default function OrdersPage() {
         </CardContent>
       </Card>
 
-      <EnhancedOrdersTable orders={orders} loading={loading} onRefresh={fetchOrders} />
+      <EnhancedOrdersTable orders={orders} loading={loading} onRefresh={fetchOrders} userRole={getUserRole()} />
     </div>
   )
 }
