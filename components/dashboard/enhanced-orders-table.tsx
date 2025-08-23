@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { ConfirmationModal } from "@/components/ui/confirmation-modal"
 import { Eye, Printer, Clock, Check, X } from "lucide-react"
 import { createClient } from "@/lib/supabase"
 
@@ -42,6 +43,17 @@ const EnhancedOrdersTable = ({
   loading = false,
 }: EnhancedOrdersTableProps) => {
   const [updatingOrders, setUpdatingOrders] = useState<Set<string>>(new Set())
+  const [confirmationModal, setConfirmationModal] = useState<{
+    isOpen: boolean
+    orderId: string
+    newStatus: string
+    type: "confirm" | "cancel"
+  }>({
+    isOpen: false,
+    orderId: "",
+    newStatus: "",
+    type: "confirm",
+  })
   const supabase = createClient()
 
   const formatDateTime = (dateString: string) => {
@@ -123,14 +135,25 @@ const EnhancedOrdersTable = ({
   }
 
   const handleStatusUpdateWithConfirmation = async (orderId: string, newStatus: string) => {
-    const confirmMessage =
-      newStatus === "confirmed"
-        ? "Are you sure you want to confirm this order?"
-        : "Are you sure you want to cancel this order?"
+    setConfirmationModal({
+      isOpen: true,
+      orderId,
+      newStatus,
+      type: newStatus === "confirmed" ? "confirm" : "cancel",
+    })
+  }
 
-    if (window.confirm(confirmMessage)) {
-      await handleStatusUpdate(orderId, newStatus)
-    }
+  const handleModalConfirm = async () => {
+    await handleStatusUpdate(confirmationModal.orderId, confirmationModal.newStatus)
+  }
+
+  const handleModalClose = () => {
+    setConfirmationModal({
+      isOpen: false,
+      orderId: "",
+      newStatus: "",
+      type: "confirm",
+    })
   }
 
   const getStatusBadge = (status: string) => {
@@ -511,6 +534,21 @@ const EnhancedOrdersTable = ({
           )
         })}
       </div>
+      {/* Custom Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={confirmationModal.isOpen}
+        onClose={handleModalClose}
+        onConfirm={handleModalConfirm}
+        title={confirmationModal.type === "confirm" ? "Confirm Order" : "Cancel Order"}
+        message={
+          confirmationModal.type === "confirm"
+            ? "Are you sure you want to confirm this order?"
+            : "Are you sure you want to cancel this order?"
+        }
+        confirmText="OK"
+        cancelText="Cancel"
+        type={confirmationModal.type}
+      />
     </div>
   )
 }

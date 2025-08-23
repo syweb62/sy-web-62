@@ -1,11 +1,23 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useMemo, useState, useEffect } from "react"
 import { Search, ShoppingBag } from "lucide-react"
 import ImageWithFallback from "@/components/image-fallback"
 import { Button } from "@/components/ui/button"
 import { OrderButton } from "@/components/ui/order-button"
-import type { MenuItem } from "@/lib/supabase"
+import { createClient } from "@/lib/supabase"
+
+interface MenuItem {
+  id: string
+  name: string
+  category: string
+  price: number
+  description: string | null
+  image_url: string | null
+  is_available: boolean
+  created_at: string
+  updated_at: string
+}
 
 function normalizeCategory(value?: string | null) {
   return (value ?? "").toString().trim().toLowerCase().replace(/\s+/g, "-")
@@ -27,27 +39,80 @@ function formatBDT(amount: number) {
 
 type Props = {
   items?: MenuItem[]
+  fetchFromDatabase?: boolean
 }
 
-export function MenuClient({ items = [] }: Props) {
+export function MenuClient({ items = [], fetchFromDatabase = false }: Props) {
   const [activeCategory, setActiveCategory] = useState<string>("all")
   const [searchQuery, setSearchQuery] = useState<string>("")
   const [hideUnavailable, setHideUnavailable] = useState<boolean>(false)
+  const [dbItems, setDbItems] = useState<MenuItem[]>([])
+  const [loading, setLoading] = useState(false)
+
+  const fetchMenuItems = async () => {
+    try {
+      setLoading(true)
+      const supabase = createClient()
+
+      const { data, error } = await supabase.from("menu_items").select("*").order("created_at", { ascending: false })
+
+      if (error) {
+        console.error("Error fetching menu items:", error)
+        return
+      }
+
+      setDbItems(data || [])
+    } catch (err) {
+      console.error("Error:", err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (fetchFromDatabase) {
+      fetchMenuItems()
+
+      // Set up real-time subscription
+      const supabase = createClient()
+      const channel = supabase
+        .channel("menu_client_changes")
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "menu_items",
+          },
+          (payload) => {
+            console.log("[v0] Menu client change detected:", payload)
+            fetchMenuItems()
+          },
+        )
+        .subscribe()
+
+      return () => {
+        supabase.removeChannel(channel)
+      }
+    }
+  }, [fetchFromDatabase])
+
+  const menuItems = fetchFromDatabase ? dbItems : items
 
   // Build categories from live data with stable ids
   const categories = useMemo(() => {
     const map = new Map<string, string>() // id -> label
-    for (const it of items) {
+    for (const it of menuItems) {
       const id = normalizeCategory(it.category)
       const label = it.category?.trim() || "Uncategorized"
       if (id) map.set(id, label)
     }
     return [{ id: "all", label: "All" }, ...Array.from(map.entries()).map(([id, label]) => ({ id, label }))]
-  }, [items])
+  }, [menuItems])
 
   const filteredItems = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
-    return items.filter((item) => {
+    return menuItems.filter((item) => {
       const name = item.name?.toLowerCase() || ""
       const desc = item.description?.toLowerCase() || ""
       const itemCatId = normalizeCategory(item.category)
@@ -57,12 +122,24 @@ export function MenuClient({ items = [] }: Props) {
       const matchesAvailability = hideUnavailable ? available : true
       return matchesCategory && matchesSearch && matchesAvailability
     })
-  }, [items, searchQuery, activeCategory, hideUnavailable])
+  }, [menuItems, searchQuery, activeCategory, hideUnavailable])
 
   const totalInCategory = useMemo(() => {
-    if (activeCategory === "all") return items.length
-    return items.filter((it) => normalizeCategory(it.category) === activeCategory).length
-  }, [items, activeCategory])
+    if (activeCategory === "all") return menuItems.length
+    return menuItems.filter((it) => normalizeCategory(it.category) === activeCategory).length
+  }, [menuItems, activeCategory])
+
+  if (fetchFromDatabase && loading && menuItems.length === 0) {
+    return (
+      <section className="py-14 md:py-20 bg-darkBg">
+        <div className="container mx-auto px-4">
+          <div className="flex justify-center items-center py-20">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gold"></div>
+          </div>
+        </div>
+      </section>
+    )
+  }
 
   return (
     <section className="py-14 md:py-20 bg-darkBg">
@@ -207,7 +284,11 @@ export function MenuClient({ items = [] }: Props) {
           ) : (
             <div className="col-span-full text-center py-16">
               <p className="text-xl text-gray-400">No menu items found.</p>
-              <p className="text-sm text-gray-500 mt-2">Try clearing filters or check your Supabase data.</p>
+              <p className="text-sm text-gray-500 mt-2">
+                {fetchFromDatabase
+                  ? "Try adding items through the dashboard or check your filters."
+                  : "Try clearing filters or check your data."}
+              </p>
             </div>
           )}
         </div>

@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { DollarSign, ShoppingBag, Users, TrendingUp, Calendar, Clock, Bell } from "lucide-react"
+import { DollarSign, ShoppingBag, Users, TrendingUp, Calendar, Clock, Bell, XCircle } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useRealtimeOrders } from "@/hooks/use-realtime-orders"
 import { useNotifications } from "@/context/notification-context"
@@ -46,6 +46,7 @@ interface DashboardStats {
     pending: number
     completed: number
     total: number
+    cancelled: number // Added cancelled orders count
   }
   customers: {
     total: number
@@ -90,7 +91,7 @@ export default function Dashboard() {
 
   const [stats, setStats] = useState<DashboardStats>({
     revenue: { today: 0, thisMonth: 0, growth: 0 },
-    orders: { today: 0, pending: 0, completed: 0, total: 0 },
+    orders: { today: 0, pending: 0, completed: 0, total: 0, cancelled: 0 }, // Added cancelled: 0
     customers: { total: 0, new: 0 },
     reservations: { today: 0, upcoming: 0 },
   })
@@ -132,6 +133,8 @@ export default function Dashboard() {
 
       const completedOrders = safeOrders.filter((order: Order) => order.status === "delivered")
 
+      const cancelledOrders = safeOrders.filter((order: Order) => order.status === "cancelled")
+
       const todayRevenue = todayOrders.reduce((sum: number, order: Order) => {
         const price = Number.parseFloat(String(order.total_price)) || 0
         return sum + (isNaN(price) ? 0 : price)
@@ -160,6 +163,7 @@ export default function Dashboard() {
           pending: pendingOrders.length,
           completed: completedOrders.length,
           total: safeOrders.length,
+          cancelled: cancelledOrders.length, // Added cancelled orders count
         },
         customers: {
           total: uniqueCustomers.size,
@@ -279,7 +283,7 @@ export default function Dashboard() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
         <Card className="bg-black/30 border-gray-800">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-gray-400">Today's Revenue</CardTitle>
@@ -300,7 +304,7 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-white">{stats.orders.today}</div>
-            <div className="text-xs text-gray-400 mt-1">
+            <div className="text-xs mt-1 text-emerald-400">
               {stats.orders.pending} pending • {stats.orders.completed} completed
             </div>
           </CardContent>
@@ -313,7 +317,7 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-white">{stats.customers.total}</div>
-            <div className="text-xs text-gray-400 mt-1">{stats.customers.new} new this week</div>
+            <div className="text-xs mt-1 text-slate-50">{stats.customers.new} new this week</div>
           </CardContent>
         </Card>
 
@@ -324,7 +328,18 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-white">{stats.reservations.today}</div>
-            <div className="text-xs text-gray-400 mt-1">{stats.reservations.upcoming} upcoming this week</div>
+            <div className="text-xs mt-1 text-amber-500">{stats.reservations.upcoming} upcoming this week</div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-black/30 border-gray-800">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-gray-400">Orders Cancelled</CardTitle>
+            <XCircle className="h-4 w-4 text-red-400" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-white">{stats.orders.cancelled}</div>
+            <div className="text-xs mt-1 text-redAccent">Total cancelled orders</div>
           </CardContent>
         </Card>
       </div>

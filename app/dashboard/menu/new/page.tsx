@@ -1,8 +1,9 @@
 "use client"
 
-import type React from "react"
-
 import { useState } from "react"
+
+import type React from "react"
+import { useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -19,6 +20,7 @@ import Link from "next/link"
 export default function NewMenuItemPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
+  const [categories, setCategories] = useState<string[]>([])
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -27,6 +29,39 @@ export default function NewMenuItemPage() {
     image_url: "",
     is_available: true,
   })
+
+  useEffect(() => {
+    fetchCategories()
+
+    const handleFocus = () => {
+      fetchCategories()
+    }
+
+    window.addEventListener("focus", handleFocus)
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) {
+        fetchCategories()
+      }
+    })
+
+    return () => {
+      window.removeEventListener("focus", handleFocus)
+      document.removeEventListener("visibilitychange", handleFocus)
+    }
+  }, [])
+
+  const fetchCategories = async () => {
+    try {
+      const { data, error } = await supabase.from("menu_items").select("category").not("category", "is", null)
+
+      if (error) throw error
+
+      const uniqueCategories = [...new Set(data?.map((item) => item.category).filter(Boolean) || [])]
+      setCategories(uniqueCategories)
+    } catch (error) {
+      console.error("Error fetching categories:", error)
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -141,12 +176,21 @@ export default function NewMenuItemPage() {
                     <SelectValue placeholder="Select category" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Sushi">Sushi</SelectItem>
-                    <SelectItem value="Main Course">Main Course</SelectItem>
-                    <SelectItem value="Noodles">Noodles</SelectItem>
-                    <SelectItem value="Appetizer">Appetizer</SelectItem>
-                    <SelectItem value="Desserts">Desserts</SelectItem>
-                    <SelectItem value="Beverages">Beverages</SelectItem>
+                    {categories.map((category) => (
+                      <SelectItem key={category} value={category}>
+                        {category}
+                      </SelectItem>
+                    ))}
+                    <SelectItem
+                      value="__refresh__"
+                      className="text-blue-400 italic"
+                      onSelect={(e) => {
+                        e.preventDefault()
+                        fetchCategories()
+                      }}
+                    >
+                      🔄 Refresh Categories
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>

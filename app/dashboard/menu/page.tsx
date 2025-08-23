@@ -12,6 +12,7 @@ import { supabase } from "@/lib/supabase"
 import { toast } from "@/hooks/use-toast"
 import { LoadingSpinner } from "@/components/loading-spinner"
 import Link from "next/link"
+import { CategoryModal } from "@/components/ui/category-modal"
 
 interface MenuItem {
   id: string
@@ -31,6 +32,7 @@ export default function MenuManagementPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [categoryFilter, setCategoryFilter] = useState("all")
   const [statusFilter, setStatusFilter] = useState("all")
+  const [categories, setCategories] = useState<string[]>([])
 
   useEffect(() => {
     fetchMenuItems()
@@ -42,6 +44,9 @@ export default function MenuManagementPage() {
 
       if (error) throw error
       setMenuItems(data || [])
+
+      const uniqueCategories = [...new Set(data?.map((item) => item.category).filter(Boolean) || [])]
+      setCategories(uniqueCategories)
     } catch (error) {
       console.error("Error fetching menu items:", error)
       toast({
@@ -51,6 +56,12 @@ export default function MenuManagementPage() {
       })
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleCategoryCreated = (newCategory: string) => {
+    if (!categories.includes(newCategory)) {
+      setCategories((prev) => [...prev, newCategory])
     }
   }
 
@@ -149,12 +160,15 @@ export default function MenuManagementPage() {
           <h1 className="text-3xl font-serif font-bold text-white">Menu Management</h1>
           <p className="text-gray-400 mt-1">Manage your restaurant's menu items and categories</p>
         </div>
-        <Link href="/dashboard/menu/new">
-          <Button className="bg-gold text-black hover:bg-gold/80">
-            <Plus size={16} className="mr-2" />
-            Add New Item
-          </Button>
-        </Link>
+        <div className="flex items-center gap-3">
+          <CategoryModal onCategoryCreated={handleCategoryCreated} />
+          <Link href="/dashboard/menu/new">
+            <Button className="bg-gold text-black hover:bg-gold/80">
+              <Plus size={16} className="mr-2" />
+              Add New Item
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {/* Filters */}
@@ -178,12 +192,11 @@ export default function MenuManagementPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Categories</SelectItem>
-                <SelectItem value="sushi">Sushi</SelectItem>
-                <SelectItem value="main course">Main Course</SelectItem>
-                <SelectItem value="noodles">Noodles</SelectItem>
-                <SelectItem value="appetizer">Appetizer</SelectItem>
-                <SelectItem value="desserts">Desserts</SelectItem>
-                <SelectItem value="beverages">Beverages</SelectItem>
+                {categories.map((category) => (
+                  <SelectItem key={category} value={category.toLowerCase()}>
+                    {category}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <Select value={statusFilter} onValueChange={setStatusFilter}>

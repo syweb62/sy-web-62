@@ -33,6 +33,7 @@ export default function EditMenuItemPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [menuItem, setMenuItem] = useState<MenuItem | null>(null)
+  const [categories, setCategories] = useState<string[]>([])
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -45,8 +46,22 @@ export default function EditMenuItemPage() {
   useEffect(() => {
     if (params.id) {
       fetchMenuItem(params.id as string)
+      fetchCategories()
     }
   }, [params.id])
+
+  const fetchCategories = async () => {
+    try {
+      const { data, error } = await supabase.from("menu_items").select("category").not("category", "is", null)
+
+      if (error) throw error
+
+      const uniqueCategories = [...new Set(data?.map((item) => item.category).filter(Boolean) || [])]
+      setCategories(uniqueCategories)
+    } catch (error) {
+      console.error("Error fetching categories:", error)
+    }
+  }
 
   const fetchMenuItem = async (id: string) => {
     try {
@@ -208,12 +223,11 @@ export default function EditMenuItemPage() {
                     <SelectValue placeholder="Select category" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Sushi">Sushi</SelectItem>
-                    <SelectItem value="Main Course">Main Course</SelectItem>
-                    <SelectItem value="Noodles">Noodles</SelectItem>
-                    <SelectItem value="Appetizer">Appetizer</SelectItem>
-                    <SelectItem value="Desserts">Desserts</SelectItem>
-                    <SelectItem value="Beverages">Beverages</SelectItem>
+                    {categories.map((category) => (
+                      <SelectItem key={category} value={category}>
+                        {category}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>

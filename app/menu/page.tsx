@@ -1,11 +1,24 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useMemo, useState, useEffect } from "react"
 import { Search, ShoppingBag } from "lucide-react"
 import ImageWithFallback from "@/components/image-fallback"
 import { useCart } from "@/hooks/use-cart"
 import { Button } from "@/components/ui/button"
 import { OrderButton } from "@/components/ui/order-button"
+import { createClient } from "@/lib/supabase"
+
+interface MenuItem {
+  id: string
+  name: string
+  category: string
+  price: number
+  description: string | null
+  image_url: string | null
+  is_available: boolean
+  created_at: string
+  updated_at: string
+}
 
 function normalizeCategory(value?: string | null) {
   return (value ?? "").toString().trim().toLowerCase().replace(/\s+/g, "-")
@@ -18,245 +31,66 @@ function toTitle(label: string) {
     .join(" ")
 }
 
-// Mock menu data with availability status
-// Added demo items to create more categories (total 25 categories derived automatically)
-const menuItems = [
-  {
-    id: "item-1",
-    name: "Sushi Platter",
-    category: "sushi",
-    price: 24.99,
-    description: "Assortment of fresh nigiri and maki rolls with wasabi, ginger, and soy sauce.",
-    image: "https://images.unsplash.com/photo-1579584425555-c3ce17fd4351?q=80&w=600&h=400&auto=format&fit=crop",
-    is_available: true,
-  },
-  {
-    id: "item-2",
-    name: "Teriyaki Salmon",
-    category: "bento",
-    price: 22.99,
-    description: "Grilled salmon glazed with our signature teriyaki sauce, served with steamed rice.",
-    image: "https://images.unsplash.com/photo-1569050467447-ce54b3bbc37d?q=80&w=600&h=400&auto=format&fit=crop",
-    is_available: false,
-  },
-  {
-    id: "item-3",
-    name: "Tonkotsu Ramen",
-    category: "ramen",
-    price: 18.99,
-    description: "Rich pork broth with ramen noodles, soft-boiled egg, chashu pork, and fresh vegetables.",
-    image: "https://images.unsplash.com/photo-1557872943-16a5ac26437e?q=80&w=600&h=400&auto=format&fit=crop",
-    is_available: true,
-  },
-  {
-    id: "item-4",
-    name: "Gyoza",
-    category: "appetizers",
-    price: 8.99,
-    description: "Pan-fried dumplings filled with seasoned ground pork and vegetables.",
-    image: "https://images.unsplash.com/photo-1541696432-82c6da8ce7bf?q=80&w=600&h=400&auto=format&fit=crop",
-    is_available: true,
-  },
-  {
-    id: "item-5",
-    name: "Dragon Roll",
-    category: "sushi",
-    price: 16.99,
-    description: "Eel and cucumber inside, avocado and tobiko on top, drizzled with eel sauce.",
-    image: "https://images.unsplash.com/photo-1617196034183-421b4917c92d?q=80&w=600&h=400&auto=format&fit=crop",
-    is_available: false,
-  },
-  {
-    id: "item-6",
-    name: "Miso Soup",
-    category: "appetizers",
-    price: 4.99,
-    description: "Traditional Japanese soup with tofu, seaweed, and green onions.",
-    image: "https://images.unsplash.com/photo-1607301406259-dfb186e15de8?q=80&w=600&h=400&auto=format&fit=crop",
-    is_available: true,
-  },
-  {
-    id: "item-7",
-    name: "Chicken Katsu Bento",
-    category: "bento",
-    price: 19.99,
-    description: "Crispy breaded chicken cutlet served with rice, salad, and miso soup.",
-    image: "https://images.unsplash.com/photo-1631709497146-a239ef373cf1?q=80&w=600&h=400&auto=format&fit=crop",
-    is_available: true,
-  },
-  {
-    id: "item-8",
-    name: "Matcha Green Tea Ice Cream",
-    category: "desserts",
-    price: 6.99,
-    description: "Creamy ice cream infused with premium matcha green tea.",
-    image: "https://images.unsplash.com/photo-1561845730-208ad5910553?q=80&w=600&h=400&auto=format&fit=crop",
-    is_available: false,
-  },
-  {
-    id: "item-9",
-    name: "Sake",
-    category: "drinks",
-    price: 12.99,
-    description: "Traditional Japanese rice wine, served warm or cold.",
-    image: "https://images.unsplash.com/photo-1627042633145-b780d842ba0a?q=80&w=600&h=400&auto=format&fit=crop",
-    is_available: true,
-  },
-  {
-    id: "item-10",
-    name: "Mochi Ice Cream",
-    category: "desserts",
-    price: 7.99,
-    description: "Sweet rice dough filled with ice cream in various flavors.",
-    image: "https://images.unsplash.com/photo-1563805042-7684c019e1cb?q=80&w=600&h=400&auto=format&fit=crop",
-    is_available: true,
-  },
-  {
-    id: "item-11",
-    name: "Spicy Tuna Roll",
-    category: "sushi",
-    price: 14.99,
-    description: "Fresh tuna mixed with spicy mayo and cucumber, wrapped in seaweed and rice.",
-    image: "https://images.unsplash.com/photo-1611143669185-af224c5e3252?q=80&w=600&h=400&auto=format&fit=crop",
-    is_available: true,
-  },
-  {
-    id: "item-12",
-    name: "Japanese Green Tea",
-    category: "drinks",
-    price: 3.99,
-    description: "Traditional Japanese green tea, served hot.",
-    image: "https://images.unsplash.com/photo-1564890369478-c89ca6d9cde9?q=80&w=600&h=400&auto=format&fit=crop",
-    is_available: true,
-  },
-
-  // New demo categories below (one item each)
-  {
-    id: "item-13",
-    name: "Salmon Sashimi",
-    category: "sashimi",
-    price: 17.99,
-    description: "Freshly sliced salmon sashimi served with wasabi and soy sauce.",
-    image: "https://images.unsplash.com/photo-1546964124-0cce460f38ef?q=80&w=600&h=400&auto=format&fit=crop",
-    is_available: true,
-  },
-  {
-    id: "item-14",
-    name: "Beef Udon",
-    category: "udon",
-    price: 15.99,
-    description: "Thick udon noodles in savory broth with tender beef and scallions.",
-    image: "https://images.unsplash.com/photo-1625944528146-67a5bf02a43e?q=80&w=600&h=400&auto=format&fit=crop",
-    is_available: true,
-  },
-  {
-    id: "item-15",
-    name: "Shrimp Tempura",
-    category: "tempura",
-    price: 13.99,
-    description: "Crispy battered shrimp served with tentsuyu dipping sauce.",
-    image: "https://images.unsplash.com/photo-1604908554035-2bd3f2b5a726?q=80&w=600&h=400&auto=format&fit=crop",
-    is_available: false,
-  },
-  {
-    id: "item-16",
-    name: "Seaweed Salad",
-    category: "salads",
-    price: 6.49,
-    description: "Refreshing wakame seaweed salad with sesame dressing.",
-    image: "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?q=80&w=600&h=400&auto=format&fit=crop",
-    is_available: true,
-  },
-  {
-    id: "item-17",
-    name: "Chicken Teriyaki Don",
-    category: "donburi",
-    price: 12.99,
-    description: "Teriyaki-glazed chicken over steamed rice with pickled ginger.",
-    image: "https://images.unsplash.com/photo-1562967916-eb82221dfb36?q=80&w=600&h=400&auto=format&fit=crop",
-    is_available: true,
-  },
-  {
-    id: "item-18",
-    name: "Yakitori Skewers",
-    category: "yakitori",
-    price: 11.99,
-    description: "Charcoal-grilled chicken skewers brushed with tare sauce.",
-    image: "https://images.unsplash.com/photo-1540189549336-e6e99c3679fe?q=80&w=600&h=400&auto=format&fit=crop",
-    is_available: true,
-  },
-  {
-    id: "item-19",
-    name: "Vegan Tofu Bowl",
-    category: "vegan",
-    price: 12.49,
-    description: "Marinated tofu with seasonal veggies over rice and sesame sauce.",
-    image: "https://images.unsplash.com/photo-1505577058444-a3dab90d4253?q=80&w=600&h=400&auto=format&fit=crop",
-    is_available: true,
-  },
-  {
-    id: "item-20",
-    name: "Onigiri",
-    category: "onigiri",
-    price: 4.49,
-    description: "Hand-pressed rice balls with tuna mayo filling and nori wrap.",
-    image: "https://images.unsplash.com/photo-1636211991121-75667f182947?q=80&w=600&h=400&auto=format&fit=crop",
-    is_available: true,
-  },
-  {
-    id: "item-21",
-    name: "Okonomiyaki",
-    category: "okonomiyaki",
-    price: 14.49,
-    description: "Savory cabbage pancake with okonomiyaki sauce and bonito flakes.",
-    image: "https://images.unsplash.com/photo-1625943863923-03398ec6053e?q=80&w=600&h=400&auto=format&fit=crop",
-    is_available: false,
-  },
-  {
-    id: "item-22",
-    name: "Teppanyaki Beef",
-    category: "teppanyaki",
-    price: 21.99,
-    description: "Seared beef and vegetables cooked on a hot iron griddle.",
-    image: "https://images.unsplash.com/photo-1544025162-d76694265947?q=80&w=600&h=400&auto=format&fit=crop",
-    is_available: true,
-  },
-  {
-    id: "item-23",
-    name: "Cold Soba",
-    category: "soba",
-    price: 10.99,
-    description: "Chilled buckwheat noodles served with dipping sauce and scallions.",
-    image: "https://images.unsplash.com/photo-1576458088443-04a19bb13da6?q=80&w=600&h=400&auto=format&fit=crop",
-    is_available: true,
-  },
-  {
-    id: "item-24",
-    name: "Katsu Curry",
-    category: "curry",
-    price: 16.49,
-    description: "Crispy pork cutlet with rich Japanese curry over rice.",
-    image: "https://images.unsplash.com/photo-1604908553924-5d5a7bde8b2e?q=80&w=600&h=400&auto=format&fit=crop",
-    is_available: true,
-  },
-  {
-    id: "item-25",
-    name: "Assorted Nigiri Set",
-    category: "nigiri",
-    price: 23.99,
-    description: "Chef’s selection of fresh nigiri sushi, served with soy and wasabi.",
-    image: "https://images.unsplash.com/photo-1553621042-f6e147245754?q=80&w=600&h=400&auto=format&fit=crop",
-    is_available: true,
-  },
-]
-
 export default function Menu() {
   const [activeCategory, setActiveCategory] = useState("all")
   const [searchQuery, setSearchQuery] = useState("")
-  // Default to hide unavailable items only when the checkbox is checked.
   const [showUnavailable, setShowUnavailable] = useState(false)
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
   const { addItem, totalItems } = useCart()
   const [addedItems, setAddedItems] = useState<Record<string, boolean>>({})
+
+  const fetchMenuItems = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      const supabase = createClient()
+
+      const { data, error } = await supabase.from("menu_items").select("*").order("created_at", { ascending: false })
+
+      if (error) {
+        console.error("Error fetching menu items:", error)
+        setError("Failed to load menu items")
+        return
+      }
+
+      setMenuItems(data || [])
+    } catch (err) {
+      console.error("Error:", err)
+      setError("Failed to load menu items")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchMenuItems()
+
+    // Set up real-time subscription for menu items
+    const supabase = createClient()
+    const channel = supabase
+      .channel("menu_items_changes")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "menu_items",
+        },
+        (payload) => {
+          console.log("[v0] Menu item change detected:", payload)
+          // Refresh menu items when changes occur
+          fetchMenuItems()
+        },
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [])
 
   const derivedCategories = useMemo(() => {
     const map = new Map<string, string>() // id -> label
@@ -268,13 +102,13 @@ export default function Menu() {
       id: string
       name: string
     }[]
-  }, [])
+  }, [menuItems])
 
   const filteredItems = menuItems.filter((item) => {
     const matchesCategory = activeCategory === "all" || normalizeCategory(item.category) === activeCategory
     const matchesSearch =
       item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.description.toLowerCase().includes(searchQuery.toLowerCase())
+      (item.description && item.description.toLowerCase().includes(searchQuery.toLowerCase()))
 
     // Hide unavailable items when the toggle is ON
     const matchesAvailability = showUnavailable || item.is_available
@@ -282,13 +116,13 @@ export default function Menu() {
     return matchesCategory && matchesSearch && matchesAvailability
   })
 
-  const handleAddToCart = (item: (typeof menuItems)[0]) => {
+  const handleAddToCart = (item: MenuItem) => {
     addItem({
       id: item.id,
       name: item.name,
       price: item.price,
-      image: item.image,
-      description: item.description,
+      image: item.image_url || "/placeholder.svg",
+      description: item.description || "",
       category: item.category,
     })
 
@@ -296,6 +130,55 @@ export default function Menu() {
     setTimeout(() => {
       setAddedItems((prev) => ({ ...prev, [item.id]: false }))
     }, 1500)
+  }
+
+  if (loading) {
+    return (
+      <>
+        {/* Hero Section */}
+        <section className="hero-section min-h-[60vh] flex items-center justify-center relative">
+          <div className="container mx-auto px-4 text-center z-10 pt-20">
+            <h1 className="text-4xl md:text-6xl font-serif font-bold mb-6">Our Menu</h1>
+            <p className="text-lg max-w-3xl mx-auto mb-8 text-gray-200">Loading our delicious menu items...</p>
+          </div>
+        </section>
+
+        <section className="py-20 bg-darkBg">
+          <div className="container mx-auto px-4">
+            <div className="flex justify-center items-center py-20">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gold"></div>
+            </div>
+          </div>
+        </section>
+      </>
+    )
+  }
+
+  if (error) {
+    return (
+      <>
+        {/* Hero Section */}
+        <section className="hero-section min-h-[60vh] flex items-center justify-center relative">
+          <div className="container mx-auto px-4 text-center z-10 pt-20">
+            <h1 className="text-4xl md:text-6xl font-serif font-bold mb-6">Our Menu</h1>
+            <p className="text-lg max-w-3xl mx-auto mb-8 text-gray-200">
+              We're having trouble loading our menu. Please try again.
+            </p>
+          </div>
+        </section>
+
+        <section className="py-20 bg-darkBg">
+          <div className="container mx-auto px-4">
+            <div className="text-center py-20">
+              <p className="text-red-400 mb-4">{error}</p>
+              <Button onClick={fetchMenuItems} className="bg-gold text-black hover:bg-gold/90">
+                Try Again
+              </Button>
+            </div>
+          </div>
+        </section>
+      </>
+    )
   }
 
   return (
@@ -382,7 +265,7 @@ export default function Menu() {
                 >
                   <div className="h-64 relative overflow-hidden group">
                     <ImageWithFallback
-                      src={item.image || "/placeholder.svg"}
+                      src={item.image_url || "/placeholder.svg"}
                       alt={item.name}
                       width={600}
                       height={400}
@@ -414,7 +297,7 @@ export default function Menu() {
                       </span>
                     </div>
                     <p className={`text-sm mb-4 line-clamp-2 ${item.is_available ? "text-gray-300" : "text-gray-500"}`}>
-                      {item.description}
+                      {item.description || "Delicious and freshly prepared."}
                     </p>
 
                     {/* Order Button - Disabled if unavailable */}
@@ -424,8 +307,8 @@ export default function Menu() {
                           id: item.id,
                           name: item.name,
                           price: item.price,
-                          image: item.image,
-                          description: item.description,
+                          image: item.image_url || "/placeholder.svg",
+                          description: item.description || "",
                           category: item.category,
                         }}
                         fullWidth
@@ -448,6 +331,11 @@ export default function Menu() {
             ) : (
               <div className="col-span-full text-center py-12">
                 <p className="text-xl text-gray-400">No menu items found. Please try a different search.</p>
+                {menuItems.length === 0 && (
+                  <p className="text-sm text-gray-500 mt-2">
+                    No menu items available. Add some items through the dashboard.
+                  </p>
+                )}
               </div>
             )}
           </div>
