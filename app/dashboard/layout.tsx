@@ -19,33 +19,12 @@ export default function DashboardLayout({
   const [authChecked, setAuthChecked] = useState(false)
 
   useEffect(() => {
-    console.log(
-      "[v0] Dashboard layout - isLoading:",
-      isLoading,
-      "user:",
-      user,
-      "role:",
-      user?.role,
-      "authChecked:",
-      authChecked,
-    )
-  }, [user, isLoading, authChecked])
-
-  useEffect(() => {
     if (!isLoading) {
-      // Give a moment for user state to settle after auth completes
-      const timer = setTimeout(() => {
-        setAuthChecked(true)
+      setAuthChecked(true)
 
-        if (!user || (user.role !== "admin" && user.role !== "manager")) {
-          console.log("[v0] Dashboard access denied - user:", user, "role:", user?.role)
-          router.push("/signin?redirect=/dashboard")
-        } else {
-          console.log("[v0] Dashboard access granted for:", user.role)
-        }
-      }, 200) // Small delay to ensure auth state is settled
-
-      return () => clearTimeout(timer)
+      if (!user || (user.role !== "admin" && user.role !== "manager")) {
+        router.push("/signin?redirect=/dashboard")
+      }
     }
   }, [user, isLoading, router])
 

@@ -80,18 +80,14 @@ export function DashboardSidebar({ userRole }: DashboardSidebarProps) {
   })
 
   const handleSignOut = async () => {
-    if (isSigningOut) return // Prevent multiple clicks
+    if (isSigningOut) return
 
     try {
       setIsSigningOut(true)
-      console.log("[v0] Signout button clicked")
       await signOut()
-      console.log("[v0] Signout completed successfully")
-      // Redirect to home page after successful signout
       window.location.href = "/"
     } catch (error) {
-      console.error("[v0] Signout failed:", error)
-      // Show user-friendly error message
+      console.error("Signout failed:", error)
       alert("Sign out failed. Please try again.")
     } finally {
       setIsSigningOut(false)

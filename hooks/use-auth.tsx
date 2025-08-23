@@ -100,48 +100,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const fetchUserProfile = useCallback(async (supabaseUser: SupabaseUser) => {
     try {
-      // Create profile immediately to prevent flickering
-      const immediateProfile = createProfile(supabaseUser)
-      setUser(immediateProfile)
+      const stableProfile = createProfile(supabaseUser)
 
       if (!supabase) {
-        return immediateProfile
+        setUser(stableProfile)
+        return stableProfile
       }
 
-      // Try to fetch from database, but don't block UI
+      // Try to fetch from database to get additional data, but don't change role
       const { data, error } = await withTimeout(
         supabase.from("profiles").select("*").eq("id", supabaseUser.id).maybeSingle(),
         3000,
       )
 
       if (error && (error as any).code !== "PGRST116") {
-        // Keep the immediate profile if database fetch fails
-        return immediateProfile
+        // Use stable profile if database fetch fails
+        setUser(stableProfile)
+        return stableProfile
       }
 
       if (data) {
-        const enhancedProfile = {
-          ...data,
-          name: data.full_name || data.name || "User",
-          role: getUserRole(supabaseUser.email), // Always use email-based role
+        // Merge database data but keep email-based role determination
+        const finalProfile = {
+          ...stableProfile, // Keep stable role and email-based data
+          ...data, // Add database data
+          role: stableProfile.role, // Always use email-based role
+          name: data.full_name || data.name || stableProfile.name,
         }
-        setUser(enhancedProfile)
-        return enhancedProfile
+        setUser(finalProfile)
+        return finalProfile
       }
 
-      // Create new profile in database without blocking
+      // Create new profile in database in background without blocking
       const newProfile = {
         id: supabaseUser.id,
         email: supabaseUser.email!,
-        full_name: supabaseUser.user_metadata?.full_name || supabaseUser.user_metadata?.name || "New User",
-        avatar_url: supabaseUser.user_metadata?.avatar_url || "",
-        phone: supabaseUser.user_metadata?.phone || "",
-        role: getUserRole(supabaseUser.email),
+        full_name: stableProfile.full_name,
+        avatar_url: stableProfile.avatar_url,
+        phone: stableProfile.phone,
+        role: stableProfile.role,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       }
 
-      // Create in background, don't wait
+      // Create in background, don't wait or update state
       supabase
         .from("profiles")
         .insert([newProfile])
@@ -151,7 +153,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // Ignore errors, profile creation is not critical
         })
 
-      return immediateProfile
+      setUser(stableProfile)
+      return stableProfile
     } catch (err) {
       // Always return a valid profile to prevent auth failures
       const fallbackProfile = createProfile(supabaseUser)
@@ -166,7 +169,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const initializeAuth = async () => {
       try {
-        // Test connection quickly
         const connectionResult = await testSupabaseConnection().catch(() => ({ status: "connected" }))
         if (mounted) {
           setConnectionStatus(connectionResult.status as "connected" | "disconnected" | "testing")
