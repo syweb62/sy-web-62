@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Search, Plus, Edit, Trash2, Calendar, Clock, Users } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
+import { useRealtimeReservations } from "@/hooks/use-realtime-reservations"
 
 // Interface for real reservations data
 interface Reservation {
@@ -27,8 +28,7 @@ interface Reservation {
 
 export default function ReservationsPage() {
   const { user } = useAuth()
-  const [reservations, setReservations] = useState<Reservation[]>([])
-  const [loading, setLoading] = useState(true)
+  const { reservations, loading } = useRealtimeReservations()
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [dateFilter, setDateFilter] = useState("all")
@@ -47,28 +47,6 @@ export default function ReservationsPage() {
         return "bg-gray-900/50 text-gray-300"
     }
   }
-
-  useEffect(() => {
-    const fetchReservations = async () => {
-      try {
-        setLoading(true)
-        const response = await fetch("/api/reservations")
-        const result = await response.json()
-
-        if (result.success) {
-          setReservations(result.reservations)
-        } else {
-          console.error("Failed to fetch reservations:", result.error)
-        }
-      } catch (error) {
-        console.error("Error fetching reservations:", error)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchReservations()
-  }, [])
 
   const filteredReservations = reservations.filter((reservation) => {
     const matchesSearch =

@@ -9,83 +9,26 @@ import { EnhancedOrdersTable } from "@/components/dashboard/enhanced-orders-tabl
 import { Search, RefreshCw, Filter, TrendingUp } from "lucide-react"
 import { createClient } from "@/lib/supabase"
 import { useAuth } from "@/hooks/use-auth"
+import { useRealtimeOrders } from "@/hooks/use-realtime-orders"
 
 export default function OrdersPage() {
-  const [orders, setOrders] = useState([])
-  const [loading, setLoading] = useState(true)
+  const { orders, loading, refetch: fetchOrders } = useRealtimeOrders()
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [connectionStatus, setConnectionStatus] = useState<"connected" | "disconnected" | "connecting">("connecting")
   const { user } = useAuth()
 
-  const fetchOrders = async () => {
-    try {
-      setLoading(true)
-      const supabase = createClient()
-
-      let query = supabase
-        .from("orders")
-        .select(`
-          order_id,
-          short_order_id,
-          customer_name,
-          phone,
-          address,
-          payment_method,
-          total_price,
-          status,
-          created_at,
-          updated_at,
-          order_items (
-            item_name,
-            quantity,
-            price_at_purchase
-          )
-        `)
-        .order("created_at", { ascending: false })
-
-      if (statusFilter !== "all") {
-        query = query.eq("status", statusFilter)
-      }
-
-      if (searchTerm) {
-        query = query.or(
-          `customer_name.ilike.%${searchTerm}%,phone.ilike.%${searchTerm}%,short_order_id.ilike.%${searchTerm}%`,
-        )
-      }
-
-      const { data, error } = await query
-
-      if (error) {
-        console.error("[v0] Error fetching orders:", error)
-        setConnectionStatus("disconnected")
-        throw error
-      }
-
-      setOrders(data || [])
-      setConnectionStatus("connected")
-      console.log("[v0] Orders fetched successfully:", data?.length || 0)
-    } catch (error) {
-      console.error("[v0] Error fetching orders:", error)
-      setConnectionStatus("disconnected")
-    } finally {
-      setLoading(false)
-    }
-  }
-
   useEffect(() => {
     const supabase = createClient()
 
     const subscription = supabase
-      .channel("orders-changes")
+      .channel("orders-status-monitor")
       .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, (payload) => {
         console.log("[v0] Real-time order change detected:", payload)
         setConnectionStatus("connected")
-        fetchOrders()
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "order_items" }, (payload) => {
         console.log("[v0] Real-time order items change detected:", payload)
-        fetchOrders()
       })
       .subscribe((status) => {
         console.log("[v0] Real-time subscription status:", status)
@@ -102,25 +45,20 @@ export default function OrdersPage() {
     }
   }, [])
 
-  useEffect(() => {
-    fetchOrders()
-  }, [statusFilter])
+  const filteredOrders = orders.filter((order) => {
+    const matchesStatus = statusFilter === "all" || order.status === statusFilter
+    const matchesSearch =
+      searchTerm === "" ||
+      order.customer_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      order.phone?.includes(searchTerm) ||
+      order.short_order_id?.toLowerCase().includes(searchTerm.toLowerCase())
 
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      fetchOrders()
-    }, 500)
-    return () => clearTimeout(timeoutId)
-  }, [searchTerm])
+    return matchesStatus && matchesSearch
+  })
 
   const handleStatusUpdate = (orderId: string, newStatus: string) => {
     console.log(`[v0] Status update requested: ${orderId} -> ${newStatus}`)
-
-    setOrders((prevOrders) =>
-      prevOrders.map((order) =>
-        order.order_id === orderId ? { ...order, status: newStatus, updated_at: new Date().toISOString() } : order,
-      ),
-    )
+    // Real-time updates will handle the state changes automatically
   }
 
   const getUserRole = (): "admin" | "manager" => {
@@ -129,10 +67,10 @@ export default function OrdersPage() {
 
   const getOrderStats = () => {
     const stats = {
-      total: orders.length,
-      pending: orders.filter((o) => o.status === "pending").length,
-      confirmed: orders.filter((o) => o.status === "confirmed").length,
-      cancelled: orders.filter((o) => o.status === "cancelled").length,
+      total: filteredOrders.length,
+      pending: filteredOrders.filter((o) => o.status === "pending").length,
+      confirmed: filteredOrders.filter((o) => o.status === "confirmed").length,
+      cancelled: filteredOrders.filter((o) => o.status === "cancelled").length,
     }
     return stats
   }
@@ -277,7 +215,7 @@ export default function OrdersPage() {
 
       {/* Enhanced Orders Table */}
       <EnhancedOrdersTable
-        orders={orders}
+        orders={filteredOrders}
         loading={loading}
         onRefresh={fetchOrders}
         onStatusUpdate={handleStatusUpdate}

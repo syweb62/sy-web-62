@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { createClient } from "@/lib/supabase"
-import { useNotifications } from "@/context/notification-context"
+import { useNotificationSystem } from "@/hooks/use-notification-system"
 
 interface Order {
   id: string
@@ -23,7 +23,7 @@ interface Order {
 export function useRealtimeOrders() {
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
-  const { addNotification } = useNotifications()
+  const { notifyOrderStatusChange } = useNotificationSystem()
 
   const fetchOrders = useCallback(async () => {
     try {
@@ -61,16 +61,18 @@ export function useRealtimeOrders() {
           console.log("[v0] Real-time order change:", payload)
 
           if (payload.eventType === "INSERT") {
-            addNotification({
-              type: "info",
-              title: "New Order Received",
-              message: `Order from ${payload.new.customer_name || "Customer"}`,
-              priority: "high",
-            })
-
-            // Refresh orders list
+            notifyOrderStatusChange(
+              payload.new.short_order_id || payload.new.order_id,
+              "pending",
+              payload.new.customer_name,
+            )
             fetchOrders()
           } else if (payload.eventType === "UPDATE") {
+            notifyOrderStatusChange(
+              payload.new.short_order_id || payload.new.order_id,
+              payload.new.status,
+              payload.new.customer_name,
+            )
             setOrders((prev) =>
               prev.map((order) =>
                 order.id === payload.new.order_id ? { ...order, status: payload.new.status, ...payload.new } : order,
@@ -94,7 +96,6 @@ export function useRealtimeOrders() {
         },
         () => {
           console.log("[v0] Order items changed, refreshing orders...")
-          // Refresh orders when items change
           fetchOrders()
         },
       )
@@ -105,7 +106,7 @@ export function useRealtimeOrders() {
       ordersSubscription.unsubscribe()
       orderItemsSubscription.unsubscribe()
     }
-  }, [fetchOrders, addNotification])
+  }, [fetchOrders, notifyOrderStatusChange])
 
   return { orders, loading, refetch: fetchOrders }
 }

@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
-import { ArrowLeft, Save } from "lucide-react"
+import { ArrowLeft, Save, Upload, X } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { toast } from "@/hooks/use-toast"
 import { LoadingSpinner } from "@/components/loading-spinner"
@@ -32,6 +32,8 @@ export default function EditMenuItemPage() {
   const params = useParams()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [menuItem, setMenuItem] = useState<MenuItem | null>(null)
   const [categories, setCategories] = useState<string[]>([])
   const [formData, setFormData] = useState({
@@ -49,6 +51,12 @@ export default function EditMenuItemPage() {
       fetchCategories()
     }
   }, [params.id])
+
+  useEffect(() => {
+    if (formData.image_url) {
+      setImagePreview(formData.image_url)
+    }
+  }, [formData.image_url])
 
   const fetchCategories = async () => {
     try {
@@ -88,6 +96,72 @@ export default function EditMenuItemPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    // Validate file type
+    if (!file.type.startsWith("image/")) {
+      toast({
+        title: "Error",
+        description: "Please select a valid image file",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast({
+        title: "Error",
+        description: "Image size should be less than 5MB",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setUploading(true)
+
+    try {
+      // Create unique filename
+      const fileExt = file.name.split(".").pop()
+      const fileName = `menu-items/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`
+
+      // Upload to Supabase Storage
+      const { data, error } = await supabase.storage.from("menu-images").upload(fileName, file)
+
+      if (error) throw error
+
+      // Get public URL
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from("menu-images").getPublicUrl(fileName)
+
+      // Update form data with new image URL
+      handleInputChange("image_url", publicUrl)
+      setImagePreview(publicUrl)
+
+      toast({
+        title: "Success",
+        description: "Image uploaded successfully",
+      })
+    } catch (error) {
+      console.error("Error uploading image:", error)
+      toast({
+        title: "Error",
+        description: "Failed to upload image",
+        variant: "destructive",
+      })
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const handleRemoveImage = () => {
+    setImagePreview(null)
+    handleInputChange("image_url", "")
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -231,17 +305,60 @@ export default function EditMenuItemPage() {
                   </SelectContent>
                 </Select>
               </div>
+
               <div className="space-y-2">
-                <Label htmlFor="image_url" className="text-white">
-                  Image URL
-                </Label>
-                <Input
-                  id="image_url"
-                  value={formData.image_url}
-                  onChange={(e) => handleInputChange("image_url", e.target.value)}
-                  className="bg-gray-800/50 border-gray-700"
-                  placeholder="https://example.com/image.jpg"
-                />
+                <Label className="text-white">Menu Item Image</Label>
+
+                {/* Image Preview */}
+                {imagePreview && (
+                  <div className="relative w-full h-32 bg-gray-800/50 border border-gray-700 rounded-md overflow-hidden">
+                    <img
+                      src={imagePreview || "/placeholder.svg"}
+                      alt="Menu item preview"
+                      className="w-full h-full object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleRemoveImage}
+                      className="absolute top-2 right-2 bg-red-600 hover:bg-red-700 text-white rounded-full p-1 transition-colors"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                )}
+
+                {/* Upload Button */}
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => document.getElementById("image-upload")?.click()}
+                    disabled={uploading}
+                    className="flex-1"
+                  >
+                    {uploading ? (
+                      <>Uploading...</>
+                    ) : (
+                      <>
+                        <Upload size={16} className="mr-2" />
+                        {imagePreview ? "Change Image" : "Upload Image"}
+                      </>
+                    )}
+                  </Button>
+
+                  {/* URL Input as fallback */}
+                  <Input
+                    placeholder="Or paste image URL"
+                    value={formData.image_url}
+                    onChange={(e) => handleInputChange("image_url", e.target.value)}
+                    className="bg-gray-800/50 border-gray-700 flex-1"
+                  />
+                </div>
+
+                {/* Hidden file input */}
+                <input id="image-upload" type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+
+                <p className="text-xs text-gray-400">Upload an image or paste a URL. Max size: 5MB</p>
               </div>
             </div>
 

@@ -35,29 +35,79 @@ export default function MenuManagementPage() {
   const [categories, setCategories] = useState<string[]>([])
 
   useEffect(() => {
-    fetchMenuItems()
-  }, [])
+    const fetchMenuItems = async () => {
+      try {
+        const { data, error } = await supabase.from("menu_items").select("*").order("created_at", { ascending: false })
 
-  const fetchMenuItems = async () => {
-    try {
-      const { data, error } = await supabase.from("menu_items").select("*").order("created_at", { ascending: false })
+        if (error) throw error
+        setMenuItems(data || [])
 
-      if (error) throw error
-      setMenuItems(data || [])
-
-      const uniqueCategories = [...new Set(data?.map((item) => item.category).filter(Boolean) || [])]
-      setCategories(uniqueCategories)
-    } catch (error) {
-      console.error("Error fetching menu items:", error)
-      toast({
-        title: "Error",
-        description: "Failed to load menu items",
-        variant: "destructive",
-      })
-    } finally {
-      setLoading(false)
+        const uniqueCategories = [...new Set(data?.map((item) => item.category).filter(Boolean) || [])]
+        setCategories(uniqueCategories)
+      } catch (error) {
+        console.error("Error fetching menu items:", error)
+        toast({
+          title: "Error",
+          description: "Failed to load menu items",
+          variant: "destructive",
+        })
+      } finally {
+        setLoading(false)
+      }
     }
-  }
+
+    fetchMenuItems()
+
+    const channel = supabase
+      .channel("dashboard_menu_items_changes")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "menu_items",
+        },
+        (payload) => {
+          console.log("[v0] Dashboard menu item change detected:", payload)
+
+          if (payload.eventType === "INSERT") {
+            const newItem = payload.new as MenuItem
+            setMenuItems((prev) => [newItem, ...prev])
+
+            // Update categories if new category is added
+            if (newItem.category && !categories.includes(newItem.category)) {
+              setCategories((prev) => [...prev, newItem.category])
+            }
+
+            toast({
+              title: "New Item Added",
+              description: `${newItem.name} has been added to the menu`,
+            })
+          } else if (payload.eventType === "UPDATE") {
+            const updatedItem = payload.new as MenuItem
+            setMenuItems((prev) => prev.map((item) => (item.id === updatedItem.id ? updatedItem : item)))
+
+            toast({
+              title: "Item Updated",
+              description: `${updatedItem.name} has been updated`,
+            })
+          } else if (payload.eventType === "DELETE") {
+            const deletedItem = payload.old as MenuItem
+            setMenuItems((prev) => prev.filter((item) => item.id !== deletedItem.id))
+
+            toast({
+              title: "Item Deleted",
+              description: `${deletedItem.name} has been removed from the menu`,
+            })
+          }
+        },
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [categories])
 
   const handleCategoryCreated = (newCategory: string) => {
     if (!categories.includes(newCategory)) {
@@ -89,14 +139,19 @@ export default function MenuManagementPage() {
 
   const toggleAvailability = async (id: string, currentStatus: boolean) => {
     try {
+      setMenuItems(menuItems.map((item) => (item.id === id ? { ...item, is_available: !currentStatus } : item)))
+
       const { error } = await supabase.from("menu_items").update({ is_available: !currentStatus }).eq("id", id)
 
-      if (error) throw error
+      if (error) {
+        // Revert optimistic update on error
+        setMenuItems(menuItems.map((item) => (item.id === id ? { ...item, is_available: currentStatus } : item)))
+        throw error
+      }
 
-      setMenuItems(menuItems.map((item) => (item.id === id ? { ...item, is_available: !currentStatus } : item)))
       toast({
         title: "Success",
-        description: "Menu item status updated",
+        description: `Menu item ${!currentStatus ? "enabled" : "disabled"} successfully`,
       })
     } catch (error) {
       toast({
