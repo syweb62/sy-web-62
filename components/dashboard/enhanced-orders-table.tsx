@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
@@ -56,7 +56,7 @@ const EnhancedOrdersTable = ({
   })
   const supabase = createClient()
 
-  const formatDateTime = (dateString: string) => {
+  const formatDateTime = useCallback((dateString: string) => {
     const date = new Date(dateString)
     return {
       date: date.toLocaleDateString("en-US", {
@@ -72,9 +72,9 @@ const EnhancedOrdersTable = ({
         hour12: true,
       }),
     }
-  }
+  }, [])
 
-  const getRelativeTime = (dateString: string) => {
+  const getRelativeTime = useCallback((dateString: string) => {
     const date = new Date(dateString)
     const now = new Date()
     const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60))
@@ -87,55 +87,54 @@ const EnhancedOrdersTable = ({
 
     const diffInDays = Math.floor(diffInHours / 24)
     return `${diffInDays}d ago`
-  }
+  }, [])
 
-  const handleStatusUpdate = async (orderId: string, newStatus: string) => {
-    if (updatingOrders.has(orderId)) {
-      console.log("[v0] Order already being updated, skipping:", orderId)
-      return
-    }
-
-    try {
-      setUpdatingOrders((prev) => new Set(prev).add(orderId))
-      console.log(`[v0] Updating order status: ${orderId} to ${newStatus}`)
-
-      if (onStatusUpdate) {
-        onStatusUpdate(orderId, newStatus)
+  const handleStatusUpdate = useCallback(
+    async (orderId: string, newStatus: string) => {
+      if (updatingOrders.has(orderId)) {
+        return
       }
 
-      const { error } = await supabase
-        .from("orders")
-        .update({
-          status: newStatus,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("order_id", orderId)
+      try {
+        setUpdatingOrders((prev) => new Set(prev).add(orderId))
 
-      if (error) {
-        console.error("[v0] Error updating order status:", error.message)
-        if (onRefresh) {
-          onRefresh()
+        if (onStatusUpdate) {
+          onStatusUpdate(orderId, newStatus)
         }
-        throw error
-      }
 
-      console.log(`[v0] Order status updated successfully: ${orderId} -> ${newStatus}`)
+        const { error } = await supabase
+          .from("orders")
+          .update({
+            status: newStatus,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("order_id", orderId)
 
-      if (onRefresh) {
-        setTimeout(onRefresh, 100)
+        if (error) {
+          console.error("[v0] Error updating order status:", error.message)
+          if (onRefresh) {
+            onRefresh()
+          }
+          throw error
+        }
+
+        if (onRefresh) {
+          setTimeout(onRefresh, 100)
+        }
+      } catch (error) {
+        console.error("[v0] Failed to update order status:", error)
+      } finally {
+        setTimeout(() => {
+          setUpdatingOrders((prev) => {
+            const newSet = new Set(prev)
+            newSet.delete(orderId)
+            return newSet
+          })
+        }, 500)
       }
-    } catch (error) {
-      console.error("[v0] Failed to update order status:", error)
-    } finally {
-      setTimeout(() => {
-        setUpdatingOrders((prev) => {
-          const newSet = new Set(prev)
-          newSet.delete(orderId)
-          return newSet
-        })
-      }, 500)
-    }
-  }
+    },
+    [updatingOrders, onStatusUpdate, onRefresh, supabase],
+  )
 
   const handleStatusUpdateWithConfirmation = async (orderId: string, newStatus: string) => {
     setConfirmationModal({
@@ -290,11 +289,10 @@ const EnhancedOrdersTable = ({
     )
   }
 
-  const handlePrint = (order: Order) => {
-    const printWindow = window.open("", "_blank")
-    if (!printWindow) return
-
-    const printContent = `
+  const generatePrintContent = useCallback(
+    (order: Order) => {
+      const dateTime = formatDateTime(order.created_at)
+      return `
       <html>
         <head>
           <title>Order ${order.short_order_id}</title>
@@ -336,7 +334,7 @@ const EnhancedOrdersTable = ({
           <div class="header">
             <h2>SUSHI YAKI RESTAURANT</h2>
             <p>Order #${order.short_order_id}</p>
-            <p>${formatDateTime(order.created_at).date} ${formatDateTime(order.created_at).time}</p>
+            <p>${dateTime.date} ${dateTime.time}</p>
           </div>
           <div class="order-info">
             <p><strong>Customer:</strong> ${order.customer_name}</p>
@@ -368,13 +366,26 @@ const EnhancedOrdersTable = ({
         </body>
       </html>
     `
+    },
+    [formatDateTime],
+  )
 
-    printWindow.document.write(printContent)
-    printWindow.document.close()
-    printWindow.print()
-  }
+  const handlePrint = useCallback(
+    (order: Order) => {
+      const printWindow = window.open("", "_blank")
+      if (!printWindow) return
+
+      const printContent = generatePrintContent(order)
+      printWindow.document.write(printContent)
+      printWindow.document.close()
+      printWindow.print()
+    },
+    [generatePrintContent],
+  )
 
   useEffect(() => {
+    if (!onRefresh) return
+
     const subscription = supabase
       .channel("enhanced-orders-realtime")
       .on(
@@ -385,8 +396,6 @@ const EnhancedOrdersTable = ({
           table: "orders",
         },
         (payload) => {
-          console.log("[v0] Real-time order update received:", payload)
-
           if (payload.eventType === "UPDATE") {
             setUpdatingOrders((prev) => {
               const newSet = new Set(prev)
@@ -394,20 +403,15 @@ const EnhancedOrdersTable = ({
               return newSet
             })
           }
-
-          if (onRefresh) {
-            onRefresh()
-          }
+          setTimeout(onRefresh, 100)
         },
       )
-      .subscribe((status) => {
-        console.log("[v0] Real-time subscription status:", status)
-      })
+      .subscribe()
 
     return () => {
       subscription.unsubscribe()
     }
-  }, [onRefresh])
+  }, [onRefresh, supabase])
 
   if (loading) {
     return (

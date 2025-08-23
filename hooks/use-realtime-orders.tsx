@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { createClient } from "@/lib/supabase"
 import { useNotificationSystem } from "@/hooks/use-notification-system"
 
@@ -31,15 +31,12 @@ export function useRealtimeOrders() {
 
   const fetchOrders = useCallback(async () => {
     try {
-      console.log("[v0] Fetching orders from API...")
       const response = await fetch("/api/orders")
       if (response.ok) {
         const data = await response.json()
-        console.log("[v0] Orders API response:", data)
         setOrders(data.orders || [])
         setConnectionStatus("connected")
       } else {
-        console.error("[v0] Failed to fetch orders:", response.status)
         setConnectionStatus("disconnected")
       }
     } catch (error) {
@@ -52,15 +49,20 @@ export function useRealtimeOrders() {
 
   const handleOrderNotification = useCallback(
     (orderId: string, status: string, customerName: string, isNewOrder = false) => {
-      console.log("[v0] Triggering notification:", { orderId, status, customerName, isNewOrder })
-
-      // Always notify for new orders or status changes
       if (isNewOrder || status !== "pending") {
         notifyOrderStatusChange(orderId, status, customerName)
       }
     },
     [notifyOrderStatusChange],
   )
+
+  const debouncedRefresh = useMemo(() => {
+    let timeoutId: NodeJS.Timeout
+    return () => {
+      clearTimeout(timeoutId)
+      timeoutId = setTimeout(() => fetchOrders(), 300)
+    }
+  }, [fetchOrders])
 
   useEffect(() => {
     if (isInitializedRef.current) return
@@ -85,13 +87,10 @@ export function useRealtimeOrders() {
           table: "orders",
         },
         (payload) => {
-          console.log("[v0] Real-time order change:", payload)
           setConnectionStatus("connected")
 
           if (payload.eventType === "INSERT") {
             const newOrder = payload.new as Order
-            console.log("[v0] New order received:", newOrder)
-
             handleOrderNotification(
               newOrder.short_order_id || newOrder.order_id,
               "pending",
@@ -106,8 +105,6 @@ export function useRealtimeOrders() {
             })
           } else if (payload.eventType === "UPDATE") {
             const updatedOrder = payload.new as Order
-            console.log("[v0] Order updated:", updatedOrder)
-
             handleOrderNotification(
               updatedOrder.short_order_id || updatedOrder.order_id,
               updatedOrder.status,
@@ -124,7 +121,6 @@ export function useRealtimeOrders() {
         },
       )
       .subscribe((status) => {
-        console.log("[v0] Orders subscription status:", status)
         if (status === "SUBSCRIBED") {
           setConnectionStatus("connected")
         } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
@@ -142,9 +138,8 @@ export function useRealtimeOrders() {
           table: "order_items",
         },
         () => {
-          console.log("[v0] Order items changed, refreshing orders...")
           setConnectionStatus("connected")
-          setTimeout(() => fetchOrders(), 200)
+          debouncedRefresh()
         },
       )
       .subscribe()
@@ -152,12 +147,11 @@ export function useRealtimeOrders() {
     subscriptionsRef.current = [ordersSubscription, orderItemsSubscription]
 
     return () => {
-      console.log("[v0] Cleaning up real-time subscriptions...")
       subscriptionsRef.current.forEach((sub) => sub?.unsubscribe())
       subscriptionsRef.current = []
       isInitializedRef.current = false
     }
-  }, [fetchOrders, handleOrderNotification])
+  }, []) // Removed dependencies to prevent subscription recreation
 
   return { orders, loading, connectionStatus, refetch: fetchOrders }
 }

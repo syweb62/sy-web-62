@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -91,7 +91,7 @@ export default function Dashboard() {
 
   const [stats, setStats] = useState<DashboardStats>({
     revenue: { today: 0, thisMonth: 0, growth: 0 },
-    orders: { today: 0, pending: 0, completed: 0, total: 0, cancelled: 0 }, // Added cancelled: 0
+    orders: { today: 0, pending: 0, completed: 0, total: 0, cancelled: 0 }, // Added cancelled orders count
     customers: { total: 0, new: 0 },
     reservations: { today: 0, upcoming: 0 },
   })
@@ -100,91 +100,85 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    if (!ordersLoading && allOrders.length >= 0) {
-      updateDashboardStats(allOrders)
-      fetchReservations()
+  const dashboardStats = useMemo(() => {
+    if (ordersLoading || !allOrders.length) {
+      return {
+        revenue: { today: 0, thisMonth: 0, growth: 0 },
+        orders: { today: 0, pending: 0, completed: 0, total: 0, cancelled: 0 },
+        customers: { total: 0, new: 0 },
+        reservations: { today: 0, upcoming: 0 },
+      }
+    }
+
+    const safeOrders = allOrders.filter((order) => {
+      return order && typeof order === "object" && order.id && typeof order.total_price !== "undefined"
+    })
+
+    const today = new Date().toDateString()
+    const todayOrders = safeOrders.filter((order: Order) => {
+      try {
+        return order.created_at && new Date(order.created_at).toDateString() === today
+      } catch {
+        return false
+      }
+    })
+
+    const pendingOrders = safeOrders.filter(
+      (order: Order) => order.status === "pending" || order.status === "confirmed",
+    )
+    const completedOrders = safeOrders.filter((order: Order) => order.status === "delivered")
+    const cancelledOrders = safeOrders.filter((order: Order) => order.status === "cancelled")
+
+    const todayRevenue = todayOrders.reduce((sum: number, order: Order) => {
+      const price = Number.parseFloat(String(order.total_price)) || 0
+      return sum + (isNaN(price) ? 0 : price)
+    }, 0)
+
+    const totalRevenue = safeOrders.reduce((sum: number, order: Order) => {
+      const price = Number.parseFloat(String(order.total_price)) || 0
+      return sum + (isNaN(price) ? 0 : price)
+    }, 0)
+
+    const uniqueCustomers = new Set(
+      safeOrders
+        .filter((order) => order.customer_name && typeof order.customer_name === "string")
+        .map((order: Order) => order.customer_name),
+    )
+
+    return {
+      revenue: {
+        today: todayRevenue,
+        thisMonth: totalRevenue,
+        growth: 12.5,
+      },
+      orders: {
+        today: todayOrders.length,
+        pending: pendingOrders.length,
+        completed: completedOrders.length,
+        total: safeOrders.length,
+        cancelled: cancelledOrders.length,
+      },
+      customers: {
+        total: uniqueCustomers.size,
+        new: 5,
+      },
     }
   }, [allOrders, ordersLoading])
 
-  const updateDashboardStats = (orders: Order[]) => {
-    try {
-      setError(null)
-      console.log("[v0] Updating dashboard stats with real-time data...")
-
-      const safeOrders = orders.filter((order) => {
+  const recentOrdersMemoized = useMemo(() => {
+    if (!allOrders.length) return []
+    return allOrders
+      .filter((order) => {
         return order && typeof order === "object" && order.id && typeof order.total_price !== "undefined"
       })
+      .slice(0, 5)
+  }, [allOrders])
 
-      setRecentOrders(safeOrders.slice(0, 5))
-
-      const today = new Date().toDateString()
-      const todayOrders = safeOrders.filter((order: Order) => {
-        try {
-          return order.created_at && new Date(order.created_at).toDateString() === today
-        } catch {
-          return false
-        }
-      })
-
-      const pendingOrders = safeOrders.filter(
-        (order: Order) => order.status === "pending" || order.status === "confirmed",
-      )
-
-      const completedOrders = safeOrders.filter((order: Order) => order.status === "delivered")
-
-      const cancelledOrders = safeOrders.filter((order: Order) => order.status === "cancelled")
-
-      const todayRevenue = todayOrders.reduce((sum: number, order: Order) => {
-        const price = Number.parseFloat(String(order.total_price)) || 0
-        return sum + (isNaN(price) ? 0 : price)
-      }, 0)
-
-      const totalRevenue = safeOrders.reduce((sum: number, order: Order) => {
-        const price = Number.parseFloat(String(order.total_price)) || 0
-        return sum + (isNaN(price) ? 0 : price)
-      }, 0)
-
-      const uniqueCustomers = new Set(
-        safeOrders
-          .filter((order) => order.customer_name && typeof order.customer_name === "string")
-          .map((order: Order) => order.customer_name),
-      )
-
-      setStats((prev) => ({
-        ...prev,
-        revenue: {
-          today: todayRevenue,
-          thisMonth: totalRevenue,
-          growth: 12.5,
-        },
-        orders: {
-          today: todayOrders.length,
-          pending: pendingOrders.length,
-          completed: completedOrders.length,
-          total: safeOrders.length,
-          cancelled: cancelledOrders.length, // Added cancelled orders count
-        },
-        customers: {
-          total: uniqueCustomers.size,
-          new: 5,
-        },
-      }))
-
-      setLoading(false)
-    } catch (error) {
-      const errorMsg = `Error updating dashboard stats: ${error instanceof Error ? error.message : String(error)}`
-      console.error("[v0]", errorMsg)
-      setError(errorMsg)
-      setLoading(false)
-    }
-  }
-
-  const fetchReservations = async () => {
+  const fetchReservations = useCallback(async () => {
     try {
       const reservationsResponse = await fetch("/api/reservations")
-
       let reservations: Reservation[] = []
+
       if (reservationsResponse.ok) {
         const reservationsData = await reservationsResponse.json()
         if (reservationsData.success && Array.isArray(reservationsData.reservations)) {
@@ -213,7 +207,6 @@ export default function Dashboard() {
       })
 
       setTodayReservations(todayReservationsFiltered.slice(0, 5))
-
       setStats((prev) => ({
         ...prev,
         reservations: {
@@ -224,7 +217,16 @@ export default function Dashboard() {
     } catch (error) {
       console.error("[v0] Error fetching reservations:", error)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    if (!ordersLoading && allOrders.length >= 0) {
+      setStats((prev) => ({ ...prev, ...dashboardStats }))
+      setRecentOrders(recentOrdersMemoized)
+      fetchReservations()
+      setLoading(false)
+    }
+  }, [dashboardStats, recentOrdersMemoized, ordersLoading, allOrders.length, fetchReservations])
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -253,7 +255,7 @@ export default function Dashboard() {
     return (
       <div className="flex flex-col justify-center items-center h-64 text-white">
         <p className="text-red-400 mb-4">Error loading dashboard: {error}</p>
-        <Button onClick={() => updateDashboardStats(allOrders)} variant="outline">
+        <Button onClick={() => setStats(dashboardStats)} variant="outline">
           Try Again
         </Button>
       </div>
