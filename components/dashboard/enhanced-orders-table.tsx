@@ -91,6 +91,7 @@ const EnhancedOrdersTable = ({
 
   const handleStatusUpdate = async (orderId: string, newStatus: string) => {
     if (updatingOrders.has(orderId)) {
+      console.log("[v0] Order already being updated, skipping:", orderId)
       return
     }
 
@@ -121,16 +122,18 @@ const EnhancedOrdersTable = ({
       console.log(`[v0] Order status updated successfully: ${orderId} -> ${newStatus}`)
 
       if (onRefresh) {
-        setTimeout(onRefresh, 500)
+        setTimeout(onRefresh, 100)
       }
     } catch (error) {
       console.error("[v0] Failed to update order status:", error)
     } finally {
-      setUpdatingOrders((prev) => {
-        const newSet = new Set(prev)
-        newSet.delete(orderId)
-        return newSet
-      })
+      setTimeout(() => {
+        setUpdatingOrders((prev) => {
+          const newSet = new Set(prev)
+          newSet.delete(orderId)
+          return newSet
+        })
+      }, 500)
     }
   }
 
@@ -384,6 +387,14 @@ const EnhancedOrdersTable = ({
         (payload) => {
           console.log("[v0] Real-time order update received:", payload)
 
+          if (payload.eventType === "UPDATE") {
+            setUpdatingOrders((prev) => {
+              const newSet = new Set(prev)
+              newSet.delete(payload.new.order_id)
+              return newSet
+            })
+          }
+
           if (onRefresh) {
             onRefresh()
           }
@@ -423,7 +434,7 @@ const EnhancedOrdersTable = ({
           <div className="w-16 h-16 bg-gray-800/50 rounded-full flex items-center justify-center mb-4">
             <Clock className="w-8 h-8 text-gray-400" />
           </div>
-          <h3 className="text-xl font-medium text-gray-300 mb-2">No Orders Found</h3>
+          <h3 className="text-xl font-medium text-white mb-2">No Orders Found</h3>
           <p className="text-gray-500 mb-6 max-w-md">
             Orders will appear here when customers place them. The system is ready to receive new orders.
           </p>

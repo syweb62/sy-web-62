@@ -6,6 +6,7 @@ import { useNotificationSystem } from "@/hooks/use-notification-system"
 
 interface Order {
   id: string
+  order_id: string
   short_order_id?: string
   customer_name: string
   phone: string
@@ -23,8 +24,10 @@ interface Order {
 export function useRealtimeOrders() {
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
+  const [connectionStatus, setConnectionStatus] = useState<"connected" | "connecting" | "disconnected">("connecting")
   const { notifyOrderStatusChange } = useNotificationSystem()
   const subscriptionsRef = useRef<any[]>([])
+  const isInitializedRef = useRef(false)
 
   const fetchOrders = useCallback(async () => {
     try {
@@ -34,28 +37,41 @@ export function useRealtimeOrders() {
         const data = await response.json()
         console.log("[v0] Orders API response:", data)
         setOrders(data.orders || [])
+        setConnectionStatus("connected")
       } else {
         console.error("[v0] Failed to fetch orders:", response.status)
+        setConnectionStatus("disconnected")
       }
     } catch (error) {
       console.error("[v0] Error fetching orders:", error)
+      setConnectionStatus("disconnected")
     } finally {
       setLoading(false)
     }
   }, [])
 
   const handleOrderNotification = useCallback(
-    (orderId: string, status: string, customerName: string) => {
-      notifyOrderStatusChange(orderId, status, customerName)
+    (orderId: string, status: string, customerName: string, isNewOrder = false) => {
+      console.log("[v0] Triggering notification:", { orderId, status, customerName, isNewOrder })
+
+      // Always notify for new orders or status changes
+      if (isNewOrder || status !== "pending") {
+        notifyOrderStatusChange(orderId, status, customerName)
+      }
     },
     [notifyOrderStatusChange],
   )
 
   useEffect(() => {
+    if (isInitializedRef.current) return
+    isInitializedRef.current = true
+
     fetchOrders()
 
     const supabase = createClient()
+    setConnectionStatus("connecting")
 
+    // Clean up existing subscriptions
     subscriptionsRef.current.forEach((sub) => sub?.unsubscribe())
     subscriptionsRef.current = []
 
@@ -70,29 +86,51 @@ export function useRealtimeOrders() {
         },
         (payload) => {
           console.log("[v0] Real-time order change:", payload)
+          setConnectionStatus("connected")
 
           if (payload.eventType === "INSERT") {
+            const newOrder = payload.new as Order
+            console.log("[v0] New order received:", newOrder)
+
             handleOrderNotification(
-              payload.new.short_order_id || payload.new.order_id,
+              newOrder.short_order_id || newOrder.order_id,
               "pending",
-              payload.new.customer_name,
+              newOrder.customer_name,
+              true,
             )
-            setOrders((prev) => [payload.new as Order, ...prev])
+
+            setOrders((prev) => {
+              const exists = prev.find((order) => order.order_id === newOrder.order_id)
+              if (exists) return prev
+              return [newOrder, ...prev]
+            })
           } else if (payload.eventType === "UPDATE") {
+            const updatedOrder = payload.new as Order
+            console.log("[v0] Order updated:", updatedOrder)
+
             handleOrderNotification(
-              payload.new.short_order_id || payload.new.order_id,
-              payload.new.status,
-              payload.new.customer_name,
+              updatedOrder.short_order_id || updatedOrder.order_id,
+              updatedOrder.status,
+              updatedOrder.customer_name,
+              false,
             )
+
             setOrders((prev) =>
-              prev.map((order) => (order.id === payload.new.order_id ? { ...order, ...payload.new } : order)),
+              prev.map((order) => (order.order_id === updatedOrder.order_id ? { ...order, ...updatedOrder } : order)),
             )
           } else if (payload.eventType === "DELETE") {
-            setOrders((prev) => prev.filter((order) => order.id !== payload.old.order_id))
+            setOrders((prev) => prev.filter((order) => order.order_id !== payload.old.order_id))
           }
         },
       )
-      .subscribe()
+      .subscribe((status) => {
+        console.log("[v0] Orders subscription status:", status)
+        if (status === "SUBSCRIBED") {
+          setConnectionStatus("connected")
+        } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          setConnectionStatus("disconnected")
+        }
+      })
 
     const orderItemsSubscription = supabase
       .channel("order-items-changes")
@@ -105,7 +143,8 @@ export function useRealtimeOrders() {
         },
         () => {
           console.log("[v0] Order items changed, refreshing orders...")
-          setTimeout(() => fetchOrders(), 500)
+          setConnectionStatus("connected")
+          setTimeout(() => fetchOrders(), 200)
         },
       )
       .subscribe()
@@ -116,8 +155,9 @@ export function useRealtimeOrders() {
       console.log("[v0] Cleaning up real-time subscriptions...")
       subscriptionsRef.current.forEach((sub) => sub?.unsubscribe())
       subscriptionsRef.current = []
+      isInitializedRef.current = false
     }
-  }, [])
+  }, [fetchOrders, handleOrderNotification])
 
-  return { orders, loading, refetch: fetchOrders }
+  return { orders, loading, connectionStatus, refetch: fetchOrders }
 }

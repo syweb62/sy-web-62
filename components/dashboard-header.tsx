@@ -1,6 +1,6 @@
 "use client"
 
-import { Bell, Settings, User } from "lucide-react"
+import { Bell, Settings, User, Wifi, WifiOff } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -15,11 +15,41 @@ import { useNotifications } from "@/context/notification-context"
 import { useAuth } from "@/hooks/use-auth"
 import { formatDistanceToNow } from "date-fns"
 
-export function DashboardHeader() {
+interface DashboardHeaderProps {
+  connectionStatus?: "connected" | "connecting" | "disconnected"
+}
+
+export function DashboardHeader({ connectionStatus = "connected" }: DashboardHeaderProps) {
   const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications()
   const { user } = useAuth()
 
   const recentNotifications = notifications.slice(0, 5)
+
+  const getConnectionStatusIcon = () => {
+    switch (connectionStatus) {
+      case "connected":
+        return <Wifi size={16} className="text-green-400" />
+      case "connecting":
+        return <Wifi size={16} className="text-yellow-400 animate-pulse" />
+      case "disconnected":
+        return <WifiOff size={16} className="text-red-400" />
+      default:
+        return <Wifi size={16} className="text-gray-400" />
+    }
+  }
+
+  const getConnectionStatusText = () => {
+    switch (connectionStatus) {
+      case "connected":
+        return "Connected"
+      case "connecting":
+        return "Connecting..."
+      case "disconnected":
+        return "Connection Lost"
+      default:
+        return "Unknown"
+    }
+  }
 
   return (
     <header className="flex items-center justify-between p-4 bg-black/30 border-b border-gray-800">
@@ -36,6 +66,21 @@ export function DashboardHeader() {
       </div>
 
       <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-gray-800/50 border border-gray-700">
+          {getConnectionStatusIcon()}
+          <span
+            className={`text-xs font-medium ${
+              connectionStatus === "connected"
+                ? "text-green-400"
+                : connectionStatus === "connecting"
+                  ? "text-yellow-400"
+                  : "text-red-400"
+            }`}
+          >
+            {getConnectionStatusText()}
+          </span>
+        </div>
+
         {/* Notifications */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
