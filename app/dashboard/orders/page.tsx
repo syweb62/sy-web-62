@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { EnhancedOrdersTable } from "@/components/dashboard/enhanced-orders-table"
-import { DashboardHeader } from "@/components/dashboard-header"
 import { Search, RefreshCw, Filter, TrendingUp } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { useRealtimeOrders } from "@/hooks/use-realtime-orders"
@@ -51,8 +50,6 @@ export default function OrdersPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900">
-      <DashboardHeader connectionStatus={connectionStatus} />
-
       <div className="space-y-8 p-6">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           <div className="space-y-2">
@@ -61,33 +58,6 @@ export default function OrdersPage() {
           </div>
 
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-3 px-4 py-2 bg-gray-800/50 rounded-lg border border-gray-700/50">
-              <div
-                className={`w-3 h-3 rounded-full ${
-                  connectionStatus === "connected"
-                    ? "bg-green-500 animate-pulse"
-                    : connectionStatus === "connecting"
-                      ? "bg-yellow-500 animate-pulse"
-                      : "bg-red-500"
-                }`}
-              ></div>
-              <span
-                className={`text-sm font-medium ${
-                  connectionStatus === "connected"
-                    ? "text-green-400"
-                    : connectionStatus === "connecting"
-                      ? "text-yellow-400"
-                      : "text-red-400"
-                }`}
-              >
-                {connectionStatus === "connected"
-                  ? "Real-time Active"
-                  : connectionStatus === "connecting"
-                    ? "Connecting..."
-                    : "Connection Lost"}
-              </span>
-            </div>
-
             <Button
               variant="outline"
               onClick={fetchOrders}
