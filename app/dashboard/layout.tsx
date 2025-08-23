@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { DashboardHeader } from "@/components/dashboard-header"
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/hooks/use-auth"
 import { SidebarProvider } from "@/components/ui/sidebar"
@@ -14,32 +14,42 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode
 }) {
-  const { user, loading } = useAuth()
+  const { user, isLoading } = useAuth()
   const router = useRouter()
+  const [authChecked, setAuthChecked] = useState(false)
 
   useEffect(() => {
-    console.log("[v0] Dashboard auth check:", {
-      user: user ? { email: user.email, role: user.role } : null,
-      loading,
-      isAdmin: user && (user.email === "admin@sushiyaki.com" || user.role === "admin"),
-      isManager: user && (user.email === "manager@sushiyaki.com" || user.role === "manager"),
-    })
+    console.log(
+      "[v0] Dashboard layout - isLoading:",
+      isLoading,
+      "user:",
+      user,
+      "role:",
+      user?.role,
+      "authChecked:",
+      authChecked,
+    )
+  }, [user, isLoading, authChecked])
 
-    if (
-      !loading &&
-      (!user ||
-        (user.email !== "admin@sushiyaki.com" &&
-          user.email !== "manager@sushiyaki.com" &&
-          user.role !== "admin" &&
-          user.role !== "manager"))
-    ) {
-      console.log("[v0] Redirecting to signin - not admin or manager user")
-      router.push("/signin?redirect=/dashboard")
+  useEffect(() => {
+    if (!isLoading) {
+      // Give a moment for user state to settle after auth completes
+      const timer = setTimeout(() => {
+        setAuthChecked(true)
+
+        if (!user || (user.role !== "admin" && user.role !== "manager")) {
+          console.log("[v0] Dashboard access denied - user:", user, "role:", user?.role)
+          router.push("/signin?redirect=/dashboard")
+        } else {
+          console.log("[v0] Dashboard access granted for:", user.role)
+        }
+      }, 200) // Small delay to ensure auth state is settled
+
+      return () => clearTimeout(timer)
     }
-  }, [user, loading, router])
+  }, [user, isLoading, router])
 
-  if (loading) {
-    console.log("[v0] Dashboard loading...")
+  if (isLoading || !authChecked) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-darkBg">
         <LoadingSpinner />
@@ -47,18 +57,10 @@ export default function DashboardLayout({
     )
   }
 
-  if (
-    !user ||
-    (user.email !== "admin@sushiyaki.com" &&
-      user.email !== "manager@sushiyaki.com" &&
-      user.role !== "admin" &&
-      user.role !== "manager")
-  ) {
-    console.log("[v0] Dashboard access denied - redirecting to signin")
+  if (!user || (user.role !== "admin" && user.role !== "manager")) {
     return null
   }
 
-  console.log("[v0] Dashboard access granted for admin/manager user")
   return (
     <SidebarProvider>
       <div className="flex h-screen w-full bg-darkBg overflow-hidden">

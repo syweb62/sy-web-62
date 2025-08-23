@@ -39,7 +39,19 @@ export default function SignInPage() {
 
   useEffect(() => {
     if (user && !authLoading) {
-      router.push(redirectTo)
+      const isAdmin = user.email === "admin@sushiyaki.com" || user.role === "admin"
+      const destination = isAdmin ? "/dashboard" : redirectTo
+      console.log(
+        "[v0] Auto-redirect triggered - user:",
+        user.email,
+        "role:",
+        user.role,
+        "isAdmin:",
+        isAdmin,
+        "destination:",
+        destination,
+      )
+      router.push(destination)
     }
   }, [user, authLoading, router, redirectTo])
 
@@ -103,17 +115,10 @@ export default function SignInPage() {
       if (isLogin) {
         console.log("[v0] Attempting admin login with:", formData.email.trim().toLowerCase())
         await signIn(formData.email.trim().toLowerCase(), formData.password)
-
-        if (formData.email.trim().toLowerCase() === "admin@sushiyaki.com") {
-          console.log("[v0] Admin login successful, redirecting to:", redirectTo === "/" ? "/dashboard" : redirectTo)
-          router.push(redirectTo === "/" ? "/dashboard" : redirectTo)
-        } else {
-          console.log("[v0] Regular user login successful, redirecting to:", redirectTo)
-          router.push(redirectTo)
-        }
+        console.log("[v0] Login successful, useEffect will handle redirect")
       } else {
         await signUp(formData.name.trim(), formData.email.trim().toLowerCase(), formData.password, formData.phone)
-        router.push(redirectTo)
+        console.log("[v0] Signup successful, useEffect will handle redirect")
       }
     } catch (error) {
       console.error("[v0] Authentication error:", error)
