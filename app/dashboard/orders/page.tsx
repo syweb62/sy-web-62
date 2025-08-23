@@ -131,9 +131,8 @@ export default function OrdersPage() {
     const stats = {
       total: orders.length,
       pending: orders.filter((o) => o.status === "pending").length,
-      preparing: orders.filter((o) => o.status === "preparing").length,
-      ready: orders.filter((o) => o.status === "ready").length,
-      completed: orders.filter((o) => o.status === "completed").length,
+      confirmed: orders.filter((o) => o.status === "confirmed").length,
+      cancelled: orders.filter((o) => o.status === "cancelled").length,
     }
     return stats
   }
@@ -188,7 +187,7 @@ export default function OrdersPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="bg-gray-900/40 border-gray-700/50">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -212,34 +211,23 @@ export default function OrdersPage() {
           </CardContent>
         </Card>
 
-        <Card className="bg-orange-500/10 border-orange-500/20">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-orange-400 uppercase tracking-wide font-medium">Preparing</p>
-                <p className="text-2xl font-bold text-orange-400">{stats.preparing}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
         <Card className="bg-green-500/10 border-green-500/20">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-green-400 uppercase tracking-wide font-medium">Ready</p>
-                <p className="text-2xl font-bold text-green-400">{stats.ready}</p>
+                <p className="text-xs text-green-400 uppercase tracking-wide font-medium">Confirmed</p>
+                <p className="text-2xl font-bold text-green-400">{stats.confirmed}</p>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="bg-purple-500/10 border-purple-500/20">
+        <Card className="bg-red-500/10 border-red-500/20">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-purple-400 uppercase tracking-wide font-medium">Completed</p>
-                <p className="text-2xl font-bold text-purple-400">{stats.completed}</p>
+                <p className="text-xs text-red-400 uppercase tracking-wide font-medium">Cancelled</p>
+                <p className="text-2xl font-bold text-red-400">{stats.cancelled}</p>
               </div>
             </div>
           </CardContent>
@@ -276,15 +264,6 @@ export default function OrdersPage() {
                   </SelectItem>
                   <SelectItem value="confirmed" className="text-white">
                     Confirmed Orders
-                  </SelectItem>
-                  <SelectItem value="preparing" className="text-white">
-                    Preparing Orders
-                  </SelectItem>
-                  <SelectItem value="ready" className="text-white">
-                    Ready Orders
-                  </SelectItem>
-                  <SelectItem value="completed" className="text-white">
-                    Completed Orders
                   </SelectItem>
                   <SelectItem value="cancelled" className="text-white">
                     Cancelled Orders

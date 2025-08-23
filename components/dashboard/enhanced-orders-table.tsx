@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Eye, Printer, Clock } from "lucide-react"
+import { Eye, Printer, Clock, Check, X } from "lucide-react"
 import { createClient } from "@/lib/supabase"
 
 interface Order {
@@ -16,7 +16,7 @@ interface Order {
   address: string
   payment_method: string
   total_price: number
-  status: "confirmed" | "cancelled"
+  status: "confirmed" | "cancelled" | "pending"
   created_at: string
   special_instructions?: string
   order_items: Array<{
@@ -122,10 +122,22 @@ const EnhancedOrdersTable = ({
     }
   }
 
+  const handleStatusUpdateWithConfirmation = async (orderId: string, newStatus: string) => {
+    const confirmMessage =
+      newStatus === "confirmed"
+        ? "Are you sure you want to confirm this order?"
+        : "Are you sure you want to cancel this order?"
+
+    if (window.confirm(confirmMessage)) {
+      await handleStatusUpdate(orderId, newStatus)
+    }
+  }
+
   const getStatusBadge = (status: string) => {
     const statusConfig = {
       confirmed: { color: "bg-green-600 text-white", label: "Order Confirmed" },
       cancelled: { color: "bg-red-600 text-white", label: "Order Canceled" },
+      pending: { color: "bg-yellow-600 text-white", label: "Order Pending" },
     }
 
     const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.confirmed
@@ -133,38 +145,122 @@ const EnhancedOrdersTable = ({
     return <Badge className={`${config.color} px-3 py-1 font-medium rounded-full`}>{config.label}</Badge>
   }
 
-  const getStatusController = (order: Order) => {
+  const getActionButtons = (order: Order) => {
     const isUpdating = updatingOrders.has(order.order_id)
 
-    if (userRole === "admin") {
+    // For pending orders, show confirm/cancel buttons
+    if (order.status === "pending") {
       return (
-        <Select
-          value={order.status}
-          onValueChange={(newStatus) => handleStatusUpdate(order.order_id, newStatus)}
-          disabled={isUpdating}
-        >
-          <SelectTrigger className="w-32 bg-gray-800 border-gray-600 text-white">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent className="bg-gray-800 border-gray-600">
-            <SelectItem value="confirmed" className="text-green-400">
-              ✓ Confirmed
-            </SelectItem>
-            <SelectItem value="cancelled" className="text-red-400">
-              ✗ Canceled
-            </SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="space-y-3">
+          {/* View/Print Controls */}
+          <div className="flex gap-2">
+            <Button
+              onClick={() => window.open(`/dashboard/orders/${order.order_id}`, "_blank")}
+              size="sm"
+              variant="outline"
+              className="border-gray-600 text-gray-300 hover:bg-gray-800 hover:text-white p-2"
+            >
+              <Eye className="w-4 h-4" />
+            </Button>
+            <Button
+              onClick={() => handlePrint(order)}
+              size="sm"
+              variant="outline"
+              className="border-gray-600 text-gray-300 hover:bg-gray-800 hover:text-white p-2"
+            >
+              <Printer className="w-4 h-4" />
+            </Button>
+            {/* Admin Status Controller */}
+            {userRole === "admin" && (
+              <Select
+                value={order.status}
+                onValueChange={(newStatus) => handleStatusUpdateWithConfirmation(order.order_id, newStatus)}
+                disabled={isUpdating}
+              >
+                <SelectTrigger className="w-24 h-8 bg-gray-800 border-gray-600 text-white text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-gray-800 border-gray-600">
+                  <SelectItem value="confirmed" className="text-green-400 text-xs">
+                    ✓ Confirm
+                  </SelectItem>
+                  <SelectItem value="cancelled" className="text-red-400 text-xs">
+                    ✗ Cancel
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+
+          {/* Confirm/Cancel Buttons */}
+          <div className="flex gap-2">
+            <Button
+              onClick={() => handleStatusUpdateWithConfirmation(order.order_id, "confirmed")}
+              disabled={isUpdating}
+              size="sm"
+              className="bg-green-600 hover:bg-green-700 text-white flex items-center gap-1"
+            >
+              <Check className="w-3 h-3" />
+              Confirm
+            </Button>
+            <Button
+              onClick={() => handleStatusUpdateWithConfirmation(order.order_id, "cancelled")}
+              disabled={isUpdating}
+              size="sm"
+              variant="destructive"
+              className="bg-red-600 hover:bg-red-700 text-white flex items-center gap-1"
+            >
+              <X className="w-3 h-3" />
+              Cancel
+            </Button>
+          </div>
+        </div>
       )
     }
 
-    // For non-admin users, just show the status badge
+    // For confirmed/cancelled orders, show view/print and admin controller
     return (
-      <Badge
-        className={`${order.status === "confirmed" ? "bg-green-600" : "bg-red-600"} text-white px-3 py-1 rounded-full`}
-      >
-        {order.status === "confirmed" ? "✓ Confirmed" : "✗ Canceled"}
-      </Badge>
+      <div className="space-y-3">
+        {/* View/Print Controls */}
+        <div className="flex gap-2">
+          <Button
+            onClick={() => window.open(`/dashboard/orders/${order.order_id}`, "_blank")}
+            size="sm"
+            variant="outline"
+            className="border-gray-600 text-gray-300 hover:bg-gray-800 hover:text-white p-2"
+          >
+            <Eye className="w-4 h-4" />
+          </Button>
+          <Button
+            onClick={() => handlePrint(order)}
+            size="sm"
+            variant="outline"
+            className="border-gray-600 text-gray-300 hover:bg-gray-800 hover:text-white p-2"
+          >
+            <Printer className="w-4 h-4" />
+          </Button>
+          {/* Admin Status Controller */}
+          {userRole === "admin" && (
+            <Select
+              value={order.status}
+              onValueChange={(newStatus) => handleStatusUpdateWithConfirmation(order.order_id, newStatus)}
+              disabled={isUpdating}
+            >
+              <SelectTrigger className="w-24 h-8 bg-gray-800 border-gray-600 text-white text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="bg-gray-800 border-gray-600">
+                <SelectItem value="confirmed" className="text-green-400 text-xs">
+                  ✓ Confirm
+                </SelectItem>
+                <SelectItem value="cancelled" className="text-red-400 text-xs">
+                  ✗ Cancel
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+      </div>
     )
   }
 
@@ -408,32 +504,7 @@ const EnhancedOrdersTable = ({
                   </div>
 
                   {/* Actions */}
-                  <div className="col-span-2">
-                    <div className="space-y-3">
-                      {/* View/Print Controls */}
-                      <div className="flex gap-2">
-                        <Button
-                          onClick={() => window.open(`/dashboard/orders/${order.order_id}`, "_blank")}
-                          size="sm"
-                          variant="outline"
-                          className="border-gray-600 text-gray-300 hover:bg-gray-800 hover:text-white p-2"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          onClick={() => handlePrint(order)}
-                          size="sm"
-                          variant="outline"
-                          className="border-gray-600 text-gray-300 hover:bg-gray-800 hover:text-white p-2"
-                        >
-                          <Printer className="w-4 h-4" />
-                        </Button>
-                      </div>
-
-                      {/* Status Controller */}
-                      {getStatusController(order)}
-                    </div>
-                  </div>
+                  <div className="col-span-2">{getActionButtons(order)}</div>
                 </div>
               </CardContent>
             </Card>
