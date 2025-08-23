@@ -103,10 +103,6 @@ export function DashboardSidebar({ userRole }: DashboardSidebarProps) {
     return currentUserRole === "manager" ? "Manager" : "Administrator"
   }
 
-  const handleNavClick = (title: string, url: string) => {
-    console.log("[v0] Navigation clicked:", title, "->", url)
-  }
-
   return (
     <Sidebar>
       <SidebarHeader className="border-b border-gray-800">
@@ -127,7 +123,7 @@ export function DashboardSidebar({ userRole }: DashboardSidebarProps) {
               {filteredMenuItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild isActive={pathname === item.url}>
-                    <Link href={item.url} onClick={() => handleNavClick(item.title, item.url)}>
+                    <Link href={item.url}>
                       <item.icon />
                       <span>{item.title}</span>
                     </Link>
@@ -145,7 +141,7 @@ export function DashboardSidebar({ userRole }: DashboardSidebarProps) {
               <SidebarMenu>
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild>
-                    <Link href="/" onClick={() => handleNavClick("View Website", "/")}>
+                    <Link href="/">
                       <Home />
                       <span>View Website</span>
                     </Link>
@@ -153,10 +149,7 @@ export function DashboardSidebar({ userRole }: DashboardSidebarProps) {
                 </SidebarMenuItem>
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild>
-                    <Link
-                      href="/dashboard/menu/new"
-                      onClick={() => handleNavClick("Add Menu Item", "/dashboard/menu/new")}
-                    >
+                    <Link href="/dashboard/menu/new">
                       <ChefHat />
                       <span>Add Menu Item</span>
                     </Link>
