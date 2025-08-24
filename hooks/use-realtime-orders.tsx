@@ -118,6 +118,15 @@ export function useRealtimeOrders() {
             setOrders((prev) =>
               prev.map((order) => (order.order_id === updatedOrder.order_id ? { ...order, ...updatedOrder } : order)),
             )
+
+            const statusChangeEvent = new CustomEvent("orderStatusChanged", {
+              detail: {
+                orderId: updatedOrder.short_order_id || updatedOrder.order_id,
+                newStatus: updatedOrder.status,
+                customerName: updatedOrder.customer_name,
+              },
+            })
+            window.dispatchEvent(statusChangeEvent)
           } else if (payload.eventType === "DELETE") {
             setOrders((prev) => prev.filter((order) => order.order_id !== payload.old.order_id))
           }

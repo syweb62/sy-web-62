@@ -190,7 +190,6 @@ const EnhancedOrdersTable = ({
         status: order.status,
       })
 
-      // Show basic view/print buttons even with invalid order_id
       return (
         <div className="space-y-3">
           <div className="flex gap-2">
@@ -222,7 +221,6 @@ const EnhancedOrdersTable = ({
     if (order.status === "pending") {
       return (
         <div className="space-y-3">
-          {/* View/Print Controls */}
           <div className="flex gap-2">
             <Button
               onClick={() => window.open(`/dashboard/orders/${validOrderId}`, "_blank")}
@@ -240,11 +238,11 @@ const EnhancedOrdersTable = ({
             >
               <Printer className="w-4 h-4" />
             </Button>
-            {/* Admin Status Controller */}
             {userRole === "admin" && (
               <Select
                 value={order.status}
                 onValueChange={(newStatus) => {
+                  if (newStatus === order.status) return
                   console.log("[v0] Admin select change:", validOrderId, "->", newStatus)
                   handleStatusUpdateWithConfirmation(validOrderId, newStatus)
                 }}
@@ -265,7 +263,6 @@ const EnhancedOrdersTable = ({
             )}
           </div>
 
-          {/* Confirm/Cancel Buttons */}
           <div className="flex gap-2">
             <Button
               onClick={(e) => {
@@ -304,7 +301,6 @@ const EnhancedOrdersTable = ({
     if (order.status === "confirmed") {
       return (
         <div className="space-y-3">
-          {/* View/Print Controls */}
           <div className="flex gap-2">
             <Button
               onClick={() => window.open(`/dashboard/orders/${validOrderId}`, "_blank")}
@@ -322,11 +318,11 @@ const EnhancedOrdersTable = ({
             >
               <Printer className="w-4 h-4" />
             </Button>
-            {/* Admin Status Controller */}
             {userRole === "admin" && (
               <Select
                 value={order.status}
                 onValueChange={(newStatus) => {
+                  if (newStatus === order.status) return
                   console.log("[v0] Admin select change:", validOrderId, "->", newStatus)
                   handleStatusUpdateWithConfirmation(validOrderId, newStatus)
                 }}
@@ -342,12 +338,14 @@ const EnhancedOrdersTable = ({
                   <SelectItem value="cancelled" className="text-red-400 text-xs">
                     ✗ Cancel
                   </SelectItem>
+                  <SelectItem value="completed" className="text-blue-400 text-xs">
+                    ✓ Complete
+                  </SelectItem>
                 </SelectContent>
               </Select>
             )}
           </div>
 
-          {/* Complete Button */}
           <div className="flex gap-2">
             <Button
               onClick={(e) => {
@@ -371,7 +369,6 @@ const EnhancedOrdersTable = ({
     if (order.status === "cancelled") {
       return (
         <div className="space-y-3">
-          {/* View/Print Controls */}
           <div className="flex gap-2">
             <Button
               onClick={() => window.open(`/dashboard/orders/${validOrderId}`, "_blank")}
@@ -389,11 +386,11 @@ const EnhancedOrdersTable = ({
             >
               <Printer className="w-4 h-4" />
             </Button>
-            {/* Admin Status Controller */}
             {userRole === "admin" && (
               <Select
                 value={order.status}
                 onValueChange={(newStatus) => {
+                  if (newStatus === order.status) return
                   console.log("[v0] Admin select change:", validOrderId, "->", newStatus)
                   handleStatusUpdateWithConfirmation(validOrderId, newStatus)
                 }}
@@ -414,7 +411,6 @@ const EnhancedOrdersTable = ({
             )}
           </div>
 
-          {/* Cancelled Status Display */}
           <div className="text-center">
             <span className="text-red-400 text-sm font-medium">Cancelled</span>
           </div>
@@ -425,7 +421,6 @@ const EnhancedOrdersTable = ({
     if (order.status === "completed") {
       return (
         <div className="space-y-3">
-          {/* View/Print Controls */}
           <div className="flex gap-2">
             <Button
               onClick={() => window.open(`/dashboard/orders/${validOrderId}`, "_blank")}
@@ -443,11 +438,11 @@ const EnhancedOrdersTable = ({
             >
               <Printer className="w-4 h-4" />
             </Button>
-            {/* Admin Status Controller */}
             {userRole === "admin" && (
               <Select
                 value={order.status}
                 onValueChange={(newStatus) => {
+                  if (newStatus === order.status) return
                   console.log("[v0] Admin select change:", validOrderId, "->", newStatus)
                   handleStatusUpdateWithConfirmation(validOrderId, newStatus)
                 }}
@@ -463,9 +458,16 @@ const EnhancedOrdersTable = ({
                   <SelectItem value="cancelled" className="text-red-400 text-xs">
                     ✗ Cancel
                   </SelectItem>
+                  <SelectItem value="completed" className="text-blue-400 text-xs">
+                    ✓ Complete
+                  </SelectItem>
                 </SelectContent>
               </Select>
             )}
+          </div>
+
+          <div className="text-center">
+            <span className="text-blue-400 text-sm font-medium">Completed</span>
           </div>
         </div>
       )
@@ -474,7 +476,6 @@ const EnhancedOrdersTable = ({
     // For other statuses, show view/print and admin controller
     return (
       <div className="space-y-3">
-        {/* View/Print Controls */}
         <div className="flex gap-2">
           <Button
             onClick={() => window.open(`/dashboard/orders/${validOrderId}`, "_blank")}
@@ -492,7 +493,6 @@ const EnhancedOrdersTable = ({
           >
             <Printer className="w-4 h-4" />
           </Button>
-          {/* Admin Status Controller */}
           {userRole === "admin" && (
             <Select
               value={order.status}
