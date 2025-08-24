@@ -12,7 +12,7 @@ interface Order {
   phone: string
   address: string
   total_price: number
-  status: "pending" | "confirmed" | "preparing" | "ready" | "delivered" | "cancelled"
+  status: "pending" | "confirmed" | "preparing" | "ready" | "delivered" | "cancelled" | "completed"
   created_at: string
   special_instructions?: string
   payment_method?: string

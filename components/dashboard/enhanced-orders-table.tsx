@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ConfirmationModal } from "@/components/ui/confirmation-modal"
-import { Eye, Printer, Clock, Check, X } from "lucide-react"
+import { Eye, Printer, Clock, Check, X, CheckCircle } from "lucide-react"
 import { createClient } from "@/lib/supabase"
 
 interface Order {
@@ -17,7 +17,7 @@ interface Order {
   address: string
   payment_method: string
   total_price: number
-  status: "confirmed" | "cancelled" | "pending"
+  status: "confirmed" | "cancelled" | "pending" | "completed"
   created_at: string
   special_instructions?: string
   order_items: Array<{
@@ -43,11 +43,12 @@ const EnhancedOrdersTable = ({
   loading = false,
 }: EnhancedOrdersTableProps) => {
   const [updatingOrders, setUpdatingOrders] = useState<Set<string>>(new Set())
+  const [pendingRequests, setPendingRequests] = useState<Set<string>>(new Set())
   const [confirmationModal, setConfirmationModal] = useState<{
     isOpen: boolean
     orderId: string
     newStatus: string
-    type: "confirm" | "cancel"
+    type: "confirm" | "cancel" | "complete"
   }>({
     isOpen: false,
     orderId: "",
@@ -99,13 +100,21 @@ const EnhancedOrdersTable = ({
       return
     }
 
+    const requestKey = `${orderId}-${newStatus}`
+    if (pendingRequests.has(requestKey) || updatingOrders.has(orderId)) {
+      console.log("[v0] Request already in progress for:", requestKey)
+      return
+    }
+
+    setPendingRequests((prev) => new Set(prev).add(requestKey))
+
     console.log("[v0] Status update requested:", orderId, "->", newStatus)
 
     setConfirmationModal({
       isOpen: true,
       orderId,
       newStatus,
-      type: newStatus === "confirmed" ? "confirm" : "cancel",
+      type: newStatus === "confirmed" ? "confirm" : newStatus === "cancelled" ? "cancel" : "complete",
     })
   }
 
@@ -127,6 +136,13 @@ const EnhancedOrdersTable = ({
   }
 
   const handleModalClose = () => {
+    const requestKey = `${confirmationModal.orderId}-${confirmationModal.newStatus}`
+    setPendingRequests((prev) => {
+      const newSet = new Set(prev)
+      newSet.delete(requestKey)
+      return newSet
+    })
+
     setConfirmationModal({
       isOpen: false,
       orderId: "",
@@ -140,6 +156,7 @@ const EnhancedOrdersTable = ({
       confirmed: { color: "bg-green-600 text-white", label: "Order Confirmed" },
       cancelled: { color: "bg-red-600 text-white", label: "Order Canceled" },
       pending: { color: "bg-yellow-600 text-white", label: "Order Pending" },
+      completed: { color: "bg-blue-600 text-white", label: "Order Completed" },
     }
 
     const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.confirmed
@@ -251,7 +268,9 @@ const EnhancedOrdersTable = ({
           {/* Confirm/Cancel Buttons */}
           <div className="flex gap-2">
             <Button
-              onClick={() => {
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
                 console.log("[v0] Confirm button clicked for order:", validOrderId)
                 handleStatusUpdateWithConfirmation(validOrderId, "confirmed")
               }}
@@ -263,7 +282,9 @@ const EnhancedOrdersTable = ({
               Confirm
             </Button>
             <Button
-              onClick={() => {
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
                 console.log("[v0] Cancel button clicked for order:", validOrderId)
                 handleStatusUpdateWithConfirmation(validOrderId, "cancelled")
               }}
@@ -280,7 +301,177 @@ const EnhancedOrdersTable = ({
       )
     }
 
-    // For confirmed/cancelled orders, show view/print and admin controller
+    if (order.status === "confirmed") {
+      return (
+        <div className="space-y-3">
+          {/* View/Print Controls */}
+          <div className="flex gap-2">
+            <Button
+              onClick={() => window.open(`/dashboard/orders/${validOrderId}`, "_blank")}
+              size="sm"
+              variant="outline"
+              className="border-gray-600 text-gray-300 hover:bg-gray-800 hover:text-white p-2"
+            >
+              <Eye className="w-4 h-4" />
+            </Button>
+            <Button
+              onClick={() => handlePrint(order)}
+              size="sm"
+              variant="outline"
+              className="border-gray-600 text-gray-300 hover:bg-gray-800 hover:text-white p-2"
+            >
+              <Printer className="w-4 h-4" />
+            </Button>
+            {/* Admin Status Controller */}
+            {userRole === "admin" && (
+              <Select
+                value={order.status}
+                onValueChange={(newStatus) => {
+                  console.log("[v0] Admin select change:", validOrderId, "->", newStatus)
+                  handleStatusUpdateWithConfirmation(validOrderId, newStatus)
+                }}
+                disabled={isUpdating}
+              >
+                <SelectTrigger className="w-24 h-8 bg-gray-800 border-gray-600 text-white text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-gray-800 border-gray-600">
+                  <SelectItem value="confirmed" className="text-green-400 text-xs">
+                    ✓ Confirm
+                  </SelectItem>
+                  <SelectItem value="cancelled" className="text-red-400 text-xs">
+                    ✗ Cancel
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+
+          {/* Complete Button */}
+          <div className="flex gap-2">
+            <Button
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                console.log("[v0] Complete button clicked for order:", validOrderId)
+                handleStatusUpdateWithConfirmation(validOrderId, "completed")
+              }}
+              disabled={isUpdating}
+              size="sm"
+              className="bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-1"
+            >
+              <CheckCircle className="w-3 h-3" />
+              Complete
+            </Button>
+          </div>
+        </div>
+      )
+    }
+
+    if (order.status === "cancelled") {
+      return (
+        <div className="space-y-3">
+          {/* View/Print Controls */}
+          <div className="flex gap-2">
+            <Button
+              onClick={() => window.open(`/dashboard/orders/${validOrderId}`, "_blank")}
+              size="sm"
+              variant="outline"
+              className="border-gray-600 text-gray-300 hover:bg-gray-800 hover:text-white p-2"
+            >
+              <Eye className="w-4 h-4" />
+            </Button>
+            <Button
+              onClick={() => handlePrint(order)}
+              size="sm"
+              variant="outline"
+              className="border-gray-600 text-gray-300 hover:bg-gray-800 hover:text-white p-2"
+            >
+              <Printer className="w-4 h-4" />
+            </Button>
+            {/* Admin Status Controller */}
+            {userRole === "admin" && (
+              <Select
+                value={order.status}
+                onValueChange={(newStatus) => {
+                  console.log("[v0] Admin select change:", validOrderId, "->", newStatus)
+                  handleStatusUpdateWithConfirmation(validOrderId, newStatus)
+                }}
+                disabled={isUpdating}
+              >
+                <SelectTrigger className="w-24 h-8 bg-gray-800 border-gray-600 text-white text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-gray-800 border-gray-600">
+                  <SelectItem value="confirmed" className="text-green-400 text-xs">
+                    ✓ Confirm
+                  </SelectItem>
+                  <SelectItem value="cancelled" className="text-red-400 text-xs">
+                    ✗ Cancel
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+
+          {/* Cancelled Status Display */}
+          <div className="text-center">
+            <span className="text-red-400 text-sm font-medium">Cancelled</span>
+          </div>
+        </div>
+      )
+    }
+
+    if (order.status === "completed") {
+      return (
+        <div className="space-y-3">
+          {/* View/Print Controls */}
+          <div className="flex gap-2">
+            <Button
+              onClick={() => window.open(`/dashboard/orders/${validOrderId}`, "_blank")}
+              size="sm"
+              variant="outline"
+              className="border-gray-600 text-gray-300 hover:bg-gray-800 hover:text-white p-2"
+            >
+              <Eye className="w-4 h-4" />
+            </Button>
+            <Button
+              onClick={() => handlePrint(order)}
+              size="sm"
+              variant="outline"
+              className="border-gray-600 text-gray-300 hover:bg-gray-800 hover:text-white p-2"
+            >
+              <Printer className="w-4 h-4" />
+            </Button>
+            {/* Admin Status Controller */}
+            {userRole === "admin" && (
+              <Select
+                value={order.status}
+                onValueChange={(newStatus) => {
+                  console.log("[v0] Admin select change:", validOrderId, "->", newStatus)
+                  handleStatusUpdateWithConfirmation(validOrderId, newStatus)
+                }}
+                disabled={isUpdating}
+              >
+                <SelectTrigger className="w-24 h-8 bg-gray-800 border-gray-600 text-white text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-gray-800 border-gray-600">
+                  <SelectItem value="confirmed" className="text-green-400 text-xs">
+                    ✓ Confirm
+                  </SelectItem>
+                  <SelectItem value="cancelled" className="text-red-400 text-xs">
+                    ✗ Cancel
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+        </div>
+      )
+    }
+
+    // For other statuses, show view/print and admin controller
     return (
       <div className="space-y-3">
         {/* View/Print Controls */}
@@ -306,6 +497,7 @@ const EnhancedOrdersTable = ({
             <Select
               value={order.status}
               onValueChange={(newStatus) => {
+                if (newStatus === order.status) return
                 console.log("[v0] Admin select change:", validOrderId, "->", newStatus)
                 handleStatusUpdateWithConfirmation(validOrderId, newStatus)
               }}
@@ -429,7 +621,9 @@ const EnhancedOrdersTable = ({
         return
       }
 
+      const requestKey = `${orderId}-${newStatus}`
       if (updatingOrders.has(orderId)) {
+        console.log("[v0] Update already in progress for order:", orderId)
         return
       }
 
@@ -468,15 +662,13 @@ const EnhancedOrdersTable = ({
 
         if (updateError) {
           console.error("[v0] Error updating order status:", updateError.message)
-          if (onRefresh) {
-            onRefresh()
-          }
           throw updateError
         }
 
         console.log("[v0] Order status updated successfully:", orderId)
+
         if (onRefresh) {
-          setTimeout(onRefresh, 100)
+          setTimeout(onRefresh, 500)
         }
       } catch (error) {
         console.error("[v0] Failed to update order status:", error)
@@ -487,7 +679,12 @@ const EnhancedOrdersTable = ({
             newSet.delete(orderId)
             return newSet
           })
-        }, 500)
+          setPendingRequests((prev) => {
+            const newSet = new Set(prev)
+            newSet.delete(requestKey)
+            return newSet
+          })
+        }, 1000)
       }
     },
     [updatingOrders, onStatusUpdate, onRefresh, supabase],
@@ -506,15 +703,28 @@ const EnhancedOrdersTable = ({
           table: "orders",
         },
         (payload) => {
+          console.log("[v0] Real-time order update detected:", payload)
+
           if (payload.eventType === "UPDATE") {
             const orderId = payload.new.order_id || payload.new.short_order_id
+
             setUpdatingOrders((prev) => {
               const newSet = new Set(prev)
               newSet.delete(orderId)
               return newSet
             })
+
+            const statusChangeEvent = new CustomEvent("orderStatusChanged", {
+              detail: {
+                orderId: orderId,
+                newStatus: payload.new.status,
+                customerName: payload.new.customer_name,
+              },
+            })
+            window.dispatchEvent(statusChangeEvent)
           }
-          setTimeout(onRefresh, 100)
+
+          setTimeout(onRefresh, 300)
         },
       )
       .subscribe()
@@ -681,11 +891,19 @@ const EnhancedOrdersTable = ({
         isOpen={confirmationModal.isOpen}
         onClose={handleModalClose}
         onConfirm={handleModalConfirm}
-        title={confirmationModal.type === "confirm" ? "Confirm Order" : "Cancel Order"}
+        title={
+          confirmationModal.type === "confirm"
+            ? "Confirm Order"
+            : confirmationModal.type === "cancel"
+              ? "Cancel Order"
+              : "Complete Order"
+        }
         message={
           confirmationModal.type === "confirm"
             ? "Are you sure you want to confirm this order?"
-            : "Are you sure you want to cancel this order?"
+            : confirmationModal.type === "cancel"
+              ? "Are you sure you want to cancel this order?"
+              : "Are you sure you want to complete this order?"
         }
         confirmText="OK"
         cancelText="Cancel"

@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useMemo, useState, useEffect } from "react"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { Search, Filter, ShoppingCart } from "lucide-react"
@@ -93,6 +93,20 @@ export default function OrdersPage() {
       alert("Reorder is not available in this preview.")
     }
   }
+
+  useEffect(() => {
+    const handleOrderStatusChange = (event: CustomEvent) => {
+      console.log("[v0] Order status changed:", event.detail)
+      // Refresh order history when status changes
+      refetch()
+    }
+
+    window.addEventListener("orderStatusChanged", handleOrderStatusChange as EventListener)
+
+    return () => {
+      window.removeEventListener("orderStatusChanged", handleOrderStatusChange as EventListener)
+    }
+  }, [refetch])
 
   if (loading) {
     return (

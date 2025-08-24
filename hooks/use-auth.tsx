@@ -88,6 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<AuthError | null>(null)
   const [connectionStatus, setConnectionStatus] = useState<"connected" | "disconnected" | "testing">("testing")
+  const [authInitialized, setAuthInitialized] = useState(false)
 
   const clearError = useCallback(() => setError(null), [])
 
@@ -107,31 +108,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return stableProfile
       }
 
-      // Try to fetch from database to get additional data, but don't change role
       const { data, error } = await withTimeout(
         supabase.from("profiles").select("*").eq("id", supabaseUser.id).maybeSingle(),
         3000,
       )
 
       if (error && (error as any).code !== "PGRST116") {
-        // Use stable profile if database fetch fails
         setUser(stableProfile)
         return stableProfile
       }
 
       if (data) {
-        // Merge database data but keep email-based role determination
         const finalProfile = {
-          ...stableProfile, // Keep stable role and email-based data
-          ...data, // Add database data
-          role: stableProfile.role, // Always use email-based role
+          ...stableProfile,
+          ...data,
+          role: stableProfile.role,
           name: data.full_name || data.name || stableProfile.name,
         }
         setUser(finalProfile)
         return finalProfile
       }
 
-      // Create new profile in database in background without blocking
       const newProfile = {
         id: supabaseUser.id,
         email: supabaseUser.email!,
@@ -143,20 +140,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         updated_at: new Date().toISOString(),
       }
 
-      // Create in background, don't wait or update state
       supabase
         .from("profiles")
         .insert([newProfile])
         .select()
         .single()
-        .catch(() => {
-          // Ignore errors, profile creation is not critical
-        })
+        .catch(() => {})
 
       setUser(stableProfile)
       return stableProfile
     } catch (err) {
-      // Always return a valid profile to prevent auth failures
       const fallbackProfile = createProfile(supabaseUser)
       setUser(fallbackProfile)
       return fallbackProfile
@@ -168,9 +161,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let mounted = true
 
     const initializeAuth = async () => {
+      if (authInitialized) return
+
       try {
         const connectionResult = await testSupabaseConnection().catch(() => ({
-          status: "connected", // Assume connected to prevent blocking auth
+          status: "connected",
         }))
         if (mounted) {
           setConnectionStatus(connectionResult.status as "connected" | "disconnected" | "testing")
@@ -186,13 +181,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const { data: sessionData } = await withTimeout(supabase.auth.getSession(), 10000)
           currentSession = sessionData?.session ?? null
         } catch (err) {
-          // Handle refresh token errors specifically
           if (err instanceof Error && err.message.includes("Invalid Refresh Token")) {
             console.log("[v0] Invalid refresh token detected, clearing session")
-            // Clear the invalid session
-            await supabase.auth.signOut().catch(() => {
-              // Ignore signout errors, just clear local state
-            })
+            await supabase.auth.signOut().catch(() => {})
             currentSession = null
           } else {
             throw err
@@ -209,29 +200,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUser(null)
         }
 
-        const { data } = supabase.auth.onAuthStateChange(async (event, nextSession) => {
-          if (!mounted) return
+        if (!authInitialized) {
+          const { data } = supabase.auth.onAuthStateChange(async (event, nextSession) => {
+            if (!mounted) return
 
-          try {
-            setSession(nextSession)
-            if (nextSession?.user) {
-              await fetchUserProfile(nextSession.user)
-            } else {
-              setUser(null)
+            try {
+              setSession(nextSession)
+              if (nextSession?.user) {
+                await fetchUserProfile(nextSession.user)
+              } else {
+                setUser(null)
+              }
+            } catch (err) {
+              if (err instanceof Error && err.message.includes("Invalid Refresh Token")) {
+                console.log("[v0] Invalid refresh token in auth state change, clearing session")
+                setSession(null)
+                setUser(null)
+              } else {
+                console.error("[v0] Auth state change error:", err)
+              }
             }
-          } catch (err) {
-            // Handle errors in auth state changes
-            if (err instanceof Error && err.message.includes("Invalid Refresh Token")) {
-              console.log("[v0] Invalid refresh token in auth state change, clearing session")
-              setSession(null)
-              setUser(null)
-            } else {
-              console.error("[v0] Auth state change error:", err)
-            }
-          }
-        })
+          })
 
-        unsubscribe = () => data.subscription.unsubscribe()
+          unsubscribe = () => data.subscription.unsubscribe()
+          setAuthInitialized(true)
+        }
       } catch (err) {
         console.error("[v0] Auth initialization error:", err)
         if (err instanceof Error && err.message.includes("Invalid Refresh Token")) {
@@ -239,7 +232,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setSession(null)
           setUser(null)
         }
-        // Don't block initialization on errors
       } finally {
         if (mounted) {
           setIsLoading(false)
@@ -253,7 +245,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       mounted = false
       if (unsubscribe) unsubscribe()
     }
-  }, [fetchUserProfile])
+  }, [fetchUserProfile, authInitialized])
 
   const signIn = useCallback(
     async (email: string, password: string) => {
@@ -274,7 +266,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             email: sanitizeInput(email.toLowerCase()),
             password,
           }),
-          15000, // Increased from 8000ms to 15000ms
+          15000,
         )
 
         if (error) {
@@ -320,7 +312,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(null)
       setSession(null)
     } catch (err) {
-      // Always clear local state even if signout fails
       setUser(null)
       setSession(null)
       handleError(err)
