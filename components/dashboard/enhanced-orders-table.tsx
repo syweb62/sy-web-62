@@ -56,6 +56,10 @@ const EnhancedOrdersTable = ({
   })
   const supabase = createClient()
 
+  const getValidOrderId = (order: Order): string => {
+    return order.order_id || order.short_order_id || ""
+  }
+
   const formatDateTime = useCallback((dateString: string) => {
     const date = new Date(dateString)
     return {
@@ -89,54 +93,14 @@ const EnhancedOrdersTable = ({
     return `${diffInDays}d ago`
   }, [])
 
-  const handleStatusUpdate = useCallback(
-    async (orderId: string, newStatus: string) => {
-      if (updatingOrders.has(orderId)) {
-        return
-      }
-
-      try {
-        setUpdatingOrders((prev) => new Set(prev).add(orderId))
-
-        if (onStatusUpdate) {
-          onStatusUpdate(orderId, newStatus)
-        }
-
-        const { error } = await supabase
-          .from("orders")
-          .update({
-            status: newStatus,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("order_id", orderId)
-
-        if (error) {
-          console.error("[v0] Error updating order status:", error.message)
-          if (onRefresh) {
-            onRefresh()
-          }
-          throw error
-        }
-
-        if (onRefresh) {
-          setTimeout(onRefresh, 100)
-        }
-      } catch (error) {
-        console.error("[v0] Failed to update order status:", error)
-      } finally {
-        setTimeout(() => {
-          setUpdatingOrders((prev) => {
-            const newSet = new Set(prev)
-            newSet.delete(orderId)
-            return newSet
-          })
-        }, 500)
-      }
-    },
-    [updatingOrders, onStatusUpdate, onRefresh, supabase],
-  )
-
   const handleStatusUpdateWithConfirmation = async (orderId: string, newStatus: string) => {
+    if (!orderId || orderId === "undefined") {
+      console.error("[v0] Invalid order ID provided:", orderId)
+      return
+    }
+
+    console.log("[v0] Status update requested:", orderId, "->", newStatus)
+
     setConfirmationModal({
       isOpen: true,
       orderId,
@@ -146,7 +110,20 @@ const EnhancedOrdersTable = ({
   }
 
   const handleModalConfirm = async () => {
+    if (!confirmationModal.orderId || confirmationModal.orderId === "undefined") {
+      console.error("[v0] Cannot update order: Invalid order ID in modal state:", confirmationModal.orderId)
+      handleModalClose()
+      return
+    }
+
+    console.log(
+      "[v0] Modal confirm - updating order:",
+      confirmationModal.orderId,
+      "to status:",
+      confirmationModal.newStatus,
+    )
     await handleStatusUpdate(confirmationModal.orderId, confirmationModal.newStatus)
+    handleModalClose()
   }
 
   const handleModalClose = () => {
@@ -170,8 +147,59 @@ const EnhancedOrdersTable = ({
     return <Badge className={`${config.color} px-3 py-1 font-medium rounded-full`}>{config.label}</Badge>
   }
 
+  const getPaymentMethodStyle = (paymentMethod: string) => {
+    const method = paymentMethod.toLowerCase()
+    if (method.includes("cash")) {
+      return "bg-green-600/30 text-green-200 px-2 py-1 rounded-full text-xs font-medium border border-green-600/50"
+    } else if (method.includes("bkash")) {
+      return "bg-pink-600/30 text-pink-200 px-2 py-1 rounded-full text-xs font-medium border border-pink-600/50"
+    } else if (method.includes("pickup")) {
+      return "bg-blue-600/30 text-blue-200 px-2 py-1 rounded-full text-xs font-medium border border-blue-600/50"
+    } else {
+      return "bg-gray-600/30 text-gray-200 px-2 py-1 rounded-full text-xs font-medium border border-gray-600/50"
+    }
+  }
+
   const getActionButtons = (order: Order) => {
-    const isUpdating = updatingOrders.has(order.order_id)
+    const validOrderId = getValidOrderId(order)
+    const isUpdating = updatingOrders.has(validOrderId)
+
+    if (!validOrderId) {
+      console.error("[v0] Order missing both order_id and short_order_id:", {
+        order_id: order.order_id,
+        short_order_id: order.short_order_id,
+        customer_name: order.customer_name,
+        total_price: order.total_price,
+        status: order.status,
+      })
+
+      // Show basic view/print buttons even with invalid order_id
+      return (
+        <div className="space-y-3">
+          <div className="flex gap-2">
+            <Button
+              onClick={() => console.log("[v0] Cannot view order - invalid ID:", order)}
+              size="sm"
+              variant="outline"
+              disabled
+              className="border-gray-600 text-gray-500 p-2"
+            >
+              <Eye className="w-4 h-4" />
+            </Button>
+            <Button
+              onClick={() => console.log("[v0] Cannot print order - invalid ID:", order)}
+              size="sm"
+              variant="outline"
+              disabled
+              className="border-gray-600 text-gray-500 p-2"
+            >
+              <Printer className="w-4 h-4" />
+            </Button>
+          </div>
+          <div className="text-yellow-400 text-xs">Order ID missing - contact support</div>
+        </div>
+      )
+    }
 
     // For pending orders, show confirm/cancel buttons
     if (order.status === "pending") {
@@ -180,7 +208,7 @@ const EnhancedOrdersTable = ({
           {/* View/Print Controls */}
           <div className="flex gap-2">
             <Button
-              onClick={() => window.open(`/dashboard/orders/${order.order_id}`, "_blank")}
+              onClick={() => window.open(`/dashboard/orders/${validOrderId}`, "_blank")}
               size="sm"
               variant="outline"
               className="border-gray-600 text-gray-300 hover:bg-gray-800 hover:text-white p-2"
@@ -199,7 +227,10 @@ const EnhancedOrdersTable = ({
             {userRole === "admin" && (
               <Select
                 value={order.status}
-                onValueChange={(newStatus) => handleStatusUpdateWithConfirmation(order.order_id, newStatus)}
+                onValueChange={(newStatus) => {
+                  console.log("[v0] Admin select change:", validOrderId, "->", newStatus)
+                  handleStatusUpdateWithConfirmation(validOrderId, newStatus)
+                }}
                 disabled={isUpdating}
               >
                 <SelectTrigger className="w-24 h-8 bg-gray-800 border-gray-600 text-white text-xs">
@@ -220,7 +251,10 @@ const EnhancedOrdersTable = ({
           {/* Confirm/Cancel Buttons */}
           <div className="flex gap-2">
             <Button
-              onClick={() => handleStatusUpdateWithConfirmation(order.order_id, "confirmed")}
+              onClick={() => {
+                console.log("[v0] Confirm button clicked for order:", validOrderId)
+                handleStatusUpdateWithConfirmation(validOrderId, "confirmed")
+              }}
               disabled={isUpdating}
               size="sm"
               className="bg-green-600 hover:bg-green-700 text-white flex items-center gap-1"
@@ -229,7 +263,10 @@ const EnhancedOrdersTable = ({
               Confirm
             </Button>
             <Button
-              onClick={() => handleStatusUpdateWithConfirmation(order.order_id, "cancelled")}
+              onClick={() => {
+                console.log("[v0] Cancel button clicked for order:", validOrderId)
+                handleStatusUpdateWithConfirmation(validOrderId, "cancelled")
+              }}
               disabled={isUpdating}
               size="sm"
               variant="destructive"
@@ -249,7 +286,7 @@ const EnhancedOrdersTable = ({
         {/* View/Print Controls */}
         <div className="flex gap-2">
           <Button
-            onClick={() => window.open(`/dashboard/orders/${order.order_id}`, "_blank")}
+            onClick={() => window.open(`/dashboard/orders/${validOrderId}`, "_blank")}
             size="sm"
             variant="outline"
             className="border-gray-600 text-gray-300 hover:bg-gray-800 hover:text-white p-2"
@@ -268,7 +305,10 @@ const EnhancedOrdersTable = ({
           {userRole === "admin" && (
             <Select
               value={order.status}
-              onValueChange={(newStatus) => handleStatusUpdateWithConfirmation(order.order_id, newStatus)}
+              onValueChange={(newStatus) => {
+                console.log("[v0] Admin select change:", validOrderId, "->", newStatus)
+                handleStatusUpdateWithConfirmation(validOrderId, newStatus)
+              }}
               disabled={isUpdating}
             >
               <SelectTrigger className="w-24 h-8 bg-gray-800 border-gray-600 text-white text-xs">
@@ -339,7 +379,6 @@ const EnhancedOrdersTable = ({
           <div class="order-info">
             <p><strong>Customer:</strong> ${order.customer_name}</p>
             <p><strong>Phone:</strong> ${order.phone}</p>
-            <p><strong>Address:</strong> ${order.address}</p>
             <p><strong>Payment:</strong> ${order.payment_method}</p>
             <p><strong>Status:</strong> ${order.status.toUpperCase()}</p>
           </div>
@@ -383,6 +422,77 @@ const EnhancedOrdersTable = ({
     [generatePrintContent],
   )
 
+  const handleStatusUpdate = useCallback(
+    async (orderId: string, newStatus: string) => {
+      if (!orderId || orderId === "undefined") {
+        console.error("[v0] Cannot update order: Invalid order ID:", orderId)
+        return
+      }
+
+      if (updatingOrders.has(orderId)) {
+        return
+      }
+
+      try {
+        console.log("[v0] Updating order status:", orderId, "->", newStatus)
+        setUpdatingOrders((prev) => new Set(prev).add(orderId))
+
+        if (onStatusUpdate) {
+          onStatusUpdate(orderId, newStatus)
+        }
+
+        let updateError = null
+
+        const { error: orderIdError } = await supabase
+          .from("orders")
+          .update({
+            status: newStatus,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("order_id", orderId)
+
+        if (orderIdError && orderIdError.message.includes("invalid input syntax for type uuid")) {
+          // If orderId is not a valid UUID, try updating by short_order_id
+          const { error: shortIdError } = await supabase
+            .from("orders")
+            .update({
+              status: newStatus,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("short_order_id", orderId)
+
+          updateError = shortIdError
+        } else {
+          updateError = orderIdError
+        }
+
+        if (updateError) {
+          console.error("[v0] Error updating order status:", updateError.message)
+          if (onRefresh) {
+            onRefresh()
+          }
+          throw updateError
+        }
+
+        console.log("[v0] Order status updated successfully:", orderId)
+        if (onRefresh) {
+          setTimeout(onRefresh, 100)
+        }
+      } catch (error) {
+        console.error("[v0] Failed to update order status:", error)
+      } finally {
+        setTimeout(() => {
+          setUpdatingOrders((prev) => {
+            const newSet = new Set(prev)
+            newSet.delete(orderId)
+            return newSet
+          })
+        }, 500)
+      }
+    },
+    [updatingOrders, onStatusUpdate, onRefresh, supabase],
+  )
+
   useEffect(() => {
     if (!onRefresh) return
 
@@ -397,9 +507,10 @@ const EnhancedOrdersTable = ({
         },
         (payload) => {
           if (payload.eventType === "UPDATE") {
+            const orderId = payload.new.order_id || payload.new.short_order_id
             setUpdatingOrders((prev) => {
               const newSet = new Set(prev)
-              newSet.delete(payload.new.order_id)
+              newSet.delete(orderId)
               return newSet
             })
           }
@@ -439,7 +550,7 @@ const EnhancedOrdersTable = ({
             <Clock className="w-8 h-8 text-gray-400" />
           </div>
           <h3 className="text-xl font-medium text-white mb-2">No Orders Found</h3>
-          <p className="text-gray-500 mb-6 max-w-md">
+          <p className="text-gray-400 text-sm mt-1">
             Orders will appear here when customers place them. The system is ready to receive new orders.
           </p>
           {onRefresh && (
@@ -474,11 +585,12 @@ const EnhancedOrdersTable = ({
       <div className="space-y-4">
         {orders.map((order) => {
           const dateTime = formatDateTime(order.created_at)
+          const validOrderId = getValidOrderId(order)
 
           return (
             <Card
-              key={order.order_id}
-              className="bg-gray-900/50 border-gray-700/30 hover:bg-gray-900/70 transition-all duration-200"
+              key={validOrderId || `order-${order.customer_name}-${order.created_at}`}
+              className="bg-gray-900/50 border-gray-700/30 hover:bg-gray-900/70 transition-all duration-200 relative"
             >
               <CardContent className="p-6">
                 <div className="grid grid-cols-12 gap-6 items-center">
@@ -498,8 +610,12 @@ const EnhancedOrdersTable = ({
                       <div className="space-y-1">
                         <p className="text-white font-semibold">{order.customer_name}</p>
                         <p className="text-gray-300 text-sm">• {order.phone}</p>
-                        <p className="text-gray-400 text-sm">{order.address}</p>
-                        <p className="text-gray-400 text-xs">Payment: {order.payment_method}</p>
+                        <div className="flex items-center gap-2">
+                          <span className={getPaymentMethodStyle(order.payment_method)}>{order.payment_method}</span>
+                        </div>
+                        <p className="text-gray-400 text-sm truncate" title={order.address}>
+                          📍 {order.address}
+                        </p>
                       </div>
                     </div>
                   </div>
@@ -521,14 +637,16 @@ const EnhancedOrdersTable = ({
                     </div>
                   </div>
 
-                  {/* Placed */}
+                  {/* Special Instructions */}
                   <div className="col-span-2">
                     <div className="space-y-2">
-                      <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">PLACED</p>
+                      <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">SPECIAL INSTRUCTIONS</p>
                       <div className="space-y-1">
-                        <p className="text-white font-medium">{dateTime.date}</p>
-                        <p className="text-gray-300 text-sm">{dateTime.time}</p>
-                        <p className="text-gray-500 text-xs">{getRelativeTime(order.created_at)}</p>
+                        {order.special_instructions ? (
+                          <p className="text-white text-sm leading-relaxed">{order.special_instructions}</p>
+                        ) : (
+                          <p className="text-gray-500 text-sm italic">No special instructions</p>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -543,6 +661,15 @@ const EnhancedOrdersTable = ({
 
                   {/* Actions */}
                   <div className="col-span-2">{getActionButtons(order)}</div>
+                </div>
+
+                {/* Placed Time */}
+                <div className="absolute top-4 right-4">
+                  <div className="text-right">
+                    <p className="text-xs text-gray-500">{dateTime.date}</p>
+                    <p className="text-xs text-gray-400">{dateTime.time}</p>
+                    <p className="text-xs text-gray-500">{getRelativeTime(order.created_at)}</p>
+                  </div>
                 </div>
               </CardContent>
             </Card>

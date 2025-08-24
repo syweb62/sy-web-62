@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -65,56 +65,57 @@ export default function AnalyticsPage() {
   const [dateRange, setDateRange] = useState("30d")
   const [refreshing, setRefreshing] = useState(false)
   const [customDateRange, setCustomDateRange] = useState<DateRange | undefined>()
+  const [exportLoading, setExportLoading] = useState(false)
 
-  useEffect(() => {
-    fetchAnalyticsData()
+  const dateRangeValues = useMemo(() => {
+    let startDate: Date, endDate: Date
+    if (customDateRange && customDateRange.from && customDateRange.to) {
+      startDate = customDateRange.from
+      endDate = customDateRange.to
+    } else {
+      endDate = new Date()
+      startDate = new Date()
+      const days = dateRange === "7d" ? 7 : dateRange === "30d" ? 30 : 90
+      startDate.setDate(endDate.getDate() - days)
+    }
+    return { startDate, endDate }
   }, [dateRange, customDateRange])
 
-  const fetchAnalyticsData = async () => {
+  const fetchAnalyticsData = useCallback(async () => {
     try {
       setLoading(true)
+      const { startDate, endDate } = dateRangeValues
 
-      let startDate: Date, endDate: Date
-      if (customDateRange && customDateRange.from && customDateRange.to) {
-        startDate = customDateRange.from
-        endDate = customDateRange.to
-      } else {
-        endDate = new Date()
-        startDate = new Date()
-        const days = dateRange === "7d" ? 7 : dateRange === "30d" ? 30 : 90
-        startDate.setDate(endDate.getDate() - days)
-      }
+      const [ordersResult, customersResult] = await Promise.all([
+        supabase
+          .from("orders")
+          .select(`
+            order_id,
+            total_price,
+            status,
+            created_at,
+            user_id,
+            order_items (
+              item_name,
+              quantity,
+              price_at_purchase
+            )
+          `)
+          .gte("created_at", startDate.toISOString())
+          .lte("created_at", endDate.toISOString()),
 
-      // Fetch orders data
-      const { data: orders, error: ordersError } = await supabase
-        .from("orders")
-        .select(`
-          order_id,
-          total_price,
-          status,
-          created_at,
-          user_id,
-          order_items (
-            item_name,
-            quantity,
-            price_at_purchase
-          )
-        `)
-        .gte("created_at", startDate.toISOString())
-        .lte("created_at", endDate.toISOString())
+        supabase.from("profiles").select("id, created_at").gte("created_at", startDate.toISOString()),
+      ])
 
-      if (ordersError) throw ordersError
+      if (ordersResult.error) throw ordersResult.error
+      if (customersResult.error) throw customersResult.error
 
-      // Fetch customers data
-      const { data: customers, error: customersError } = await supabase
-        .from("profiles")
-        .select("id, created_at")
-        .gte("created_at", startDate.toISOString())
-
-      if (customersError) throw customersError
-
-      // Process data
-      const processedData = processAnalyticsData(orders || [], customers || [], startDate, endDate)
+      const processedData = processAnalyticsData(
+        ordersResult.data || [],
+        customersResult.data || [],
+        startDate,
+        endDate,
+      )
       setData(processedData)
     } catch (error) {
       console.error("Error fetching analytics:", error)
@@ -127,131 +128,140 @@ export default function AnalyticsPage() {
       setLoading(false)
       setRefreshing(false)
     }
-  }
+  }, [dateRangeValues])
 
-  const processAnalyticsData = (orders: any[], customers: any[], startDate: Date, endDate: Date): AnalyticsData => {
-    // Revenue calculations
-    const totalRevenue = orders.reduce((sum, order) => sum + (order.total_price || 0), 0)
-    const previousPeriodOrders = orders.filter((order) => {
-      const orderDate = new Date(order.created_at)
-      return orderDate < startDate
-    })
-    const previousRevenue = previousPeriodOrders.reduce((sum, order) => sum + (order.total_price || 0), 0)
-    const revenueGrowth = previousRevenue > 0 ? ((totalRevenue - previousRevenue) / previousRevenue) * 100 : 0
+  useEffect(() => {
+    fetchAnalyticsData()
+  }, [fetchAnalyticsData])
 
-    // Daily revenue
-    const dailyRevenue = Array.from(
-      { length: (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24) + 1 },
-      (_, i) => {
-        const date = new Date(startDate)
-        date.setDate(startDate.getDate() + i)
-        const dateStr = date.toISOString().split("T")[0]
-        const dayOrders = orders.filter((order) => order.created_at.startsWith(dateStr))
-        const amount = dayOrders.reduce((sum, order) => sum + (order.total_price || 0), 0)
-        return { date: date.toLocaleDateString("en-US", { month: "short", day: "numeric" }), amount }
-      },
-    )
+  const processAnalyticsData = useMemo(() => {
+    return (orders: any[], customers: any[], startDate: Date, endDate: Date): AnalyticsData => {
+      // Revenue calculations
+      const totalRevenue = orders.reduce((sum, order) => sum + (order.total_price || 0), 0)
+      const previousPeriodOrders = orders.filter((order) => {
+        const orderDate = new Date(order.created_at)
+        return orderDate < startDate
+      })
+      const previousRevenue = previousPeriodOrders.reduce((sum, order) => sum + (order.total_price || 0), 0)
+      const revenueGrowth = previousRevenue > 0 ? ((totalRevenue - previousRevenue) / previousRevenue) * 100 : 0
 
-    // Orders by status
-    const ordersByStatus = orders.reduce(
-      (acc, order) => {
-        acc[order.status] = (acc[order.status] || 0) + 1
-        return acc
-      },
-      {} as Record<string, number>,
-    )
+      const dailyRevenueMap = new Map<string, number>()
+      orders.forEach((order) => {
+        const dateStr = order.created_at.split("T")[0]
+        dailyRevenueMap.set(dateStr, (dailyRevenueMap.get(dateStr) || 0) + (order.total_price || 0))
+      })
 
-    const statusData = Object.entries(ordersByStatus).map(([status, count]) => ({
-      status: status.charAt(0).toUpperCase() + status.slice(1),
-      count,
-    }))
-
-    // Daily orders
-    const dailyOrders = Array.from(
-      { length: (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24) + 1 },
-      (_, i) => {
-        const date = new Date(startDate)
-        date.setDate(startDate.getDate() + i)
-        const dateStr = date.toISOString().split("T")[0]
-        const count = orders.filter((order) => order.created_at.startsWith(dateStr)).length
-        return { date: date.toLocaleDateString("en-US", { month: "short", day: "numeric" }), count }
-      },
-    )
-
-    // Top items
-    const itemCounts = orders
-      .flatMap((order) => order.order_items || [])
-      .reduce(
-        (acc, item) => {
-          const name = item.item_name
-          if (!acc[name]) {
-            acc[name] = { orders: 0, revenue: 0 }
-          }
-          acc[name].orders += item.quantity
-          acc[name].revenue += item.price_at_purchase * item.quantity
-          return acc
+      const dailyRevenue = Array.from(
+        { length: Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1 },
+        (_, i) => {
+          const date = new Date(startDate)
+          date.setDate(startDate.getDate() + i)
+          const dateStr = date.toISOString().split("T")[0]
+          const amount = dailyRevenueMap.get(dateStr) || 0
+          return { date: date.toLocaleDateString("en-US", { month: "short", day: "numeric" }), amount }
         },
-        {} as Record<string, { orders: number; revenue: number }>,
       )
 
-    const topItems = Object.entries(itemCounts)
-      .map(([name, data]) => ({ name, ...data }))
-      .sort((a, b) => b.revenue - a.revenue)
-      .slice(0, 10)
+      const ordersByStatus = orders.reduce(
+        (acc, order) => {
+          acc[order.status] = (acc[order.status] || 0) + 1
+          return acc
+        },
+        {} as Record<string, number>,
+      )
 
-    // Customer metrics
-    const totalCustomers = customers.length
-    const newCustomers = customers.filter((customer) => {
-      const customerDate = new Date(customer.created_at)
-      return customerDate >= startDate
-    }).length
+      const statusData = Object.entries(ordersByStatus).map(([status, count]) => ({
+        status: status.charAt(0).toUpperCase() + status.slice(1),
+        count,
+      }))
 
-    const returningCustomers = orders.filter((order) => order.user_id).length - newCustomers
-    const customerGrowth = totalCustomers > 0 ? (newCustomers / totalCustomers) * 100 : 0
+      const dailyOrdersMap = new Map<string, number>()
+      orders.forEach((order) => {
+        const dateStr = order.created_at.split("T")[0]
+        dailyOrdersMap.set(dateStr, (dailyOrdersMap.get(dateStr) || 0) + 1)
+      })
 
-    // Performance metrics
-    const avgOrderValue = orders.length > 0 ? totalRevenue / orders.length : 0
-    const conversionRate = totalCustomers > 0 ? (orders.length / totalCustomers) * 100 : 0
-    const customerLifetimeValue = totalCustomers > 0 ? totalRevenue / totalCustomers : 0
+      const dailyOrders = Array.from(
+        { length: Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1 },
+        (_, i) => {
+          const date = new Date(startDate)
+          date.setDate(startDate.getDate() + i)
+          const dateStr = date.toISOString().split("T")[0]
+          const count = dailyOrdersMap.get(dateStr) || 0
+          return { date: date.toLocaleDateString("en-US", { month: "short", day: "numeric" }), count }
+        },
+      )
 
-    return {
-      revenue: {
-        total: totalRevenue,
-        growth: revenueGrowth,
-        daily: dailyRevenue,
-        monthly: [], // Could be implemented for longer periods
-      },
-      orders: {
-        total: orders.length,
-        growth: 0, // Could be calculated similar to revenue
-        byStatus: statusData,
-        daily: dailyOrders,
-      },
-      customers: {
-        total: totalCustomers,
-        new: newCustomers,
-        returning: returningCustomers,
-        growth: customerGrowth,
-      },
-      topItems,
-      performance: {
-        avgOrderValue,
-        conversionRate,
-        customerLifetimeValue,
-      },
+      const itemCounts = new Map<string, { orders: number; revenue: number }>()
+      orders.forEach((order) => {
+        ;(order.order_items || []).forEach((item) => {
+          const existing = itemCounts.get(item.item_name) || { orders: 0, revenue: 0 }
+          existing.orders += item.quantity
+          existing.revenue += item.price_at_purchase * item.quantity
+          itemCounts.set(item.item_name, existing)
+        })
+      })
+
+      const topItems = Array.from(itemCounts.entries())
+        .map(([name, data]) => ({ name, ...data }))
+        .sort((a, b) => b.revenue - a.revenue)
+        .slice(0, 10)
+
+      // Customer metrics
+      const totalCustomers = customers.length
+      const newCustomers = customers.filter((customer) => {
+        const customerDate = new Date(customer.created_at)
+        return customerDate >= startDate
+      }).length
+
+      const returningCustomers = orders.filter((order) => order.user_id).length - newCustomers
+      const customerGrowth = totalCustomers > 0 ? (newCustomers / totalCustomers) * 100 : 0
+
+      // Performance metrics
+      const avgOrderValue = orders.length > 0 ? totalRevenue / orders.length : 0
+      const conversionRate = totalCustomers > 0 ? (orders.length / totalCustomers) * 100 : 0
+      const customerLifetimeValue = totalCustomers > 0 ? totalRevenue / totalCustomers : 0
+
+      return {
+        revenue: {
+          total: totalRevenue,
+          growth: revenueGrowth,
+          daily: dailyRevenue,
+          monthly: [], // Could be implemented for longer periods
+        },
+        orders: {
+          total: orders.length,
+          growth: 0, // Could be calculated similar to revenue
+          byStatus: statusData,
+          daily: dailyOrders,
+        },
+        customers: {
+          total: totalCustomers,
+          new: newCustomers,
+          returning: returningCustomers,
+          growth: customerGrowth,
+        },
+        topItems,
+        performance: {
+          avgOrderValue,
+          conversionRate,
+          customerLifetimeValue,
+        },
+      }
     }
-  }
+  }, [])
 
-  const handleRefresh = () => {
+  const handleRefresh = useCallback(() => {
     setRefreshing(true)
     fetchAnalyticsData()
-  }
+  }, [fetchAnalyticsData])
 
-  const exportData = async () => {
+  const exportData = useCallback(async () => {
     if (!data) return
 
     try {
-      // Fetch menu items with categories for proper categorization
+      setExportLoading(true)
+
       const { data: menuItems, error: menuError } = await supabase.from("menu_items").select("name, category")
 
       if (menuError) throw menuError
@@ -266,7 +276,6 @@ export default function AnalyticsPage() {
           {} as Record<string, string>,
         ) || {}
 
-      // Group items by category
       const categorizedItems = data.topItems.reduce(
         (acc, item) => {
           const category = categoryMap[item.name] || "Other"
@@ -287,7 +296,6 @@ export default function AnalyticsPage() {
         items,
       }))
 
-      // Generate PDF content using jsPDF
       const doc = new jsPDF()
 
       // PDF Header
@@ -383,13 +391,15 @@ export default function AnalyticsPage() {
         description: "Failed to export analytics data. Please try again.",
         variant: "destructive",
       })
+    } finally {
+      setExportLoading(false)
     }
-  }
+  }, [data, customDateRange, dateRange])
 
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-96">
-        <LoadingSpinner />
+        <LoadingSpinner size="lg" text="Loading analytics data..." />
       </div>
     )
   }
@@ -433,9 +443,9 @@ export default function AnalyticsPage() {
             <RefreshCw size={16} className={`mr-2 ${refreshing ? "animate-spin" : ""}`} />
             Refresh
           </Button>
-          <Button onClick={exportData} className="bg-gold text-black hover:bg-gold/80">
-            <Download size={16} className="mr-2" />
-            Export PDF
+          <Button onClick={exportData} disabled={exportLoading} className="bg-gold text-black hover:bg-gold/80">
+            <Download size={16} className={`mr-2 ${exportLoading ? "animate-spin" : ""}`} />
+            {exportLoading ? "Exporting..." : "Export PDF"}
           </Button>
         </div>
       </div>

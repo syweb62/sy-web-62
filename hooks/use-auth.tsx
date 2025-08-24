@@ -49,7 +49,7 @@ const isValidEmail = (email: string): boolean => {
 
 const isStrongPassword = (password: string): boolean => password.length >= 6
 
-const withTimeout = async <T,>(p: Promise<T>, ms = 5000): Promise<T> => {
+const withTimeout = async <T,>(p: Promise<T>, ms = 15000): Promise<T> => {
   return Promise.race<T>([
     p,
     new Promise<T>((_, reject) => {
@@ -169,7 +169,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const initializeAuth = async () => {
       try {
-        const connectionResult = await testSupabaseConnection().catch(() => ({ status: "connected" }))
+        const connectionResult = await testSupabaseConnection().catch(() => ({
+          status: "connected", // Assume connected to prevent blocking auth
+        }))
         if (mounted) {
           setConnectionStatus(connectionResult.status as "connected" | "disconnected" | "testing")
         }
@@ -179,12 +181,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return
         }
 
-        // Get current session
-        const { data: sessionData } = await withTimeout(supabase.auth.getSession(), 3000)
+        let currentSession: Session | null = null
+        try {
+          const { data: sessionData } = await withTimeout(supabase.auth.getSession(), 10000)
+          currentSession = sessionData?.session ?? null
+        } catch (err) {
+          // Handle refresh token errors specifically
+          if (err instanceof Error && err.message.includes("Invalid Refresh Token")) {
+            console.log("[v0] Invalid refresh token detected, clearing session")
+            // Clear the invalid session
+            await supabase.auth.signOut().catch(() => {
+              // Ignore signout errors, just clear local state
+            })
+            currentSession = null
+          } else {
+            throw err
+          }
+        }
 
         if (!mounted) return
 
-        const currentSession = sessionData?.session ?? null
         setSession(currentSession)
 
         if (currentSession?.user) {
@@ -193,21 +209,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUser(null)
         }
 
-        // Set up auth state listener
         const { data } = supabase.auth.onAuthStateChange(async (event, nextSession) => {
           if (!mounted) return
 
-          setSession(nextSession)
-          if (nextSession?.user) {
-            await fetchUserProfile(nextSession.user)
-          } else {
-            setUser(null)
+          try {
+            setSession(nextSession)
+            if (nextSession?.user) {
+              await fetchUserProfile(nextSession.user)
+            } else {
+              setUser(null)
+            }
+          } catch (err) {
+            // Handle errors in auth state changes
+            if (err instanceof Error && err.message.includes("Invalid Refresh Token")) {
+              console.log("[v0] Invalid refresh token in auth state change, clearing session")
+              setSession(null)
+              setUser(null)
+            } else {
+              console.error("[v0] Auth state change error:", err)
+            }
           }
         })
 
         unsubscribe = () => data.subscription.unsubscribe()
       } catch (err) {
         console.error("[v0] Auth initialization error:", err)
+        if (err instanceof Error && err.message.includes("Invalid Refresh Token")) {
+          console.log("[v0] Clearing invalid session during initialization")
+          setSession(null)
+          setUser(null)
+        }
+        // Don't block initialization on errors
       } finally {
         if (mounted) {
           setIsLoading(false)
@@ -242,12 +274,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             email: sanitizeInput(email.toLowerCase()),
             password,
           }),
-          8000,
+          15000, // Increased from 8000ms to 15000ms
         )
 
         if (error) {
           if (error.message === "Invalid login credentials") {
             throw new Error("Invalid email or password")
+          }
+          if (error.message === "request-timeout") {
+            throw new Error("Connection timeout. Please check your internet connection and try again.")
           }
           throw error
         }
@@ -333,7 +368,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             email: sanitizeInput(email.toLowerCase()),
             password,
           }),
-          8000,
+          15000,
         )
 
         if (signInError) {
@@ -375,7 +410,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             .eq("id", user.id)
             .select()
             .single(),
-          8000,
+          15000,
         )
         if (error) throw error
         const updatedProfile = { ...data, name: data.full_name || data.name || "User" }
@@ -402,7 +437,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           supabase.auth.resetPasswordForEmail(sanitizeInput(email), {
             redirectTo: `${window.location.origin}/reset-password`,
           }),
-          8000,
+          15000,
         )
         if (error) throw error
       } catch (err) {
@@ -421,7 +456,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         clearError()
         if (!isStrongPassword(newPassword)) throw new Error("New password must be at least 6 characters long")
-        const { error } = await withTimeout(supabase.auth.updateUser({ password: newPassword }), 8000)
+        const { error } = await withTimeout(supabase.auth.updateUser({ password: newPassword }), 15000)
         if (error) throw error
       } catch (err) {
         handleError(err)
@@ -439,7 +474,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         clearError()
         if (!isStrongPassword(newPassword)) throw new Error("New password must be at least 6 characters long")
-        const { error } = await withTimeout(supabase.auth.updateUser({ password: newPassword }), 8000)
+        const { error } = await withTimeout(supabase.auth.updateUser({ password: newPassword }), 15000)
         if (error) throw error
       } catch (err) {
         handleError(err)
@@ -467,7 +502,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             redirectTo: `${window.location.origin}/auth/callback`,
           },
         }),
-        8000,
+        15000,
       )
 
       if (error) {

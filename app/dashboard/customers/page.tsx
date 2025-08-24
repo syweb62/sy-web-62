@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
@@ -9,6 +9,7 @@ import { Search, Users, UserCheck, UserX, Phone, MapPin, RefreshCw } from "lucid
 import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
+import { LoadingSpinner } from "@/components/loading-spinner"
 
 interface Customer {
   id: string
@@ -41,7 +42,7 @@ export default function CustomersPage() {
 
       const supabase = createClient()
 
-      const { data: profiles, error } = await supabase
+      const { data: customersWithOrders, error } = await supabase
         .from("profiles")
         .select(`
           id,
@@ -60,43 +61,48 @@ export default function CustomersPage() {
         throw error
       }
 
-      console.log("[v0] Fetched profiles:", profiles?.length || 0)
+      const { data: orderStats, error: orderStatsError } = await supabase
+        .from("orders")
+        .select(`
+          customer_name,
+          phone,
+          total_price,
+          created_at
+        `)
+        .order("created_at", { ascending: false })
 
-      const customersWithStats = await Promise.all(
-        (profiles || []).map(async (profile) => {
-          try {
-            // Query orders by customer_name and phone since there's no user_id field
-            const { data: orders, error: ordersError } = await supabase
-              .from("orders")
-              .select("total_price, created_at, customer_name, phone")
-              .or(`customer_name.eq.${profile.full_name || ""},phone.eq.${profile.phone || ""}`)
-              .order("created_at", { ascending: false })
+      if (orderStatsError) {
+        console.warn("[v0] Error fetching order stats:", orderStatsError)
+      }
 
-            if (ordersError) {
-              console.warn("[v0] Error fetching orders for customer:", profile.id, ordersError)
-            }
+      const orderStatsMap = new Map<string, { totalOrders: number; totalSpent: number; lastOrderDate: string | null }>()
 
-            const totalOrders = orders?.length || 0
-            const totalSpent = orders?.reduce((sum, order) => sum + (order.total_price || 0), 0) || 0
-            const lastOrderDate = orders?.[0]?.created_at
+      if (orderStats) {
+        orderStats.forEach((order) => {
+          const key = `${order.customer_name}-${order.phone}`
+          const existing = orderStatsMap.get(key) || { totalOrders: 0, totalSpent: 0, lastOrderDate: null }
 
-            return {
-              ...profile,
-              total_orders: totalOrders,
-              total_spent: totalSpent,
-              last_order_date: lastOrderDate,
-            }
-          } catch (customerError) {
-            console.warn("[v0] Error processing customer stats:", profile.id, customerError)
-            return {
-              ...profile,
-              total_orders: 0,
-              total_spent: 0,
-              last_order_date: null,
-            }
+          existing.totalOrders += 1
+          existing.totalSpent += order.total_price || 0
+          if (!existing.lastOrderDate || order.created_at > existing.lastOrderDate) {
+            existing.lastOrderDate = order.created_at
           }
-        }),
-      )
+
+          orderStatsMap.set(key, existing)
+        })
+      }
+
+      const customersWithStats = (customersWithOrders || []).map((profile) => {
+        const key = `${profile.full_name}-${profile.phone}`
+        const stats = orderStatsMap.get(key) || { totalOrders: 0, totalSpent: 0, lastOrderDate: null }
+
+        return {
+          ...profile,
+          total_orders: stats.totalOrders,
+          total_spent: stats.totalSpent,
+          last_order_date: stats.lastOrderDate,
+        }
+      })
 
       console.log("[v0] Processed customers with stats:", customersWithStats.length)
       setCustomers(customersWithStats)
@@ -112,41 +118,53 @@ export default function CustomersPage() {
     }
   }
 
-  const getStatusColor = (customer: Customer) => {
-    const daysSinceLastOrder = customer.last_order_date
-      ? Math.floor((Date.now() - new Date(customer.last_order_date).getTime()) / (1000 * 60 * 60 * 24))
-      : null
+  const getStatusInfo = useMemo(() => {
+    return (customer: Customer) => {
+      const daysSinceLastOrder = customer.last_order_date
+        ? Math.floor((Date.now() - new Date(customer.last_order_date).getTime()) / (1000 * 60 * 60 * 24))
+        : null
 
-    if (!customer.last_order_date) return "bg-gray-900/50 text-gray-300"
-    if (daysSinceLastOrder! <= 7) return "bg-green-900/50 text-green-300"
-    if (daysSinceLastOrder! <= 30) return "bg-yellow-900/50 text-yellow-300"
-    return "bg-red-900/50 text-red-300"
-  }
+      if (!customer.last_order_date) {
+        return { color: "bg-gray-900/50 text-gray-300", text: "New" }
+      }
+      if (daysSinceLastOrder! <= 7) {
+        return { color: "bg-green-900/50 text-green-300", text: "Active" }
+      }
+      if (daysSinceLastOrder! <= 30) {
+        return { color: "bg-yellow-900/50 text-yellow-300", text: "Recent" }
+      }
+      return { color: "bg-red-900/50 text-red-300", text: "Inactive" }
+    }
+  }, [])
 
-  const getStatusText = (customer: Customer) => {
-    const daysSinceLastOrder = customer.last_order_date
-      ? Math.floor((Date.now() - new Date(customer.last_order_date).getTime()) / (1000 * 60 * 60 * 24))
-      : null
+  const filteredCustomers = useMemo(() => {
+    return customers.filter((customer) => {
+      const matchesSearch =
+        customer.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        customer.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        customer.phone?.includes(searchTerm)
 
-    if (!customer.last_order_date) return "New"
-    if (daysSinceLastOrder! <= 7) return "Active"
-    if (daysSinceLastOrder! <= 30) return "Recent"
-    return "Inactive"
-  }
+      return matchesSearch
+    })
+  }, [customers, searchTerm])
 
-  const filteredCustomers = customers.filter((customer) => {
-    const matchesSearch =
-      customer.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      customer.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      customer.phone?.includes(searchTerm)
+  const customerStats = useMemo(() => {
+    const activeCount = customers.filter((c) => getStatusInfo(c).text === "Active").length
+    const inactiveCount = customers.filter((c) => getStatusInfo(c).text === "Inactive").length
+    const newThisMonth = customers.filter((c) => new Date(c.created_at).getMonth() === new Date().getMonth()).length
 
-    return matchesSearch
-  })
+    return {
+      total: customers.length,
+      active: activeCount,
+      inactive: inactiveCount,
+      newThisMonth,
+    }
+  }, [customers, getStatusInfo])
 
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-96">
-        <div className="text-white">Loading customers...</div>
+        <LoadingSpinner size="lg" text="Loading customers..." />
       </div>
     )
   }
@@ -178,7 +196,7 @@ export default function CustomersPage() {
               <Users className="text-gold" size={20} />
               <div>
                 <p className="text-sm text-gray-400">Total Customers</p>
-                <p className="text-xl font-bold text-white">{customers.length}</p>
+                <p className="text-xl font-bold text-white">{customerStats.total}</p>
               </div>
             </div>
           </CardContent>
@@ -189,9 +207,7 @@ export default function CustomersPage() {
               <UserCheck className="text-green-400" size={20} />
               <div>
                 <p className="text-sm text-gray-400">Active Customers</p>
-                <p className="text-xl font-bold text-white">
-                  {customers.filter((c) => getStatusText(c) === "Active").length}
-                </p>
+                <p className="text-xl font-bold text-white">{customerStats.active}</p>
               </div>
             </div>
           </CardContent>
@@ -202,9 +218,7 @@ export default function CustomersPage() {
               <UserX className="text-red-400" size={20} />
               <div>
                 <p className="text-sm text-gray-400">Inactive Customers</p>
-                <p className="text-xl font-bold text-white">
-                  {customers.filter((c) => getStatusText(c) === "Inactive").length}
-                </p>
+                <p className="text-xl font-bold text-white">{customerStats.inactive}</p>
               </div>
             </div>
           </CardContent>
@@ -215,9 +229,7 @@ export default function CustomersPage() {
               <Users className="text-blue-400" size={20} />
               <div>
                 <p className="text-sm text-gray-400">New This Month</p>
-                <p className="text-xl font-bold text-white">
-                  {customers.filter((c) => new Date(c.created_at).getMonth() === new Date().getMonth()).length}
-                </p>
+                <p className="text-xl font-bold text-white">{customerStats.newThisMonth}</p>
               </div>
             </div>
           </CardContent>
@@ -307,7 +319,7 @@ export default function CustomersPage() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge className={getStatusColor(customer)}>{getStatusText(customer)}</Badge>
+                        <Badge className={getStatusInfo(customer).color}>{getStatusInfo(customer).text}</Badge>
                       </TableCell>
                       <TableCell className="text-white">{customer.total_orders || 0}</TableCell>
                       <TableCell className="text-gold font-medium">

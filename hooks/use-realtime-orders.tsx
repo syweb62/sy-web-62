@@ -14,6 +14,9 @@ interface Order {
   total_price: number
   status: "pending" | "confirmed" | "preparing" | "ready" | "delivered" | "cancelled"
   created_at: string
+  special_instructions?: string
+  payment_method?: string
+  message?: string
   order_items: Array<{
     item_name: string
     quantity: number

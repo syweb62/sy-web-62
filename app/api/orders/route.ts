@@ -49,7 +49,8 @@ export async function GET(request: NextRequest) {
 
     const formattedOrders =
       orders?.map((order) => ({
-        id: order.order_id,
+        id: order.order_id || order.short_order_id,
+        order_id: order.order_id || order.short_order_id,
         short_order_id: order.short_order_id,
         customer_name: order.customer_name || "Guest",
         phone: order.phone || "N/A",
@@ -57,6 +58,7 @@ export async function GET(request: NextRequest) {
         total_price: order.total_price,
         status: order.status,
         created_at: order.created_at,
+        special_instructions: order.message,
         order_items:
           order.order_items?.map((item: any) => ({
             item_name: item.item_name,
@@ -97,7 +99,13 @@ export async function PATCH(request: NextRequest) {
 
     const { error } = await supabase.from("orders").update({ status }).eq("order_id", orderId)
 
-    if (error) throw error
+    if (error && error.message.includes("invalid input syntax for type uuid")) {
+      // If orderId is not a valid UUID, try updating by short_order_id
+      const { error: shortIdError } = await supabase.from("orders").update({ status }).eq("short_order_id", orderId)
+      if (shortIdError) throw shortIdError
+    } else if (error) {
+      throw error
+    }
 
     return NextResponse.json({ success: true, message: "Order status updated successfully" })
   } catch (error) {

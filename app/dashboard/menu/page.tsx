@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo, useCallback } from "react"
 import Image from "next/image"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -34,28 +34,28 @@ export default function MenuManagementPage() {
   const [statusFilter, setStatusFilter] = useState("all")
   const [categories, setCategories] = useState<string[]>([])
 
-  useEffect(() => {
-    const fetchMenuItems = async () => {
-      try {
-        const { data, error } = await supabase.from("menu_items").select("*").order("created_at", { ascending: false })
+  const fetchMenuItems = useCallback(async () => {
+    try {
+      const { data, error } = await supabase.from("menu_items").select("*").order("created_at", { ascending: false })
 
-        if (error) throw error
-        setMenuItems(data || [])
+      if (error) throw error
+      setMenuItems(data || [])
 
-        const uniqueCategories = [...new Set(data?.map((item) => item.category).filter(Boolean) || [])]
-        setCategories(uniqueCategories)
-      } catch (error) {
-        console.error("Error fetching menu items:", error)
-        toast({
-          title: "Error",
-          description: "Failed to load menu items",
-          variant: "destructive",
-        })
-      } finally {
-        setLoading(false)
-      }
+      const uniqueCategories = [...new Set(data?.map((item) => item.category).filter(Boolean) || [])]
+      setCategories(uniqueCategories)
+    } catch (error) {
+      console.error("Error fetching menu items:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load menu items",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
     }
+  }, [])
 
+  useEffect(() => {
     fetchMenuItems()
 
     const channel = supabase
@@ -75,8 +75,13 @@ export default function MenuManagementPage() {
             setMenuItems((prev) => [newItem, ...prev])
 
             // Update categories if new category is added
-            if (newItem.category && !categories.includes(newItem.category)) {
-              setCategories((prev) => [...prev, newItem.category])
+            if (newItem.category) {
+              setCategories((prev) => {
+                if (!prev.includes(newItem.category)) {
+                  return [...prev, newItem.category]
+                }
+                return prev
+              })
             }
 
             toast({
@@ -107,45 +112,55 @@ export default function MenuManagementPage() {
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [categories])
+  }, [fetchMenuItems])
 
-  const handleCategoryCreated = (newCategory: string) => {
-    if (!categories.includes(newCategory)) {
-      setCategories((prev) => [...prev, newCategory])
-    }
-  }
+  const handleCategoryCreated = useCallback((newCategory: string) => {
+    setCategories((prev) => {
+      if (!prev.includes(newCategory)) {
+        return [...prev, newCategory]
+      }
+      return prev
+    })
+  }, [])
 
-  const deleteMenuItem = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this menu item?")) return
+  const deleteMenuItem = useCallback(
+    async (id: string) => {
+      if (!confirm("Are you sure you want to delete this menu item?")) return
 
+      try {
+        const { error } = await supabase.from("menu_items").delete().eq("id", id)
+
+        if (error) throw error
+
+        // Optimistic update
+        setMenuItems((prev) => prev.filter((item) => item.id !== id))
+        toast({
+          title: "Success",
+          description: "Menu item deleted successfully",
+        })
+      } catch (error) {
+        // Revert optimistic update on error
+        fetchMenuItems()
+        toast({
+          title: "Error",
+          description: "Failed to delete menu item",
+          variant: "destructive",
+        })
+      }
+    },
+    [fetchMenuItems],
+  )
+
+  const toggleAvailability = useCallback(async (id: string, currentStatus: boolean) => {
     try {
-      const { error } = await supabase.from("menu_items").delete().eq("id", id)
-
-      if (error) throw error
-
-      setMenuItems(menuItems.filter((item) => item.id !== id))
-      toast({
-        title: "Success",
-        description: "Menu item deleted successfully",
-      })
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to delete menu item",
-        variant: "destructive",
-      })
-    }
-  }
-
-  const toggleAvailability = async (id: string, currentStatus: boolean) => {
-    try {
-      setMenuItems(menuItems.map((item) => (item.id === id ? { ...item, is_available: !currentStatus } : item)))
+      // Optimistic update
+      setMenuItems((prev) => prev.map((item) => (item.id === id ? { ...item, is_available: !currentStatus } : item)))
 
       const { error } = await supabase.from("menu_items").update({ is_available: !currentStatus }).eq("id", id)
 
       if (error) {
         // Revert optimistic update on error
-        setMenuItems(menuItems.map((item) => (item.id === id ? { ...item, is_available: currentStatus } : item)))
+        setMenuItems((prev) => prev.map((item) => (item.id === id ? { ...item, is_available: currentStatus } : item)))
         throw error
       }
 
@@ -160,49 +175,55 @@ export default function MenuManagementPage() {
         variant: "destructive",
       })
     }
-  }
+  }, [])
 
-  const getStatusColor = (isAvailable: boolean) => {
-    return isAvailable ? "bg-green-900/50 text-green-300" : "bg-red-900/50 text-red-300"
-  }
-
-  const getCategoryColor = (category: string) => {
-    switch (category.toLowerCase()) {
-      case "sushi":
-        return "bg-purple-900/50 text-purple-300"
-      case "main course":
-        return "bg-blue-900/50 text-blue-300"
-      case "noodles":
-        return "bg-orange-900/50 text-orange-300"
-      case "appetizer":
-        return "bg-green-900/50 text-green-300"
-      case "desserts":
-        return "bg-pink-900/50 text-pink-300"
-      case "beverages":
-        return "bg-cyan-900/50 text-cyan-300"
-      default:
-        return "bg-gray-900/50 text-gray-300"
+  const getStatusColor = useMemo(() => {
+    return (isAvailable: boolean) => {
+      return isAvailable ? "bg-green-900/50 text-green-300" : "bg-red-900/50 text-red-300"
     }
-  }
+  }, [])
 
-  const filteredItems = menuItems.filter((item) => {
-    const matchesSearch =
-      item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.description.toLowerCase().includes(searchTerm.toLowerCase())
+  const getCategoryColor = useMemo(() => {
+    return (category: string) => {
+      switch (category.toLowerCase()) {
+        case "sushi":
+          return "bg-purple-900/50 text-purple-300"
+        case "main course":
+          return "bg-blue-900/50 text-blue-300"
+        case "noodles":
+          return "bg-orange-900/50 text-orange-300"
+        case "appetizer":
+          return "bg-green-900/50 text-green-300"
+        case "desserts":
+          return "bg-pink-900/50 text-pink-300"
+        case "beverages":
+          return "bg-cyan-900/50 text-cyan-300"
+        default:
+          return "bg-gray-900/50 text-gray-300"
+      }
+    }
+  }, [])
 
-    const matchesCategory = categoryFilter === "all" || item.category.toLowerCase() === categoryFilter.toLowerCase()
-    const matchesStatus =
-      statusFilter === "all" ||
-      (statusFilter === "available" && item.is_available) ||
-      (statusFilter === "unavailable" && !item.is_available)
+  const filteredItems = useMemo(() => {
+    return menuItems.filter((item) => {
+      const matchesSearch =
+        item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.description.toLowerCase().includes(searchTerm.toLowerCase())
 
-    return matchesSearch && matchesCategory && matchesStatus
-  })
+      const matchesCategory = categoryFilter === "all" || item.category.toLowerCase() === categoryFilter.toLowerCase()
+      const matchesStatus =
+        statusFilter === "all" ||
+        (statusFilter === "available" && item.is_available) ||
+        (statusFilter === "unavailable" && !item.is_available)
+
+      return matchesSearch && matchesCategory && matchesStatus
+    })
+  }, [menuItems, searchTerm, categoryFilter, statusFilter])
 
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-96">
-        <LoadingSpinner />
+        <LoadingSpinner size="lg" text="Loading menu items..." />
       </div>
     )
   }
