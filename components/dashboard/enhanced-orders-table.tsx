@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
@@ -45,6 +45,7 @@ const EnhancedOrdersTable = ({
   const [localOrders, setLocalOrders] = useState<Order[]>(orders)
   const [updatingOrders, setUpdatingOrders] = useState<Set<string>>(new Set())
   const [pendingRequests, setPendingRequests] = useState<Set<string>>(new Set())
+  const processingEvents = useRef<Set<string>>(new Set())
   const [confirmationModal, setConfirmationModal] = useState<{
     isOpen: boolean
     orderId: string
@@ -102,11 +103,12 @@ const EnhancedOrdersTable = ({
     }
 
     const requestKey = `${orderId}-${newStatus}`
-    if (pendingRequests.has(requestKey) || updatingOrders.has(orderId)) {
+    if (processingEvents.current.has(requestKey) || pendingRequests.has(requestKey) || updatingOrders.has(orderId)) {
       console.log("[v0] Request already in progress for:", requestKey)
       return
     }
 
+    processingEvents.current.add(requestKey)
     setPendingRequests((prev) => new Set(prev).add(requestKey))
     setUpdatingOrders((prev) => new Set(prev).add(orderId))
 
@@ -139,6 +141,7 @@ const EnhancedOrdersTable = ({
 
   const handleModalClose = () => {
     const requestKey = `${confirmationModal.orderId}-${confirmationModal.newStatus}`
+    processingEvents.current.delete(requestKey)
     setPendingRequests((prev) => {
       const newSet = new Set(prev)
       newSet.delete(requestKey)
@@ -225,7 +228,6 @@ const EnhancedOrdersTable = ({
       )
     }
 
-    // For pending orders, show confirm/cancel buttons
     if (order.status === "pending") {
       return (
         <div className="space-y-3">
@@ -481,7 +483,6 @@ const EnhancedOrdersTable = ({
       )
     }
 
-    // For other statuses, show view/print and admin controller
     return (
       <div className="space-y-3">
         <div className="flex gap-2">
@@ -654,7 +655,16 @@ const EnhancedOrdersTable = ({
         })
 
         if (!response.ok) {
-          setLocalOrders(orders)
+          setLocalOrders((prevOrders) =>
+            prevOrders.map((order) => {
+              const validOrderId = getValidOrderId(order)
+              if (validOrderId === orderId) {
+                const originalOrder = orders.find((o) => getValidOrderId(o) === orderId)
+                return originalOrder ? { ...order, status: originalOrder.status } : order
+              }
+              return order
+            }),
+          )
           const errorData = await response.json()
           throw new Error(errorData.error || `HTTP error! status: ${response.status}`)
         }
@@ -667,7 +677,7 @@ const EnhancedOrdersTable = ({
         }
 
         if (onRefresh) {
-          setTimeout(onRefresh, 100)
+          setTimeout(onRefresh, 200)
         }
 
         const statusChangeEvent = new CustomEvent("orderStatusChanged", {
@@ -680,7 +690,6 @@ const EnhancedOrdersTable = ({
         window.dispatchEvent(statusChangeEvent)
       } catch (error) {
         console.error("[v0] Failed to update order status:", error)
-        setLocalOrders(orders)
         alert(`Failed to update order status: ${error instanceof Error ? error.message : "Unknown error"}`)
       } finally {
         setUpdatingOrders((prev) => {
@@ -688,10 +697,38 @@ const EnhancedOrdersTable = ({
           newSet.delete(orderId)
           return newSet
         })
+
+        const requestKey = `${orderId}-${newStatus}`
+        processingEvents.current.delete(requestKey)
       }
     },
     [onStatusUpdate, onRefresh, orders],
   )
+
+  useEffect(() => {
+    if (orders.length === 0 && localOrders.length > 0) {
+      return
+    }
+
+    if (orders.length !== localOrders.length) {
+      setLocalOrders(orders)
+      return
+    }
+
+    const hasRealChanges = orders.some((order) => {
+      const localOrder = localOrders.find((lo) => getValidOrderId(lo) === getValidOrderId(order))
+      if (!localOrder) return true
+
+      const validOrderId = getValidOrderId(order)
+      if (updatingOrders.has(validOrderId)) return false
+
+      return order.status !== localOrder.status
+    })
+
+    if (hasRealChanges) {
+      setLocalOrders(orders)
+    }
+  }, [orders, localOrders, updatingOrders])
 
   useEffect(() => {
     if (!onRefresh) return
@@ -736,10 +773,6 @@ const EnhancedOrdersTable = ({
       subscription.unsubscribe()
     }
   }, [onRefresh, supabase])
-
-  useEffect(() => {
-    setLocalOrders(orders)
-  }, [orders])
 
   if (loading) {
     return (
@@ -811,7 +844,6 @@ const EnhancedOrdersTable = ({
             >
               <CardContent className="p-6">
                 <div className="grid grid-cols-12 gap-6 items-center">
-                  {/* Order ID */}
                   <div className="col-span-2">
                     <div className="space-y-2">
                       <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">ORDER ID</p>
@@ -820,7 +852,6 @@ const EnhancedOrdersTable = ({
                     </div>
                   </div>
 
-                  {/* Customer */}
                   <div className="col-span-3">
                     <div className="space-y-2">
                       <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">CUSTOMER</p>
@@ -837,7 +868,6 @@ const EnhancedOrdersTable = ({
                     </div>
                   </div>
 
-                  {/* Items */}
                   <div className="col-span-2">
                     <div className="space-y-2">
                       <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">ITEMS</p>
@@ -854,7 +884,6 @@ const EnhancedOrdersTable = ({
                     </div>
                   </div>
 
-                  {/* Special Instructions */}
                   <div className="col-span-2">
                     <div className="space-y-2">
                       <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">SPECIAL INSTRUCTIONS</p>
@@ -868,7 +897,6 @@ const EnhancedOrdersTable = ({
                     </div>
                   </div>
 
-                  {/* Total */}
                   <div className="col-span-1">
                     <div className="space-y-2">
                       <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">TOTAL</p>
@@ -876,11 +904,9 @@ const EnhancedOrdersTable = ({
                     </div>
                   </div>
 
-                  {/* Actions */}
                   <div className="col-span-2">{getActionButtons(order)}</div>
                 </div>
 
-                {/* Placed Time */}
                 <div className="absolute top-4 right-4">
                   <div className="text-right">
                     <p className="text-xs text-gray-500">{dateTime.date}</p>
@@ -893,7 +919,6 @@ const EnhancedOrdersTable = ({
           )
         })}
       </div>
-      {/* Custom Confirmation Modal */}
       <ConfirmationModal
         isOpen={confirmationModal.isOpen}
         onClose={handleModalClose}
