@@ -42,6 +42,7 @@ const EnhancedOrdersTable = ({
   userRole = "manager",
   loading = false,
 }: EnhancedOrdersTableProps) => {
+  const [localOrders, setLocalOrders] = useState<Order[]>(orders)
   const [updatingOrders, setUpdatingOrders] = useState<Set<string>>(new Set())
   const [pendingRequests, setPendingRequests] = useState<Set<string>>(new Set())
   const [confirmationModal, setConfirmationModal] = useState<{
@@ -107,6 +108,7 @@ const EnhancedOrdersTable = ({
     }
 
     setPendingRequests((prev) => new Set(prev).add(requestKey))
+    setUpdatingOrders((prev) => new Set(prev).add(orderId))
 
     console.log("[v0] Status update requested:", orderId, "->", newStatus)
 
@@ -140,6 +142,12 @@ const EnhancedOrdersTable = ({
     setPendingRequests((prev) => {
       const newSet = new Set(prev)
       newSet.delete(requestKey)
+      return newSet
+    })
+
+    setUpdatingOrders((prev) => {
+      const newSet = new Set(prev)
+      newSet.delete(confirmationModal.orderId)
       return newSet
     })
 
@@ -621,73 +629,68 @@ const EnhancedOrdersTable = ({
         return
       }
 
-      const requestKey = `${orderId}-${newStatus}`
-      if (updatingOrders.has(orderId)) {
-        console.log("[v0] Update already in progress for order:", orderId)
-        return
-      }
-
       try {
         console.log("[v0] Updating order status:", orderId, "->", newStatus)
-        setUpdatingOrders((prev) => new Set(prev).add(orderId))
+
+        setLocalOrders((prevOrders) =>
+          prevOrders.map((order) => {
+            const validOrderId = getValidOrderId(order)
+            if (validOrderId === orderId) {
+              return { ...order, status: newStatus as Order["status"] }
+            }
+            return order
+          }),
+        )
+
+        const response = await fetch("/api/orders", {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            orderId: orderId,
+            status: newStatus,
+          }),
+        })
+
+        if (!response.ok) {
+          setLocalOrders(orders)
+          const errorData = await response.json()
+          throw new Error(errorData.error || `HTTP error! status: ${response.status}`)
+        }
+
+        const result = await response.json()
+        console.log("[v0] Order status updated successfully:", result.message)
 
         if (onStatusUpdate) {
           onStatusUpdate(orderId, newStatus)
         }
 
-        let updateError = null
-
-        const { error: orderIdError } = await supabase
-          .from("orders")
-          .update({
-            status: newStatus,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("order_id", orderId)
-
-        if (orderIdError && orderIdError.message.includes("invalid input syntax for type uuid")) {
-          // If orderId is not a valid UUID, try updating by short_order_id
-          const { error: shortIdError } = await supabase
-            .from("orders")
-            .update({
-              status: newStatus,
-              updated_at: new Date().toISOString(),
-            })
-            .eq("short_order_id", orderId)
-
-          updateError = shortIdError
-        } else {
-          updateError = orderIdError
-        }
-
-        if (updateError) {
-          console.error("[v0] Error updating order status:", updateError.message)
-          throw updateError
-        }
-
-        console.log("[v0] Order status updated successfully:", orderId)
-
         if (onRefresh) {
-          setTimeout(onRefresh, 500)
+          setTimeout(onRefresh, 100)
         }
+
+        const statusChangeEvent = new CustomEvent("orderStatusChanged", {
+          detail: {
+            orderId: orderId,
+            newStatus: newStatus,
+            timestamp: new Date().toISOString(),
+          },
+        })
+        window.dispatchEvent(statusChangeEvent)
       } catch (error) {
         console.error("[v0] Failed to update order status:", error)
+        setLocalOrders(orders)
+        alert(`Failed to update order status: ${error instanceof Error ? error.message : "Unknown error"}`)
       } finally {
-        setTimeout(() => {
-          setUpdatingOrders((prev) => {
-            const newSet = new Set(prev)
-            newSet.delete(orderId)
-            return newSet
-          })
-          setPendingRequests((prev) => {
-            const newSet = new Set(prev)
-            newSet.delete(requestKey)
-            return newSet
-          })
-        }, 1000)
+        setUpdatingOrders((prev) => {
+          const newSet = new Set(prev)
+          newSet.delete(orderId)
+          return newSet
+        })
       }
     },
-    [updatingOrders, onStatusUpdate, onRefresh, supabase],
+    [onStatusUpdate, onRefresh, orders],
   )
 
   useEffect(() => {
@@ -734,6 +737,10 @@ const EnhancedOrdersTable = ({
     }
   }, [onRefresh, supabase])
 
+  useEffect(() => {
+    setLocalOrders(orders)
+  }, [orders])
+
   if (loading) {
     return (
       <div className="space-y-4">
@@ -752,7 +759,7 @@ const EnhancedOrdersTable = ({
     )
   }
 
-  if (orders.length === 0) {
+  if (localOrders.length === 0) {
     return (
       <Card className="bg-gray-900/30 border-gray-700/50">
         <CardContent className="flex flex-col items-center justify-center py-16 text-center">
@@ -783,7 +790,7 @@ const EnhancedOrdersTable = ({
         <div>
           <h2 className="text-2xl font-semibold text-white">Active Orders</h2>
           <p className="text-gray-400 text-sm mt-1">
-            {orders.length} order{orders.length !== 1 ? "s" : ""} • Real-time updates enabled
+            {localOrders.length} order{localOrders.length !== 1 ? "s" : ""} • Real-time updates enabled
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -793,7 +800,7 @@ const EnhancedOrdersTable = ({
       </div>
 
       <div className="space-y-4">
-        {orders.map((order) => {
+        {localOrders.map((order) => {
           const dateTime = formatDateTime(order.created_at)
           const validOrderId = getValidOrderId(order)
 
