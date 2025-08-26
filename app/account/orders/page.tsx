@@ -96,15 +96,28 @@ export default function OrdersPage() {
 
   useEffect(() => {
     const handleOrderStatusChange = (event: CustomEvent) => {
-      console.log("[v0] Order status changed:", event.detail)
+      console.log("[v0] Order status changed event received:", event.detail)
+      console.log("[v0] Event type:", event.type)
+      console.log("[v0] Current window location:", window.location.href)
+
       // Refresh order history when status changes
       refetch()
     }
 
+    console.log("[v0] Setting up orderStatusChanged event listener")
     window.addEventListener("orderStatusChanged", handleOrderStatusChange as EventListener)
 
+    const handleOrderUpdated = (event: CustomEvent) => {
+      console.log("[v0] Order updated event received:", event.detail)
+      refetch()
+    }
+
+    window.addEventListener("orderUpdated", handleOrderUpdated as EventListener)
+
     return () => {
+      console.log("[v0] Cleaning up event listeners")
       window.removeEventListener("orderStatusChanged", handleOrderStatusChange as EventListener)
+      window.removeEventListener("orderUpdated", handleOrderUpdated as EventListener)
     }
   }, [refetch])
 

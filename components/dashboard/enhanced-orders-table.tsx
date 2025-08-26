@@ -685,6 +685,13 @@ const EnhancedOrdersTable = ({
           setTimeout(onRefresh, 100)
         }
 
+        console.log("[v0] Broadcasting orderStatusChanged event:", {
+          orderId,
+          shortOrderId: orderToUpdate?.short_order_id,
+          newStatus,
+          customerName: orderToUpdate?.customer_name,
+        })
+
         const statusChangeEvent = new CustomEvent("orderStatusChanged", {
           detail: {
             orderId: orderId,
@@ -696,6 +703,12 @@ const EnhancedOrdersTable = ({
           },
         })
         window.dispatchEvent(statusChangeEvent)
+
+        console.log("[v0] Broadcasting orderUpdated event:", {
+          orderId,
+          status: newStatus,
+          source: "dashboard",
+        })
 
         const orderUpdatedEvent = new CustomEvent("orderUpdated", {
           detail: {
@@ -715,6 +728,7 @@ const EnhancedOrdersTable = ({
         window.dispatchEvent(orderUpdatedEvent)
 
         if (window.parent && window.parent !== window) {
+          console.log("[v0] Sending message to parent window")
           window.parent.postMessage(
             {
               type: "ORDER_STATUS_CHANGED",
