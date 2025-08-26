@@ -82,38 +82,6 @@ const createProfile = (u: SupabaseUser): Profile => ({
   updated_at: u.updated_at || u.created_at,
 })
 
-const isInvalidRefreshTokenError = (error: any): boolean => {
-  return (
-    error &&
-    (error.message?.includes("Invalid Refresh Token") ||
-      error.message?.includes("Refresh Token Not Found") ||
-      error.message?.includes("refresh_token_not_found") ||
-      error.code === "invalid_refresh_token")
-  )
-}
-
-const clearInvalidSession = async () => {
-  try {
-    console.log("[v0] Clearing invalid session and storage")
-    if (supabase) {
-      await supabase.auth.signOut({ scope: "local" })
-    }
-    // Clear localStorage items that might contain stale tokens
-    if (typeof window !== "undefined") {
-      const keysToRemove = []
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i)
-        if (key && key.startsWith("sb-")) {
-          keysToRemove.push(key)
-        }
-      }
-      keysToRemove.forEach((key) => localStorage.removeItem(key))
-    }
-  } catch (err) {
-    console.log("[v0] Error clearing session:", err)
-  }
-}
-
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<Profile | null>(null)
   const [session, setSession] = useState<Session | null>(null)
@@ -210,21 +178,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         let currentSession: Session | null = null
         try {
-          const { data: sessionData, error: sessionError } = await withTimeout(supabase.auth.getSession(), 10000)
-
-          if (sessionError && isInvalidRefreshTokenError(sessionError)) {
-            console.log("[v0] Invalid refresh token during session retrieval, clearing session")
-            await clearInvalidSession()
-            currentSession = null
-          } else if (sessionError) {
-            throw sessionError
-          } else {
-            currentSession = sessionData?.session ?? null
-          }
+          const { data: sessionData } = await withTimeout(supabase.auth.getSession(), 10000)
+          currentSession = sessionData?.session ?? null
         } catch (err) {
-          if (isInvalidRefreshTokenError(err)) {
+          if (err instanceof Error && err.message.includes("Invalid Refresh Token")) {
             console.log("[v0] Invalid refresh token detected, clearing session")
-            await clearInvalidSession()
+            await supabase.auth.signOut().catch(() => {})
             currentSession = null
           } else {
             throw err
@@ -253,9 +212,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 setUser(null)
               }
             } catch (err) {
-              if (isInvalidRefreshTokenError(err)) {
+              if (err instanceof Error && err.message.includes("Invalid Refresh Token")) {
                 console.log("[v0] Invalid refresh token in auth state change, clearing session")
-                await clearInvalidSession()
                 setSession(null)
                 setUser(null)
               } else {
@@ -269,9 +227,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       } catch (err) {
         console.error("[v0] Auth initialization error:", err)
-        if (isInvalidRefreshTokenError(err)) {
+        if (err instanceof Error && err.message.includes("Invalid Refresh Token")) {
           console.log("[v0] Clearing invalid session during initialization")
-          await clearInvalidSession()
           setSession(null)
           setUser(null)
         }
