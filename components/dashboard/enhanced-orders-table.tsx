@@ -832,6 +832,20 @@ const EnhancedOrdersTable = ({
   }, [onRefresh, supabase])
 
   useEffect(() => {
+    // Sync with parent orders when:
+    // 1. Initial load (localOrders is empty)
+    // 2. No pending updates (to avoid overriding optimistic updates)
+    // 3. Orders data has actually changed (to avoid unnecessary re-renders)
+    const hasNoPendingUpdates = updatingOrders.size === 0 && pendingRequests.size === 0
+    const ordersChanged = JSON.stringify(orders) !== JSON.stringify(localOrders)
+
+    if ((localOrders.length === 0 && orders.length > 0) || (hasNoPendingUpdates && ordersChanged)) {
+      console.log("[v0] Syncing localOrders with parent orders data")
+      setLocalOrders(orders)
+    }
+  }, [orders, updatingOrders.size, pendingRequests.size, localOrders])
+
+  useEffect(() => {
     // Only sync on initial load when localOrders is empty
     if (localOrders.length === 0 && orders.length > 0) {
       setLocalOrders(orders)
