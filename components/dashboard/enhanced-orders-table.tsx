@@ -50,7 +50,7 @@ const EnhancedOrdersTable = ({
     isOpen: boolean
     orderId: string
     newStatus: string
-    type: "confirm" | "cancel" | "complete"
+    type: "confirm" | "cancel" | "warning"
   }>({
     isOpen: false,
     orderId: "",
@@ -118,7 +118,7 @@ const EnhancedOrdersTable = ({
       isOpen: true,
       orderId,
       newStatus,
-      type: newStatus === "confirmed" ? "confirm" : newStatus === "cancelled" ? "cancel" : "complete",
+      type: newStatus === "confirmed" ? "confirm" : newStatus === "cancelled" ? "cancel" : "confirm",
     })
   }
 
@@ -636,6 +636,8 @@ const EnhancedOrdersTable = ({
       try {
         console.log("[v0] Updating order status:", orderId, "->", newStatus)
 
+        const orderToUpdate = localOrders.find((order) => getValidOrderId(order) === orderId)
+
         setLocalOrders((prevOrders) =>
           prevOrders.map((order) => {
             const validOrderId = getValidOrderId(order)
@@ -686,11 +688,47 @@ const EnhancedOrdersTable = ({
         const statusChangeEvent = new CustomEvent("orderStatusChanged", {
           detail: {
             orderId: orderId,
+            shortOrderId: orderToUpdate?.short_order_id,
             newStatus: newStatus,
+            customerName: orderToUpdate?.customer_name,
+            totalPrice: orderToUpdate?.total_price,
             timestamp: new Date().toISOString(),
           },
         })
         window.dispatchEvent(statusChangeEvent)
+
+        const orderUpdatedEvent = new CustomEvent("orderUpdated", {
+          detail: {
+            orderId: orderId,
+            shortOrderId: orderToUpdate?.short_order_id,
+            status: newStatus,
+            customerName: orderToUpdate?.customer_name,
+            phone: orderToUpdate?.phone,
+            address: orderToUpdate?.address,
+            totalPrice: orderToUpdate?.total_price,
+            paymentMethod: orderToUpdate?.payment_method,
+            specialInstructions: orderToUpdate?.special_instructions,
+            updatedAt: new Date().toISOString(),
+            source: "dashboard",
+          },
+        })
+        window.dispatchEvent(orderUpdatedEvent)
+
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage(
+            {
+              type: "ORDER_STATUS_CHANGED",
+              data: {
+                orderId: orderId,
+                shortOrderId: orderToUpdate?.short_order_id,
+                newStatus: newStatus,
+                customerName: orderToUpdate?.customer_name,
+                timestamp: new Date().toISOString(),
+              },
+            },
+            "*",
+          )
+        }
       } catch (error) {
         console.error("[v0] Failed to update order status:", error)
         setLocalOrders((prevOrders) =>
@@ -712,7 +750,7 @@ const EnhancedOrdersTable = ({
         })
       }
     },
-    [onStatusUpdate, onRefresh, orders],
+    [onStatusUpdate, onRefresh, orders, localOrders],
   )
 
   useEffect(() => {
@@ -740,11 +778,33 @@ const EnhancedOrdersTable = ({
             const statusChangeEvent = new CustomEvent("orderStatusChanged", {
               detail: {
                 orderId: orderId,
+                shortOrderId: payload.new.short_order_id,
                 newStatus: payload.new.status,
                 customerName: payload.new.customer_name,
+                totalPrice: payload.new.total_price,
+                timestamp: new Date().toISOString(),
+                source: "realtime",
               },
             })
             window.dispatchEvent(statusChangeEvent)
+
+            const orderUpdatedEvent = new CustomEvent("orderUpdated", {
+              detail: {
+                orderId: orderId,
+                shortOrderId: payload.new.short_order_id,
+                status: payload.new.status,
+                customerName: payload.new.customer_name,
+                phone: payload.new.phone,
+                address: payload.new.address,
+                totalPrice: payload.new.total_price,
+                paymentMethod: payload.new.payment_method,
+                specialInstructions: payload.new.special_instructions,
+                updatedAt: new Date().toISOString(),
+                source: "realtime",
+                eventType: payload.eventType,
+              },
+            })
+            window.dispatchEvent(orderUpdatedEvent)
           }
 
           setTimeout(onRefresh, 300)
@@ -923,17 +983,21 @@ const EnhancedOrdersTable = ({
         onConfirm={handleModalConfirm}
         title={
           confirmationModal.type === "confirm"
-            ? "Confirm Order"
+            ? confirmationModal.newStatus === "completed"
+              ? "Complete Order"
+              : "Confirm Order"
             : confirmationModal.type === "cancel"
               ? "Cancel Order"
-              : "Complete Order"
+              : "Confirm Action"
         }
         message={
           confirmationModal.type === "confirm"
-            ? "Are you sure you want to confirm this order?"
+            ? confirmationModal.newStatus === "completed"
+              ? "Are you sure you want to complete this order?"
+              : "Are you sure you want to confirm this order?"
             : confirmationModal.type === "cancel"
               ? "Are you sure you want to cancel this order?"
-              : "Are you sure you want to complete this order?"
+              : "Are you sure you want to proceed?"
         }
         confirmText="OK"
         cancelText="Cancel"
