@@ -135,7 +135,14 @@ const EnhancedOrdersTable = ({
       "to status:",
       confirmationModal.newStatus,
     )
-    await handleStatusUpdate(confirmationModal.orderId, confirmationModal.newStatus)
+
+    try {
+      await handleStatusUpdate(confirmationModal.orderId, confirmationModal.newStatus)
+      console.log("[v0] Status update completed successfully")
+    } catch (error) {
+      console.error("[v0] Status update failed:", error)
+    }
+
     handleModalClose()
   }
 
@@ -630,19 +637,22 @@ const EnhancedOrdersTable = ({
         return
       }
 
-      try {
-        console.log("[v0] Updating order status:", orderId, "->", newStatus)
+      console.log("[v0] Starting status update process for order:", orderId, "->", newStatus)
 
+      try {
+        console.log("[v0] Applying optimistic update to local state")
         setLocalOrders((prevOrders) =>
           prevOrders.map((order) => {
             const validOrderId = getValidOrderId(order)
             if (validOrderId === orderId) {
+              console.log("[v0] Updating local order status:", validOrderId, "->", newStatus)
               return { ...order, status: newStatus as Order["status"] }
             }
             return order
           }),
         )
 
+        console.log("[v0] Making API call to update order status")
         const response = await fetch("/api/orders", {
           method: "PATCH",
           headers: {
@@ -654,7 +664,10 @@ const EnhancedOrdersTable = ({
           }),
         })
 
+        console.log("[v0] API response status:", response.status)
+
         if (!response.ok) {
+          console.error("[v0] API call failed, reverting optimistic update")
           setLocalOrders((prevOrders) =>
             prevOrders.map((order) => {
               const validOrderId = getValidOrderId(order)
@@ -673,10 +686,12 @@ const EnhancedOrdersTable = ({
         console.log("[v0] Order status updated successfully:", result.message)
 
         if (onStatusUpdate) {
+          console.log("[v0] Calling onStatusUpdate callback")
           onStatusUpdate(orderId, newStatus)
         }
 
         if (onRefresh) {
+          console.log("[v0] Calling onRefresh callback")
           setTimeout(onRefresh, 200)
         }
 
@@ -688,10 +703,12 @@ const EnhancedOrdersTable = ({
           },
         })
         window.dispatchEvent(statusChangeEvent)
+        console.log("[v0] Status change event dispatched")
       } catch (error) {
         console.error("[v0] Failed to update order status:", error)
         alert(`Failed to update order status: ${error instanceof Error ? error.message : "Unknown error"}`)
       } finally {
+        console.log("[v0] Cleaning up updating state for order:", orderId)
         setUpdatingOrders((prev) => {
           const newSet = new Set(prev)
           newSet.delete(orderId)
