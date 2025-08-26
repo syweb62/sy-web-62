@@ -103,7 +103,7 @@ const EnhancedOrdersTable = ({
     }
 
     const requestKey = `${orderId}-${newStatus}`
-    if (processingEvents.current.has(requestKey) || pendingRequests.has(requestKey) || updatingOrders.has(orderId)) {
+    if (pendingRequests.has(requestKey) || updatingOrders.has(orderId) || processingEvents.current.has(requestKey)) {
       console.log("[v0] Request already in progress for:", requestKey)
       return
     }
@@ -135,14 +135,7 @@ const EnhancedOrdersTable = ({
       "to status:",
       confirmationModal.newStatus,
     )
-
-    try {
-      await handleStatusUpdate(confirmationModal.orderId, confirmationModal.newStatus)
-      console.log("[v0] Status update completed successfully")
-    } catch (error) {
-      console.error("[v0] Status update failed:", error)
-    }
-
+    await handleStatusUpdate(confirmationModal.orderId, confirmationModal.newStatus)
     handleModalClose()
   }
 
@@ -285,6 +278,7 @@ const EnhancedOrdersTable = ({
               onClick={(e) => {
                 e.preventDefault()
                 e.stopPropagation()
+                if (typeof window === "undefined") return
                 console.log("[v0] Confirm button clicked for order:", validOrderId)
                 handleStatusUpdateWithConfirmation(validOrderId, "confirmed")
               }}
@@ -299,6 +293,7 @@ const EnhancedOrdersTable = ({
               onClick={(e) => {
                 e.preventDefault()
                 e.stopPropagation()
+                if (typeof window === "undefined") return
                 console.log("[v0] Cancel button clicked for order:", validOrderId)
                 handleStatusUpdateWithConfirmation(validOrderId, "cancelled")
               }}
@@ -368,6 +363,7 @@ const EnhancedOrdersTable = ({
               onClick={(e) => {
                 e.preventDefault()
                 e.stopPropagation()
+                if (typeof window === "undefined") return
                 console.log("[v0] Complete button clicked for order:", validOrderId)
                 handleStatusUpdateWithConfirmation(validOrderId, "completed")
               }}
@@ -637,22 +633,19 @@ const EnhancedOrdersTable = ({
         return
       }
 
-      console.log("[v0] Starting status update process for order:", orderId, "->", newStatus)
-
       try {
-        console.log("[v0] Applying optimistic update to local state")
+        console.log("[v0] Updating order status:", orderId, "->", newStatus)
+
         setLocalOrders((prevOrders) =>
           prevOrders.map((order) => {
             const validOrderId = getValidOrderId(order)
             if (validOrderId === orderId) {
-              console.log("[v0] Updating local order status:", validOrderId, "->", newStatus)
               return { ...order, status: newStatus as Order["status"] }
             }
             return order
           }),
         )
 
-        console.log("[v0] Making API call to update order status")
         const response = await fetch("/api/orders", {
           method: "PATCH",
           headers: {
@@ -664,16 +657,13 @@ const EnhancedOrdersTable = ({
           }),
         })
 
-        console.log("[v0] API response status:", response.status)
-
         if (!response.ok) {
-          console.error("[v0] API call failed, reverting optimistic update")
           setLocalOrders((prevOrders) =>
             prevOrders.map((order) => {
               const validOrderId = getValidOrderId(order)
               if (validOrderId === orderId) {
                 const originalOrder = orders.find((o) => getValidOrderId(o) === orderId)
-                return originalOrder ? { ...order, status: originalOrder.status } : order
+                return originalOrder || order
               }
               return order
             }),
@@ -686,13 +676,11 @@ const EnhancedOrdersTable = ({
         console.log("[v0] Order status updated successfully:", result.message)
 
         if (onStatusUpdate) {
-          console.log("[v0] Calling onStatusUpdate callback")
           onStatusUpdate(orderId, newStatus)
         }
 
         if (onRefresh) {
-          console.log("[v0] Calling onRefresh callback")
-          setTimeout(onRefresh, 200)
+          setTimeout(onRefresh, 100)
         }
 
         const statusChangeEvent = new CustomEvent("orderStatusChanged", {
@@ -703,53 +691,31 @@ const EnhancedOrdersTable = ({
           },
         })
         window.dispatchEvent(statusChangeEvent)
-        console.log("[v0] Status change event dispatched")
       } catch (error) {
         console.error("[v0] Failed to update order status:", error)
+        setLocalOrders((prevOrders) =>
+          prevOrders.map((order) => {
+            const validOrderId = getValidOrderId(order)
+            if (validOrderId === orderId) {
+              const originalOrder = orders.find((o) => getValidOrderId(o) === orderId)
+              return originalOrder || order
+            }
+            return order
+          }),
+        )
         alert(`Failed to update order status: ${error instanceof Error ? error.message : "Unknown error"}`)
       } finally {
-        console.log("[v0] Cleaning up updating state for order:", orderId)
         setUpdatingOrders((prev) => {
           const newSet = new Set(prev)
           newSet.delete(orderId)
           return newSet
         })
-
-        const requestKey = `${orderId}-${newStatus}`
-        processingEvents.current.delete(requestKey)
       }
     },
     [onStatusUpdate, onRefresh, orders],
   )
 
   useEffect(() => {
-    if (orders.length === 0 && localOrders.length > 0) {
-      return
-    }
-
-    if (orders.length !== localOrders.length) {
-      setLocalOrders(orders)
-      return
-    }
-
-    const hasRealChanges = orders.some((order) => {
-      const localOrder = localOrders.find((lo) => getValidOrderId(lo) === getValidOrderId(order))
-      if (!localOrder) return true
-
-      const validOrderId = getValidOrderId(order)
-      if (updatingOrders.has(validOrderId)) return false
-
-      return order.status !== localOrder.status
-    })
-
-    if (hasRealChanges) {
-      setLocalOrders(orders)
-    }
-  }, [orders, localOrders, updatingOrders])
-
-  useEffect(() => {
-    if (!onRefresh) return
-
     const subscription = supabase
       .channel("enhanced-orders-realtime")
       .on(
@@ -790,6 +756,13 @@ const EnhancedOrdersTable = ({
       subscription.unsubscribe()
     }
   }, [onRefresh, supabase])
+
+  useEffect(() => {
+    // Only sync on initial load when localOrders is empty
+    if (localOrders.length === 0 && orders.length > 0) {
+      setLocalOrders(orders)
+    }
+  }, [orders]) // Only depend on orders, not orders.length
 
   if (loading) {
     return (
@@ -861,6 +834,7 @@ const EnhancedOrdersTable = ({
             >
               <CardContent className="p-6">
                 <div className="grid grid-cols-12 gap-6 items-center">
+                  {/* Order ID */}
                   <div className="col-span-2">
                     <div className="space-y-2">
                       <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">ORDER ID</p>
@@ -869,6 +843,7 @@ const EnhancedOrdersTable = ({
                     </div>
                   </div>
 
+                  {/* Customer */}
                   <div className="col-span-3">
                     <div className="space-y-2">
                       <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">CUSTOMER</p>
@@ -885,6 +860,7 @@ const EnhancedOrdersTable = ({
                     </div>
                   </div>
 
+                  {/* Items */}
                   <div className="col-span-2">
                     <div className="space-y-2">
                       <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">ITEMS</p>
@@ -901,6 +877,7 @@ const EnhancedOrdersTable = ({
                     </div>
                   </div>
 
+                  {/* Special Instructions */}
                   <div className="col-span-2">
                     <div className="space-y-2">
                       <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">SPECIAL INSTRUCTIONS</p>
@@ -914,6 +891,7 @@ const EnhancedOrdersTable = ({
                     </div>
                   </div>
 
+                  {/* Total */}
                   <div className="col-span-1">
                     <div className="space-y-2">
                       <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">TOTAL</p>
@@ -921,9 +899,11 @@ const EnhancedOrdersTable = ({
                     </div>
                   </div>
 
+                  {/* Actions */}
                   <div className="col-span-2">{getActionButtons(order)}</div>
                 </div>
 
+                {/* Placed Time */}
                 <div className="absolute top-4 right-4">
                   <div className="text-right">
                     <p className="text-xs text-gray-500">{dateTime.date}</p>
@@ -936,6 +916,7 @@ const EnhancedOrdersTable = ({
           )
         })}
       </div>
+      {/* Custom Confirmation Modal */}
       <ConfirmationModal
         isOpen={confirmationModal.isOpen}
         onClose={handleModalClose}
