@@ -138,7 +138,7 @@ export default function Menu() {
         {/* Hero Section */}
         <section className="hero-section min-h-[60vh] flex items-center justify-center relative">
           <div className="container mx-auto px-4 text-center z-10 pt-20">
-            <h1 className="text-4xl md:text-6xl font-serif font-bold mb-6">Our Menu</h1>
+            <h1 className="text-4xl md:text-6xl font-bold mb-6">Our Menu</h1>
             <p className="text-lg max-w-3xl mx-auto mb-8 text-gray-200">Loading our delicious menu items...</p>
           </div>
         </section>
@@ -160,7 +160,7 @@ export default function Menu() {
         {/* Hero Section */}
         <section className="hero-section min-h-[60vh] flex items-center justify-center relative">
           <div className="container mx-auto px-4 text-center z-10 pt-20">
-            <h1 className="text-4xl md:text-6xl font-serif font-bold mb-6">Our Menu</h1>
+            <h1 className="text-4xl md:text-6xl font-bold mb-6">Our Menu</h1>
             <p className="text-lg max-w-3xl mx-auto mb-8 text-gray-200">
               We're having trouble loading our menu. Please try again.
             </p>
@@ -186,7 +186,7 @@ export default function Menu() {
       {/* Hero Section */}
       <section className="hero-section min-h-[60vh] flex items-center justify-center relative">
         <div className="container mx-auto px-4 text-center z-10 pt-20">
-          <h1 className="text-4xl md:text-6xl font-serif font-bold mb-6">Our Menu</h1>
+          <h1 className="text-4xl md:text-6xl font-bold mb-6">Our Menu</h1>
           <p className="text-lg max-w-3xl mx-auto mb-8 text-gray-200">
             Explore our diverse selection of authentic Japanese dishes prepared with the finest ingredients.
           </p>
@@ -289,10 +289,10 @@ export default function Menu() {
 
                   <div className="p-6">
                     <div className="flex justify-between items-start mb-3">
-                      <h3 className={`text-xl font-serif ${item.is_available ? "text-white" : "text-gray-400"}`}>
+                      <h3 className={`text-xl font-bold ${item.is_available ? "text-white" : "text-gray-400"}`}>
                         {item.name}
                       </h3>
-                      <span className={`font-medium text-lg ${item.is_available ? "text-gold" : "text-gray-500"}`}>
+                      <span className={`font-semibold text-lg ${item.is_available ? "text-gold" : "text-gray-500"}`}>
                         BDT {item.price.toFixed(2)}
                       </span>
                     </div>

@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ConfirmationModal } from "@/components/ui/confirmation-modal"
 import { Eye, Printer, Clock, Check, X, CheckCircle } from "lucide-react"
 import { createClient } from "@/lib/supabase"
@@ -42,8 +41,8 @@ const EnhancedOrdersTable = ({
   userRole = "manager",
   loading = false,
 }: EnhancedOrdersTableProps) => {
-  const [localOrders, setLocalOrders] = useState<Order[]>(orders)
-  const [updatingOrders, setUpdatingOrders] = useState<Set<string>>(new Set())
+  const [displayOrders, setDisplayOrders] = useState<Order[]>(orders)
+  const [processingOrders, setProcessingOrders] = useState<Set<string>>(new Set())
   const [confirmationModal, setConfirmationModal] = useState<{
     isOpen: boolean
     orderId: string
@@ -55,12 +54,21 @@ const EnhancedOrdersTable = ({
     newStatus: "",
     type: "confirm",
   })
-  const [recentUpdates, setRecentUpdates] = useState<Set<string>>(new Set())
+
   const supabase = createClient()
 
   const getValidOrderId = (order: Order): string => {
     return order.order_id || order.short_order_id || ""
   }
+
+  useEffect(() => {
+    console.log("[v0] Syncing display orders with parent orders")
+    setDisplayOrders(orders)
+  }, [orders])
+
+  const [localOrders, setLocalOrders] = useState<Order[]>(orders)
+  const [updatingOrders, setUpdatingOrders] = useState<Set<string>>(new Set())
+  const [recentUpdates, setRecentUpdates] = useState<Set<string>>(new Set())
 
   const formatDateTime = useCallback((dateString: string) => {
     const date = new Date(dateString)
@@ -172,351 +180,6 @@ const EnhancedOrdersTable = ({
     }
   }
 
-  const getActionButtons = (order: Order) => {
-    const validOrderId = getValidOrderId(order)
-    const isUpdating = updatingOrders.has(validOrderId)
-
-    if (!validOrderId) {
-      console.error("[v0] Order missing both order_id and short_order_id:", {
-        order_id: order.order_id,
-        short_order_id: order.short_order_id,
-        customer_name: order.customer_name,
-        total_price: order.total_price,
-        status: order.status,
-      })
-
-      return (
-        <div className="space-y-3">
-          <div className="flex gap-2">
-            <Button
-              onClick={() => console.log("[v0] Cannot view order - invalid ID:", order)}
-              size="sm"
-              variant="outline"
-              disabled
-              className="border-gray-600 text-gray-500 p-2"
-            >
-              <Eye className="w-4 h-4" />
-            </Button>
-            <Button
-              onClick={() => console.log("[v0] Cannot print order - invalid ID:", order)}
-              size="sm"
-              variant="outline"
-              disabled
-              className="border-gray-600 text-gray-500 p-2"
-            >
-              <Printer className="w-4 h-4" />
-            </Button>
-          </div>
-          <div className="text-yellow-400 text-xs">Order ID missing - contact support</div>
-        </div>
-      )
-    }
-
-    if (order.status === "pending") {
-      return (
-        <div className="space-y-3">
-          <div className="flex gap-2">
-            <Button
-              onClick={() => window.open(`/dashboard/orders/${validOrderId}`, "_blank")}
-              size="sm"
-              variant="outline"
-              className="border-gray-600 text-gray-300 hover:bg-gray-800 hover:text-white p-2"
-            >
-              <Eye className="w-4 h-4" />
-            </Button>
-            <Button
-              onClick={() => handlePrint(order)}
-              size="sm"
-              variant="outline"
-              className="border-gray-600 text-gray-300 hover:bg-gray-800 hover:text-white p-2"
-            >
-              <Printer className="w-4 h-4" />
-            </Button>
-            {userRole === "admin" && (
-              <Select
-                value={order.status}
-                onValueChange={(newStatus) => {
-                  if (newStatus === order.status) return
-                  console.log("[v0] Admin select change:", validOrderId, "->", newStatus)
-                  handleStatusUpdateWithConfirmation(validOrderId, newStatus)
-                }}
-                disabled={isUpdating}
-              >
-                <SelectTrigger className="w-24 h-8 bg-gray-800 border-gray-600 text-white text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-gray-800 border-gray-600">
-                  <SelectItem value="confirmed" className="text-green-400 text-xs">
-                    ✓ Confirm
-                  </SelectItem>
-                  <SelectItem value="cancelled" className="text-red-400 text-xs">
-                    ✗ Cancel
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            )}
-          </div>
-
-          <div className="flex gap-2">
-            <Button
-              onClick={(e) => {
-                e.preventDefault()
-                e.stopPropagation()
-                if (typeof window === "undefined") return
-                console.log("[v0] Confirm button clicked for order:", validOrderId)
-                handleStatusUpdateWithConfirmation(validOrderId, "confirmed")
-              }}
-              disabled={isUpdating}
-              size="sm"
-              className="bg-green-600 hover:bg-green-700 text-white flex items-center gap-1"
-            >
-              <Check className="w-3 h-3" />
-              Confirm
-            </Button>
-            <Button
-              onClick={(e) => {
-                e.preventDefault()
-                e.stopPropagation()
-                if (typeof window === "undefined") return
-                console.log("[v0] Cancel button clicked for order:", validOrderId)
-                handleStatusUpdateWithConfirmation(validOrderId, "cancelled")
-              }}
-              disabled={isUpdating}
-              size="sm"
-              variant="destructive"
-              className="bg-red-600 hover:bg-red-700 text-white flex items-center gap-1"
-            >
-              <X className="w-3 h-3" />
-              Cancel
-            </Button>
-          </div>
-        </div>
-      )
-    }
-
-    if (order.status === "confirmed") {
-      return (
-        <div className="space-y-3">
-          <div className="flex gap-2">
-            <Button
-              onClick={() => window.open(`/dashboard/orders/${validOrderId}`, "_blank")}
-              size="sm"
-              variant="outline"
-              className="border-gray-600 text-gray-300 hover:bg-gray-800 hover:text-white p-2"
-            >
-              <Eye className="w-4 h-4" />
-            </Button>
-            <Button
-              onClick={() => handlePrint(order)}
-              size="sm"
-              variant="outline"
-              className="border-gray-600 text-gray-300 hover:bg-gray-800 hover:text-white p-2"
-            >
-              <Printer className="w-4 h-4" />
-            </Button>
-            {userRole === "admin" && (
-              <Select
-                value={order.status}
-                onValueChange={(newStatus) => {
-                  if (newStatus === order.status) return
-                  console.log("[v0] Admin select change:", validOrderId, "->", newStatus)
-                  handleStatusUpdateWithConfirmation(validOrderId, newStatus)
-                }}
-                disabled={isUpdating}
-              >
-                <SelectTrigger className="w-24 h-8 bg-gray-800 border-gray-600 text-white text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-gray-800 border-gray-600">
-                  <SelectItem value="confirmed" className="text-green-400 text-xs">
-                    ✓ Confirm
-                  </SelectItem>
-                  <SelectItem value="cancelled" className="text-red-400 text-xs">
-                    ✗ Cancel
-                  </SelectItem>
-                  <SelectItem value="completed" className="text-blue-400 text-xs">
-                    ✓ Complete
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            )}
-          </div>
-
-          <div className="flex gap-2">
-            <Button
-              onClick={(e) => {
-                e.preventDefault()
-                e.stopPropagation()
-                if (typeof window === "undefined") return
-                console.log("[v0] Complete button clicked for order:", validOrderId)
-                handleStatusUpdateWithConfirmation(validOrderId, "completed")
-              }}
-              disabled={isUpdating}
-              size="sm"
-              className="bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-1"
-            >
-              <CheckCircle className="w-3 h-3" />
-              Complete
-            </Button>
-          </div>
-        </div>
-      )
-    }
-
-    if (order.status === "cancelled") {
-      return (
-        <div className="space-y-3">
-          <div className="flex gap-2">
-            <Button
-              onClick={() => window.open(`/dashboard/orders/${validOrderId}`, "_blank")}
-              size="sm"
-              variant="outline"
-              className="border-gray-600 text-gray-300 hover:bg-gray-800 hover:text-white p-2"
-            >
-              <Eye className="w-4 h-4" />
-            </Button>
-            <Button
-              onClick={() => handlePrint(order)}
-              size="sm"
-              variant="outline"
-              className="border-gray-600 text-gray-300 hover:bg-gray-800 hover:text-white p-2"
-            >
-              <Printer className="w-4 h-4" />
-            </Button>
-            {userRole === "admin" && (
-              <Select
-                value={order.status}
-                onValueChange={(newStatus) => {
-                  if (newStatus === order.status) return
-                  console.log("[v0] Admin select change:", validOrderId, "->", newStatus)
-                  handleStatusUpdateWithConfirmation(validOrderId, newStatus)
-                }}
-                disabled={isUpdating}
-              >
-                <SelectTrigger className="w-24 h-8 bg-gray-800 border-gray-600 text-white text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-gray-800 border-gray-600">
-                  <SelectItem value="confirmed" className="text-green-400 text-xs">
-                    ✓ Confirm
-                  </SelectItem>
-                  <SelectItem value="cancelled" className="text-red-400 text-xs">
-                    ✗ Cancel
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            )}
-          </div>
-
-          <div className="text-center">
-            <span className="text-red-400 text-sm font-medium">Cancelled</span>
-          </div>
-        </div>
-      )
-    }
-
-    if (order.status === "completed") {
-      return (
-        <div className="space-y-3">
-          <div className="flex gap-2">
-            <Button
-              onClick={() => window.open(`/dashboard/orders/${validOrderId}`, "_blank")}
-              size="sm"
-              variant="outline"
-              className="border-gray-600 text-gray-300 hover:bg-gray-800 hover:text-white p-2"
-            >
-              <Eye className="w-4 h-4" />
-            </Button>
-            <Button
-              onClick={() => handlePrint(order)}
-              size="sm"
-              variant="outline"
-              className="border-gray-600 text-gray-300 hover:bg-gray-800 hover:text-white p-2"
-            >
-              <Printer className="w-4 h-4" />
-            </Button>
-            {userRole === "admin" && (
-              <Select
-                value={order.status}
-                onValueChange={(newStatus) => {
-                  if (newStatus === order.status) return
-                  console.log("[v0] Admin select change:", validOrderId, "->", newStatus)
-                  handleStatusUpdateWithConfirmation(validOrderId, newStatus)
-                }}
-                disabled={isUpdating}
-              >
-                <SelectTrigger className="w-24 h-8 bg-gray-800 border-gray-600 text-white text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-gray-800 border-gray-600">
-                  <SelectItem value="confirmed" className="text-green-400 text-xs">
-                    ✓ Confirm
-                  </SelectItem>
-                  <SelectItem value="cancelled" className="text-red-400 text-xs">
-                    ✗ Cancel
-                  </SelectItem>
-                  <SelectItem value="completed" className="text-blue-400 text-xs">
-                    ✓ Complete
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            )}
-          </div>
-
-          <div className="text-center">
-            <span className="text-blue-400 text-sm font-medium">Completed</span>
-          </div>
-        </div>
-      )
-    }
-
-    return (
-      <div className="space-y-3">
-        <div className="flex gap-2">
-          <Button
-            onClick={() => window.open(`/dashboard/orders/${validOrderId}`, "_blank")}
-            size="sm"
-            variant="outline"
-            className="border-gray-600 text-gray-300 hover:bg-gray-800 bg-transparent"
-          >
-            <Eye className="w-4 h-4" />
-          </Button>
-          <Button
-            onClick={() => handlePrint(order)}
-            size="sm"
-            variant="outline"
-            className="border-gray-600 text-gray-300 hover:bg-gray-800 bg-transparent"
-          >
-            <Printer className="w-4 h-4" />
-          </Button>
-          {userRole === "admin" && (
-            <Select
-              value={order.status}
-              onValueChange={(newStatus) => {
-                if (newStatus === order.status) return
-                console.log("[v0] Admin select change:", validOrderId, "->", newStatus)
-                handleStatusUpdateWithConfirmation(validOrderId, newStatus)
-              }}
-              disabled={isUpdating}
-            >
-              <SelectTrigger className="w-24 h-8 bg-gray-800 border-gray-600 text-white text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="bg-gray-800 border-gray-600">
-                <SelectItem value="confirmed" className="text-green-400 text-xs">
-                  ✓ Confirm
-                </SelectItem>
-                <SelectItem value="cancelled" className="text-red-400 text-xs">
-                  ✗ Cancel
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          )}
-        </div>
-      </div>
-    )
-  }
-
   const generatePrintContent = useCallback(
     (order: Order) => {
       const dateTime = formatDateTime(order.created_at)
@@ -612,39 +275,29 @@ const EnhancedOrdersTable = ({
 
   const handleStatusUpdate = useCallback(
     async (orderId: string, newStatus: string) => {
-      console.log("[v0] handleStatusUpdate called:", { orderId, newStatus })
+      console.log("[v0] Starting status update:", { orderId, newStatus })
 
-      if (!orderId || orderId === "undefined") {
-        console.error("[v0] Invalid order ID provided:", orderId)
+      if (!orderId || processingOrders.has(orderId)) {
+        console.log("[v0] Skipping update - invalid ID or already processing")
         return
       }
 
-      if (updatingOrders.has(orderId)) {
-        console.log("[v0] Order already being updated:", orderId)
-        return
-      }
-
-      setUpdatingOrders((prev) => new Set(prev).add(orderId))
+      // Mark as processing
+      setProcessingOrders((prev) => new Set(prev).add(orderId))
 
       try {
-        console.log("[v0] Starting status update process...")
-
-        const orderToUpdate = localOrders.find((order) => getValidOrderId(order) === orderId)
-        console.log("[v0] Found order to update:", orderToUpdate)
-
-        setLocalOrders((prevOrders) =>
+        setDisplayOrders((prevOrders) =>
           prevOrders.map((order) => {
             const validOrderId = getValidOrderId(order)
             if (validOrderId === orderId) {
-              console.log("[v0] Updating order in local state:", validOrderId, "->", newStatus)
+              console.log("[v0] Optimistically updating order:", validOrderId, "->", newStatus)
               return { ...order, status: newStatus as Order["status"] }
             }
             return order
           }),
         )
 
-        console.log("[v0] Making API call to update order status")
-
+        console.log("[v0] Making API call to persist status change")
         const response = await fetch("/api/orders", {
           method: "PATCH",
           headers: {
@@ -657,112 +310,45 @@ const EnhancedOrdersTable = ({
         })
 
         if (!response.ok) {
-          const errorText = await response.text()
-          throw new Error(`HTTP ${response.status}: ${errorText}`)
+          throw new Error(`API call failed: ${response.status}`)
         }
 
         const result = await response.json()
-        console.log("[v0] Order status updated successfully:", result)
+        console.log("[v0] Status update successful:", result)
 
-        setRecentUpdates((prev) => new Set(prev).add(orderId))
-        setTimeout(() => {
-          setRecentUpdates((prev) => {
-            const newSet = new Set(prev)
-            newSet.delete(orderId)
-            return newSet
-          })
-        }, 5000) // Prevent stale sync for 5 seconds
-
-        const statusChangeEvent = new CustomEvent("orderStatusChanged", {
-          detail: {
-            orderId: orderId,
-            shortOrderId: orderToUpdate?.short_order_id,
-            newStatus: newStatus,
-            customerName: orderToUpdate?.customer_name,
-            totalPrice: orderToUpdate?.total_price,
-            timestamp: new Date().toISOString(),
-            source: "dashboard",
-          },
-        })
-
-        window.dispatchEvent(statusChangeEvent)
-
-        if (window.parent && window.parent !== window) {
-          try {
-            window.parent.dispatchEvent(statusChangeEvent)
-            window.parent.postMessage(
-              {
-                type: "orderStatusChanged",
-                data: statusChangeEvent.detail,
-              },
-              "*",
-            )
-          } catch (e) {
-            console.log("[v0] Could not dispatch to parent window:", e)
-          }
+        const eventData = {
+          orderId: orderId,
+          newStatus: newStatus,
+          timestamp: new Date().toISOString(),
+          source: "dashboard",
         }
 
-        if (window.opener && window.opener !== window) {
-          try {
-            window.opener.dispatchEvent(statusChangeEvent)
-            window.opener.postMessage(
-              {
-                type: "orderStatusChanged",
-                data: statusChangeEvent.detail,
-              },
-              "*",
-            )
-          } catch (e) {
-            console.log("[v0] Could not dispatch to opener window:", e)
-          }
-        }
+        // Dispatch custom event
+        window.dispatchEvent(new CustomEvent("orderStatusChanged", { detail: eventData }))
 
-        try {
-          const updateData = {
-            orderId,
-            newStatus,
-            timestamp: Date.now(),
-            source: "dashboard",
-          }
+        // Cross-window communication via localStorage
+        localStorage.setItem("orderStatusUpdate", JSON.stringify(eventData))
+        setTimeout(() => localStorage.removeItem("orderStatusUpdate"), 1000)
 
-          localStorage.setItem("lastOrderUpdate", JSON.stringify(updateData))
-          localStorage.setItem("orderUpdateTrigger", Date.now().toString())
-
-          setTimeout(() => {
-            localStorage.removeItem("orderUpdateTrigger")
-          }, 1000)
-        } catch (e) {
-          console.log("[v0] Could not use localStorage:", e)
-        }
-
+        // Call parent callback
         if (onStatusUpdate) {
-          console.log("[v0] Calling onStatusUpdate callback")
           onStatusUpdate(orderId, newStatus)
         }
       } catch (error) {
-        console.error("[v0] Error updating order status:", error)
+        console.error("[v0] Status update failed:", error)
 
-        setLocalOrders((prevOrders) =>
-          prevOrders.map((order) => {
-            const validOrderId = getValidOrderId(order)
-            if (validOrderId === orderId) {
-              const originalOrder = orders.find((o) => getValidOrderId(o) === orderId)
-              return originalOrder || order
-            }
-            return order
-          }),
-        )
+        setDisplayOrders(orders)
 
         throw error
       } finally {
-        setUpdatingOrders((prev) => {
+        setProcessingOrders((prev) => {
           const newSet = new Set(prev)
           newSet.delete(orderId)
           return newSet
         })
       }
     },
-    [onStatusUpdate, orders, localOrders],
+    [orders, processingOrders, onStatusUpdate],
   )
 
   useEffect(() => {
@@ -987,7 +573,7 @@ const EnhancedOrdersTable = ({
     )
   }
 
-  if (localOrders.length === 0) {
+  if (displayOrders.length === 0) {
     return (
       <Card className="bg-gray-900/30 border-gray-700/50">
         <CardContent className="flex flex-col items-center justify-center py-16 text-center">
@@ -1012,13 +598,152 @@ const EnhancedOrdersTable = ({
     )
   }
 
+  const getActionButtons = (order: Order) => {
+    const validOrderId = getValidOrderId(order)
+    const isProcessing = processingOrders.has(validOrderId)
+
+    if (!validOrderId) {
+      return (
+        <div className="space-y-3">
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" disabled className="border-gray-600 text-gray-500 p-2 bg-transparent">
+              <Eye className="w-4 h-4" />
+            </Button>
+            <Button size="sm" variant="outline" disabled className="border-gray-600 text-gray-500 p-2 bg-transparent">
+              <Printer className="w-4 h-4" />
+            </Button>
+          </div>
+          <p className="text-red-400 text-xs">Invalid Order ID</p>
+        </div>
+      )
+    }
+
+    if (order.status === "pending") {
+      return (
+        <div className="space-y-3">
+          <div className="flex gap-2">
+            <Button
+              onClick={() => window.open(`/dashboard/orders/${validOrderId}`, "_blank")}
+              size="sm"
+              variant="outline"
+              className="border-gray-600 text-gray-300 hover:bg-gray-800 bg-transparent p-2"
+            >
+              <Eye className="w-4 h-4" />
+            </Button>
+            <Button
+              onClick={() => handlePrint(order)}
+              size="sm"
+              variant="outline"
+              className="border-gray-600 text-gray-300 hover:bg-gray-800 bg-transparent p-2"
+            >
+              <Printer className="w-4 h-4" />
+            </Button>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              onClick={() => {
+                console.log("[v0] Confirm button clicked for order:", validOrderId)
+                handleStatusUpdateWithConfirmation(validOrderId, "confirmed")
+              }}
+              size="sm"
+              disabled={isProcessing}
+              className="bg-green-600 hover:bg-green-700 text-white flex-1"
+            >
+              {isProcessing ? <Clock className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+              {isProcessing ? "Processing..." : "Confirm"}
+            </Button>
+            <Button
+              onClick={() => {
+                console.log("[v0] Cancel button clicked for order:", validOrderId)
+                handleStatusUpdateWithConfirmation(validOrderId, "cancelled")
+              }}
+              size="sm"
+              disabled={isProcessing}
+              variant="destructive"
+              className="flex-1"
+            >
+              {isProcessing ? <Clock className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
+              {isProcessing ? "Processing..." : "Cancel"}
+            </Button>
+          </div>
+        </div>
+      )
+    }
+
+    if (order.status === "confirmed") {
+      return (
+        <div className="space-y-3">
+          <div className="flex gap-2">
+            <Button
+              onClick={() => window.open(`/dashboard/orders/${validOrderId}`, "_blank")}
+              size="sm"
+              variant="outline"
+              className="border-gray-600 text-gray-300 hover:bg-gray-800 bg-transparent p-2"
+            >
+              <Eye className="w-4 h-4" />
+            </Button>
+            <Button
+              onClick={() => handlePrint(order)}
+              size="sm"
+              variant="outline"
+              className="border-gray-600 text-gray-300 hover:bg-gray-800 bg-transparent p-2"
+            >
+              <Printer className="w-4 h-4" />
+            </Button>
+          </div>
+          <Button
+            onClick={() => {
+              console.log("[v0] Complete button clicked for order:", validOrderId)
+              handleStatusUpdateWithConfirmation(validOrderId, "completed")
+            }}
+            size="sm"
+            disabled={isProcessing}
+            className="bg-blue-600 hover:bg-blue-700 text-white w-full"
+          >
+            {isProcessing ? <Clock className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+            {isProcessing ? "Processing..." : "Complete"}
+          </Button>
+        </div>
+      )
+    }
+
+    // For completed or cancelled orders
+    return (
+      <div className="space-y-3">
+        <div className="flex gap-2">
+          <Button
+            onClick={() => window.open(`/dashboard/orders/${validOrderId}`, "_blank")}
+            size="sm"
+            variant="outline"
+            className="border-gray-600 text-gray-300 hover:bg-gray-800 bg-transparent p-2"
+          >
+            <Eye className="w-4 h-4" />
+          </Button>
+          <Button
+            onClick={() => handlePrint(order)}
+            size="sm"
+            variant="outline"
+            className="border-gray-600 text-gray-300 hover:bg-gray-800 bg-transparent p-2"
+          >
+            <Printer className="w-4 h-4" />
+          </Button>
+        </div>
+        <div className="text-center">
+          <Badge className={order.status === "completed" ? "bg-blue-600 text-white" : "bg-red-600 text-white"}>
+            {order.status === "completed" ? "Completed" : "Cancelled"}
+          </Badge>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-semibold text-white">Active Orders</h2>
           <p className="text-gray-400 text-sm mt-1">
-            {localOrders.length} order{localOrders.length !== 1 ? "s" : ""} • Real-time updates enabled
+            {displayOrders.length} order{displayOrders.length !== 1 ? "s" : ""} • Real-time updates enabled
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -1028,7 +753,7 @@ const EnhancedOrdersTable = ({
       </div>
 
       <div className="space-y-4">
-        {localOrders.map((order) => {
+        {displayOrders.map((order) => {
           const dateTime = formatDateTime(order.created_at)
           const validOrderId = getValidOrderId(order)
 

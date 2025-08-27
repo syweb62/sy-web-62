@@ -21,6 +21,8 @@ function getBaseUrl(): string {
   return "http://localhost:3000"
 }
 
+const baseUrl = getBaseUrl()
+
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
@@ -32,8 +34,6 @@ export const viewport: Viewport = {
   ],
   colorScheme: "dark",
 }
-
-const baseUrl = getBaseUrl()
 
 export const metadata: Metadata = {
   title: {
@@ -115,11 +115,12 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <>
-      <ResourceHints />
-      <script
-        dangerouslySetInnerHTML={{
-          __html: `
+    <html lang="en">
+      <body>
+        <ResourceHints />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
         (function () {
           try {
             window.__PUBLIC_ENV = window.__PUBLIC_ENV || {};
@@ -147,9 +148,10 @@ export default function RootLayout({
           }
         })();
       `,
-        }}
-      />
-      <ClientComponent children={children} />
-    </>
+          }}
+        />
+        <ClientComponent children={children} />
+      </body>
+    </html>
   )
 }

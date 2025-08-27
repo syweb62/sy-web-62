@@ -14,7 +14,8 @@
 body {
   color: rgb(var(--foreground-rgb));
   background: linear-gradient(to bottom, rgb(var(--background-start-rgb)), rgb(var(--background-end-rgb))) fixed;
-  font-family: var(--font-poppins), sans-serif;
+  /* Updated to use clean system fonts instead of Inter */
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Helvetica Neue", Arial, sans-serif;
   width: 100%;
   max-width: 100vw;
   overflow-x: hidden;
@@ -26,7 +27,8 @@ h3,
 h4,
 h5,
 h6 {
-  font-family: var(--font-playfair), serif;
+  /* Updated headings to use clean system fonts instead of Inter */
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Helvetica Neue", Arial, sans-serif;
 }
 
 .hero-section {
