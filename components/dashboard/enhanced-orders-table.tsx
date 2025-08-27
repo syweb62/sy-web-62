@@ -690,6 +690,13 @@ const EnhancedOrdersTable = ({
         if (window.parent && window.parent !== window) {
           try {
             window.parent.dispatchEvent(statusChangeEvent)
+            window.parent.postMessage(
+              {
+                type: "orderStatusChanged",
+                data: statusChangeEvent.detail,
+              },
+              "*",
+            )
           } catch (e) {
             console.log("[v0] Could not dispatch to parent window:", e)
           }
@@ -698,22 +705,31 @@ const EnhancedOrdersTable = ({
         if (window.opener && window.opener !== window) {
           try {
             window.opener.dispatchEvent(statusChangeEvent)
+            window.opener.postMessage(
+              {
+                type: "orderStatusChanged",
+                data: statusChangeEvent.detail,
+              },
+              "*",
+            )
           } catch (e) {
             console.log("[v0] Could not dispatch to opener window:", e)
           }
         }
 
         try {
-          localStorage.setItem(
-            "orderStatusUpdate",
-            JSON.stringify({
-              orderId,
-              newStatus,
-              timestamp: Date.now(),
-            }),
-          )
+          const updateData = {
+            orderId,
+            newStatus,
+            timestamp: Date.now(),
+            source: "dashboard",
+          }
+
+          localStorage.setItem("lastOrderUpdate", JSON.stringify(updateData))
+          localStorage.setItem("orderUpdateTrigger", Date.now().toString())
+
           setTimeout(() => {
-            localStorage.removeItem("orderStatusUpdate")
+            localStorage.removeItem("orderUpdateTrigger")
           }, 1000)
         } catch (e) {
           console.log("[v0] Could not use localStorage:", e)
@@ -750,6 +766,8 @@ const EnhancedOrdersTable = ({
   )
 
   useEffect(() => {
+    console.log("[v0] Setting up enhanced real-time subscription for orders")
+
     const subscription = supabase
       .channel("enhanced-orders-realtime")
       .on(
@@ -765,12 +783,14 @@ const EnhancedOrdersTable = ({
           if (payload.eventType === "UPDATE") {
             const orderId = payload.new.order_id || payload.new.short_order_id
 
+            // Clear updating state for this order
             setUpdatingOrders((prev) => {
               const newSet = new Set(prev)
               newSet.delete(orderId)
               return newSet
             })
 
+            // Broadcast comprehensive status change event
             const statusChangeEvent = new CustomEvent("orderStatusChanged", {
               detail: {
                 orderId: orderId,
@@ -780,10 +800,15 @@ const EnhancedOrdersTable = ({
                 totalPrice: payload.new.total_price,
                 timestamp: new Date().toISOString(),
                 source: "realtime",
+                eventType: payload.eventType,
               },
             })
-            window.dispatchEvent(statusChangeEvent)
 
+            // Dispatch to current window
+            window.dispatchEvent(statusChangeEvent)
+            console.log("[v0] Dispatched orderStatusChanged event:", statusChangeEvent.detail)
+
+            // Broadcast comprehensive order updated event
             const orderUpdatedEvent = new CustomEvent("orderUpdated", {
               detail: {
                 orderId: orderId,
@@ -801,14 +826,106 @@ const EnhancedOrdersTable = ({
               },
             })
             window.dispatchEvent(orderUpdatedEvent)
+
+            // Cross-window communication via postMessage
+            const broadcastToWindows = (eventData: any) => {
+              // Try parent window
+              if (window.parent && window.parent !== window) {
+                try {
+                  window.parent.postMessage(
+                    {
+                      type: "orderStatusChanged",
+                      data: eventData,
+                    },
+                    "*",
+                  )
+                  console.log("[v0] Posted message to parent window")
+                } catch (e) {
+                  console.log("[v0] Could not post message to parent:", e)
+                }
+              }
+
+              // Try opener window
+              if (window.opener && window.opener !== window) {
+                try {
+                  window.opener.postMessage(
+                    {
+                      type: "orderStatusChanged",
+                      data: eventData,
+                    },
+                    "*",
+                  )
+                  console.log("[v0] Posted message to opener window")
+                } catch (e) {
+                  console.log("[v0] Could not post message to opener:", e)
+                }
+              }
+
+              // Try all frames
+              try {
+                for (let i = 0; i < window.frames.length; i++) {
+                  try {
+                    window.frames[i].postMessage(
+                      {
+                        type: "orderStatusChanged",
+                        data: eventData,
+                      },
+                      "*",
+                    )
+                  } catch (e) {
+                    // Ignore cross-origin errors for frames
+                  }
+                }
+              } catch (e) {
+                console.log("[v0] Could not broadcast to frames:", e)
+              }
+            }
+
+            broadcastToWindows(statusChangeEvent.detail)
+
+            // Cross-window communication via localStorage
+            try {
+              const updateData = {
+                orderId,
+                newStatus: payload.new.status,
+                timestamp: Date.now(),
+                source: "realtime",
+                eventType: payload.eventType,
+              }
+
+              localStorage.setItem("lastOrderUpdate", JSON.stringify(updateData))
+              localStorage.setItem("orderUpdateTrigger", Date.now().toString())
+              console.log("[v0] Stored cross-window update data:", updateData)
+
+              // Clean up trigger after 1 second
+              setTimeout(() => {
+                localStorage.removeItem("orderUpdateTrigger")
+              }, 1000)
+            } catch (e) {
+              console.log("[v0] Could not use localStorage for cross-window communication:", e)
+            }
           }
 
-          setTimeout(onRefresh, 300)
+          // Refresh parent component data
+          setTimeout(() => {
+            console.log("[v0] Triggering parent refresh after real-time update")
+            onRefresh()
+          }, 300)
         },
       )
-      .subscribe()
+      .subscribe((status) => {
+        console.log("[v0] Real-time subscription status:", status)
+        if (status === "SUBSCRIBED") {
+          console.log("[v0] Successfully subscribed to real-time order updates")
+        } else if (status === "CHANNEL_ERROR") {
+          console.error("[v0] Real-time subscription error")
+        } else if (status === "TIMED_OUT") {
+          console.error("[v0] Real-time subscription timed out")
+        }
+      })
 
     return () => {
+      console.log("[v0] Cleaning up real-time subscription")
       subscription.unsubscribe()
     }
   }, [onRefresh, supabase])
@@ -822,14 +939,17 @@ const EnhancedOrdersTable = ({
 
   useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === "orderStatusUpdate" && e.newValue) {
+      if (e.key === "orderUpdateTrigger" && e.newValue) {
         try {
-          const update = JSON.parse(e.newValue)
-          console.log("[v0] Received cross-window order update:", update)
+          const lastUpdate = localStorage.getItem("lastOrderUpdate")
+          if (lastUpdate) {
+            const update = JSON.parse(lastUpdate)
+            console.log("[v0] Received cross-window order update:", update)
 
-          // Force refresh to get latest data from database
-          if (onRefresh) {
-            onRefresh()
+            // Force refresh to get latest data from database
+            if (onRefresh) {
+              onRefresh()
+            }
           }
         } catch (error) {
           console.error("[v0] Error parsing storage update:", error)

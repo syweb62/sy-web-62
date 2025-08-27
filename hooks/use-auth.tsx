@@ -261,6 +261,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           throw new Error("Invalid email format")
         }
 
+        console.log(`[v0] Attempting admin login with: ${email}`)
+
         const { data, error } = await withTimeout(
           supabase.auth.signInWithPassword({
             email: sanitizeInput(email.toLowerCase()),
@@ -281,8 +283,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         if (data.session && data.user) {
           setSession(data.session)
-          await fetchUserProfile(data.user)
+          const profile = await fetchUserProfile(data.user)
+          console.log("[v0] Admin login successful")
         }
+
+        console.log("[v0] Login successful, useEffect will handle redirect")
       } catch (err) {
         handleError(err)
         throw err
