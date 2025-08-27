@@ -364,139 +364,172 @@ const EnhancedOrdersTable = ({
           table: "orders",
         },
         (payload) => {
-          console.log("[v0] Real-time order update detected:", payload)
+          try {
+            console.log("[v0] Real-time order update detected:", payload)
 
-          if (payload.eventType === "UPDATE") {
-            const orderId = payload.new.order_id || payload.new.short_order_id
+            if (payload.eventType === "UPDATE" && payload.new) {
+              const orderId = payload.new.order_id || payload.new.short_order_id
 
-            // Clear updating state for this order
-            setUpdatingOrders((prev) => {
-              const newSet = new Set(prev)
-              newSet.delete(orderId)
-              return newSet
-            })
-
-            // Broadcast comprehensive status change event
-            const statusChangeEvent = new CustomEvent("orderStatusChanged", {
-              detail: {
-                orderId: orderId,
-                shortOrderId: payload.new.short_order_id,
-                newStatus: payload.new.status,
-                customerName: payload.new.customer_name,
-                totalPrice: payload.new.total_price,
-                timestamp: new Date().toISOString(),
-                source: "realtime",
-                eventType: payload.eventType,
-              },
-            })
-
-            // Dispatch to current window
-            window.dispatchEvent(statusChangeEvent)
-            console.log("[v0] Dispatched orderStatusChanged event:", statusChangeEvent.detail)
-
-            // Broadcast comprehensive order updated event
-            const orderUpdatedEvent = new CustomEvent("orderUpdated", {
-              detail: {
-                orderId: orderId,
-                shortOrderId: payload.new.short_order_id,
-                status: payload.new.status,
-                customerName: payload.new.customer_name,
-                phone: payload.new.phone,
-                address: payload.new.address,
-                totalPrice: payload.new.total_price,
-                paymentMethod: payload.new.payment_method,
-                specialInstructions: payload.new.special_instructions,
-                updatedAt: new Date().toISOString(),
-                source: "realtime",
-                eventType: payload.eventType,
-              },
-            })
-            window.dispatchEvent(orderUpdatedEvent)
-
-            // Cross-window communication via postMessage
-            const broadcastToWindows = (eventData: any) => {
-              // Try parent window
-              if (window.parent && window.parent !== window) {
-                try {
-                  window.parent.postMessage(
-                    {
-                      type: "orderStatusChanged",
-                      data: eventData,
-                    },
-                    "*",
-                  )
-                  console.log("[v0] Posted message to parent window")
-                } catch (e) {
-                  console.log("[v0] Could not post message to parent:", e)
-                }
+              if (!orderId) {
+                console.warn("[v0] Real-time update received but no valid order ID found")
+                return
               }
 
-              // Try opener window
-              if (window.opener && window.opener !== window) {
-                try {
-                  window.opener.postMessage(
-                    {
-                      type: "orderStatusChanged",
-                      data: eventData,
-                    },
-                    "*",
-                  )
-                  console.log("[v0] Posted message to opener window")
-                } catch (e) {
-                  console.log("[v0] Could not post message to opener:", e)
-                }
-              }
+              // Clear updating state for this order
+              setUpdatingOrders((prev) => {
+                const newSet = new Set(prev)
+                newSet.delete(orderId)
+                return newSet
+              })
 
-              // Try all frames
               try {
-                for (let i = 0; i < window.frames.length; i++) {
+                // Broadcast comprehensive status change event
+                const statusChangeEvent = new CustomEvent("orderStatusChanged", {
+                  detail: {
+                    orderId: orderId,
+                    shortOrderId: payload.new.short_order_id,
+                    newStatus: payload.new.status,
+                    customerName: payload.new.customer_name,
+                    totalPrice: payload.new.total_price,
+                    timestamp: new Date().toISOString(),
+                    source: "realtime",
+                    eventType: payload.eventType,
+                  },
+                })
+
+                // Dispatch to current window
+                window.dispatchEvent(statusChangeEvent)
+                console.log("[v0] Dispatched orderStatusChanged event:", statusChangeEvent.detail)
+
+                // Broadcast comprehensive order updated event
+                const orderUpdatedEvent = new CustomEvent("orderUpdated", {
+                  detail: {
+                    orderId: orderId,
+                    shortOrderId: payload.new.short_order_id,
+                    status: payload.new.status,
+                    customerName: payload.new.customer_name,
+                    phone: payload.new.phone,
+                    address: payload.new.address,
+                    totalPrice: payload.new.total_price,
+                    paymentMethod: payload.new.payment_method,
+                    specialInstructions: payload.new.special_instructions,
+                    updatedAt: new Date().toISOString(),
+                    source: "realtime",
+                    eventType: payload.eventType,
+                  },
+                })
+                window.dispatchEvent(orderUpdatedEvent)
+              } catch (eventError) {
+                console.error("[v0] Error dispatching custom events:", eventError)
+              }
+
+              try {
+                // Cross-window communication via postMessage
+                const broadcastToWindows = (eventData: any) => {
+                  // Try parent window
+                  if (window.parent && window.parent !== window) {
+                    try {
+                      window.parent.postMessage(
+                        {
+                          type: "orderStatusChanged",
+                          data: eventData,
+                        },
+                        "*",
+                      )
+                      console.log("[v0] Posted message to parent window")
+                    } catch (e) {
+                      console.log("[v0] Could not post message to parent:", e.message)
+                    }
+                  }
+
+                  // Try opener window
+                  if (window.opener && window.opener !== window) {
+                    try {
+                      window.opener.postMessage(
+                        {
+                          type: "orderStatusChanged",
+                          data: eventData,
+                        },
+                        "*",
+                      )
+                      console.log("[v0] Posted message to opener window")
+                    } catch (e) {
+                      console.log("[v0] Could not post message to opener:", e.message)
+                    }
+                  }
+
+                  // Try all frames
                   try {
-                    window.frames[i].postMessage(
-                      {
-                        type: "orderStatusChanged",
-                        data: eventData,
-                      },
-                      "*",
-                    )
+                    for (let i = 0; i < window.frames.length; i++) {
+                      try {
+                        window.frames[i].postMessage(
+                          {
+                            type: "orderStatusChanged",
+                            data: eventData,
+                          },
+                          "*",
+                        )
+                      } catch (e) {
+                        // Ignore cross-origin errors for frames
+                      }
+                    }
                   } catch (e) {
-                    // Ignore cross-origin errors for frames
+                    console.log("[v0] Could not broadcast to frames:", e.message)
                   }
                 }
-              } catch (e) {
-                console.log("[v0] Could not broadcast to frames:", e)
+
+                broadcastToWindows({
+                  orderId: orderId,
+                  shortOrderId: payload.new.short_order_id,
+                  newStatus: payload.new.status,
+                  timestamp: new Date().toISOString(),
+                  source: "realtime",
+                })
+              } catch (postMessageError) {
+                console.error("[v0] Error with postMessage communication:", postMessageError)
+              }
+
+              try {
+                // Cross-window communication via localStorage
+                const updateData = {
+                  orderId,
+                  newStatus: payload.new.status,
+                  timestamp: Date.now(),
+                  source: "realtime",
+                  eventType: payload.eventType,
+                }
+
+                localStorage.setItem("lastOrderUpdate", JSON.stringify(updateData))
+                localStorage.setItem("orderUpdateTrigger", Date.now().toString())
+                console.log("[v0] Stored cross-window update data:", updateData)
+
+                // Clean up trigger after 1 second
+                setTimeout(() => {
+                  try {
+                    localStorage.removeItem("orderUpdateTrigger")
+                  } catch (e) {
+                    console.log("[v0] Could not clean up localStorage trigger:", e.message)
+                  }
+                }, 1000)
+              } catch (storageError) {
+                console.log("[v0] Could not use localStorage for cross-window communication:", storageError.message)
               }
             }
 
-            broadcastToWindows(statusChangeEvent.detail)
-
-            // Cross-window communication via localStorage
             try {
-              const updateData = {
-                orderId,
-                newStatus: payload.new.status,
-                timestamp: Date.now(),
-                source: "realtime",
-                eventType: payload.eventType,
-              }
-
-              localStorage.setItem("lastOrderUpdate", JSON.stringify(updateData))
-              localStorage.setItem("orderUpdateTrigger", Date.now().toString())
-              console.log("[v0] Stored cross-window update data:", updateData)
-
-              // Clean up trigger after 1 second
+              // Refresh parent component data
               setTimeout(() => {
-                localStorage.removeItem("orderUpdateTrigger")
-              }, 1000)
-            } catch (e) {
-              console.log("[v0] Could not use localStorage for cross-window communication:", e)
+                console.log("[v0] Triggering parent refresh after real-time update")
+                if (onRefresh) {
+                  onRefresh()
+                }
+              }, 300)
+            } catch (refreshError) {
+              console.error("[v0] Error triggering parent refresh:", refreshError)
             }
+          } catch (error) {
+            console.error("[v0] Error in real-time subscription callback:", error)
           }
-
-          // Refresh parent component data
-          setTimeout(() => {
-            console.log("[v0] Triggering parent refresh after real-time update")
-            onRefresh()
-          }, 300)
         },
       )
       .subscribe((status) => {
@@ -507,12 +540,18 @@ const EnhancedOrdersTable = ({
           console.error("[v0] Real-time subscription error")
         } else if (status === "TIMED_OUT") {
           console.error("[v0] Real-time subscription timed out")
+        } else if (status === "CLOSED") {
+          console.log("[v0] Real-time subscription closed")
         }
       })
 
     return () => {
-      console.log("[v0] Cleaning up real-time subscription")
-      subscription.unsubscribe()
+      try {
+        console.log("[v0] Cleaning up real-time subscription")
+        subscription.unsubscribe()
+      } catch (error) {
+        console.error("[v0] Error cleaning up subscription:", error)
+      }
     }
   }, [onRefresh, supabase])
 
