@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
@@ -44,8 +44,6 @@ const EnhancedOrdersTable = ({
 }: EnhancedOrdersTableProps) => {
   const [localOrders, setLocalOrders] = useState<Order[]>(orders)
   const [updatingOrders, setUpdatingOrders] = useState<Set<string>>(new Set())
-  const [pendingRequests, setPendingRequests] = useState<Set<string>>(new Set())
-  const processingEvents = useRef<Set<string>>(new Set())
   const [confirmationModal, setConfirmationModal] = useState<{
     isOpen: boolean
     orderId: string
@@ -104,19 +102,12 @@ const EnhancedOrdersTable = ({
       return
     }
 
-    const requestKey = `${orderId}-${newStatus}`
-    if (pendingRequests.has(requestKey) || updatingOrders.has(orderId) || processingEvents.current.has(requestKey)) {
-      console.log("[v0] Request already in progress for:", requestKey)
+    if (updatingOrders.has(orderId)) {
+      console.log("[v0] Order already being updated:", orderId)
       return
     }
 
     console.log("[v0] Opening confirmation modal for:", { orderId, newStatus })
-
-    processingEvents.current.add(requestKey)
-    setPendingRequests((prev) => new Set(prev).add(requestKey))
-    setUpdatingOrders((prev) => new Set(prev).add(orderId))
-
-    console.log("[v0] Status update requested:", orderId, "->", newStatus)
 
     setConfirmationModal({
       isOpen: true,
@@ -129,30 +120,23 @@ const EnhancedOrdersTable = ({
   const handleModalConfirm = async () => {
     console.log("[v0] handleModalConfirm called with modal state:", confirmationModal)
 
+    const { orderId, newStatus } = confirmationModal
+
+    setConfirmationModal({
+      isOpen: false,
+      orderId: "",
+      newStatus: "",
+      type: "confirm",
+    })
+
     try {
-      await handleStatusUpdate(confirmationModal.orderId, confirmationModal.newStatus)
+      await handleStatusUpdate(orderId, newStatus)
     } catch (error) {
       console.error("[v0] Status update failed:", error)
-    } finally {
-      handleModalClose()
     }
   }
 
   const handleModalClose = () => {
-    const requestKey = `${confirmationModal.orderId}-${confirmationModal.newStatus}`
-    processingEvents.current.delete(requestKey)
-    setPendingRequests((prev) => {
-      const newSet = new Set(prev)
-      newSet.delete(requestKey)
-      return newSet
-    })
-
-    setUpdatingOrders((prev) => {
-      const newSet = new Set(prev)
-      newSet.delete(confirmationModal.orderId)
-      return newSet
-    })
-
     setConfirmationModal({
       isOpen: false,
       orderId: "",
@@ -492,7 +476,7 @@ const EnhancedOrdersTable = ({
             onClick={() => window.open(`/dashboard/orders/${validOrderId}`, "_blank")}
             size="sm"
             variant="outline"
-            className="border-gray-600 text-gray-300 hover:bg-gray-800 hover:text-white p-2"
+            className="border-gray-600 text-gray-300 hover:bg-gray-800 bg-transparent"
           >
             <Eye className="w-4 h-4" />
           </Button>
@@ -500,7 +484,7 @@ const EnhancedOrdersTable = ({
             onClick={() => handlePrint(order)}
             size="sm"
             variant="outline"
-            className="border-gray-600 text-gray-300 hover:bg-gray-800 hover:text-white p-2"
+            className="border-gray-600 text-gray-300 hover:bg-gray-800 bg-transparent"
           >
             <Printer className="w-4 h-4" />
           </Button>
@@ -634,14 +618,19 @@ const EnhancedOrdersTable = ({
         return
       }
 
+      if (updatingOrders.has(orderId)) {
+        console.log("[v0] Order already being updated:", orderId)
+        return
+      }
+
+      setUpdatingOrders((prev) => new Set(prev).add(orderId))
+
       try {
         console.log("[v0] Starting status update process...")
-        console.log("[v0] Updating order status:", orderId, "->", newStatus)
 
         const orderToUpdate = localOrders.find((order) => getValidOrderId(order) === orderId)
         console.log("[v0] Found order to update:", orderToUpdate)
 
-        console.log("[v0] Applying optimistic update to local state")
         setLocalOrders((prevOrders) =>
           prevOrders.map((order) => {
             const validOrderId = getValidOrderId(order)
@@ -653,11 +642,7 @@ const EnhancedOrdersTable = ({
           }),
         )
 
-        console.log("[v0] Making API call to update order status:", {
-          orderId,
-          newStatus,
-          apiUrl: `/api/orders`,
-        })
+        console.log("[v0] Making API call to update order status")
 
         const response = await fetch("/api/orders", {
           method: "PATCH",
@@ -678,13 +663,6 @@ const EnhancedOrdersTable = ({
         const result = await response.json()
         console.log("[v0] Order status updated successfully:", result)
 
-        console.log("[v0] Broadcasting orderStatusChanged event:", {
-          orderId,
-          shortOrderId: orderToUpdate?.short_order_id,
-          newStatus,
-          customerName: orderToUpdate?.customer_name,
-        })
-
         const statusChangeEvent = new CustomEvent("orderStatusChanged", {
           detail: {
             orderId: orderId,
@@ -697,10 +675,8 @@ const EnhancedOrdersTable = ({
           },
         })
 
-        // Dispatch to current window
         window.dispatchEvent(statusChangeEvent)
 
-        // Try to dispatch to parent window if in iframe
         if (window.parent && window.parent !== window) {
           try {
             window.parent.dispatchEvent(statusChangeEvent)
@@ -709,7 +685,6 @@ const EnhancedOrdersTable = ({
           }
         }
 
-        // Try to dispatch to opener window if popup
         if (window.opener && window.opener !== window) {
           try {
             window.opener.dispatchEvent(statusChangeEvent)
@@ -718,7 +693,6 @@ const EnhancedOrdersTable = ({
           }
         }
 
-        // Use localStorage as fallback for cross-window communication
         try {
           localStorage.setItem(
             "orderStatusUpdate",
@@ -728,16 +702,15 @@ const EnhancedOrdersTable = ({
               timestamp: Date.now(),
             }),
           )
-          // Clear after a short delay
           setTimeout(() => {
             localStorage.removeItem("orderStatusUpdate")
           }, 1000)
         } catch (e) {
-          console.log("[v0] Could not use localStorage for cross-window communication:", e)
+          console.log("[v0] Could not use localStorage:", e)
         }
 
         if (onRefresh) {
-          console.log("[v0] Calling onRefresh to update parent component")
+          console.log("[v0] Calling onRefresh")
           onRefresh()
         }
 
@@ -752,7 +725,6 @@ const EnhancedOrdersTable = ({
           prevOrders.map((order) => {
             const validOrderId = getValidOrderId(order)
             if (validOrderId === orderId) {
-              // Find original order from props to revert
               const originalOrder = orders.find((o) => getValidOrderId(o) === orderId)
               return originalOrder || order
             }
@@ -760,7 +732,13 @@ const EnhancedOrdersTable = ({
           }),
         )
 
-        throw error // Re-throw to be handled by handleModalConfirm
+        throw error
+      } finally {
+        setUpdatingOrders((prev) => {
+          const newSet = new Set(prev)
+          newSet.delete(orderId)
+          return newSet
+        })
       }
     },
     [onStatusUpdate, onRefresh, orders, localOrders],
@@ -831,22 +809,11 @@ const EnhancedOrdersTable = ({
   }, [onRefresh, supabase])
 
   useEffect(() => {
-    // Only sync on initial load when localOrders is empty
-    if (localOrders.length === 0 && orders.length > 0) {
+    if (orders.length > 0 && localOrders.length === 0) {
+      console.log("[v0] Initial sync with parent orders")
       setLocalOrders(orders)
     }
-  }, [orders]) // Only depend on orders, not orders.length
-
-  useEffect(() => {
-    // Only sync when there are no pending operations and the data has actually changed
-    if (updatingOrders.size === 0 && pendingRequests.size === 0 && processingEvents.current.size === 0) {
-      const ordersChanged = JSON.stringify(orders) !== JSON.stringify(localOrders)
-      if (ordersChanged && orders.length > 0) {
-        console.log("[v0] Syncing local orders with fresh parent data")
-        setLocalOrders(orders)
-      }
-    }
-  }, [orders, updatingOrders.size, pendingRequests.size])
+  }, [orders, localOrders.length])
 
   if (loading) {
     return (
