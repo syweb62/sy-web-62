@@ -55,6 +55,7 @@ const EnhancedOrdersTable = ({
     newStatus: "",
     type: "confirm",
   })
+  const [recentUpdates, setRecentUpdates] = useState<Set<string>>(new Set())
   const supabase = createClient()
 
   const getValidOrderId = (order: Order): string => {
@@ -663,6 +664,15 @@ const EnhancedOrdersTable = ({
         const result = await response.json()
         console.log("[v0] Order status updated successfully:", result)
 
+        setRecentUpdates((prev) => new Set(prev).add(orderId))
+        setTimeout(() => {
+          setRecentUpdates((prev) => {
+            const newSet = new Set(prev)
+            newSet.delete(orderId)
+            return newSet
+          })
+        }, 5000) // Prevent stale sync for 5 seconds
+
         const statusChangeEvent = new CustomEvent("orderStatusChanged", {
           detail: {
             orderId: orderId,
@@ -709,11 +719,6 @@ const EnhancedOrdersTable = ({
           console.log("[v0] Could not use localStorage:", e)
         }
 
-        if (onRefresh) {
-          console.log("[v0] Calling onRefresh")
-          onRefresh()
-        }
-
         if (onStatusUpdate) {
           console.log("[v0] Calling onStatusUpdate callback")
           onStatusUpdate(orderId, newStatus)
@@ -741,7 +746,7 @@ const EnhancedOrdersTable = ({
         })
       }
     },
-    [onStatusUpdate, onRefresh, orders, localOrders],
+    [onStatusUpdate, orders, localOrders],
   )
 
   useEffect(() => {
@@ -814,17 +819,6 @@ const EnhancedOrdersTable = ({
       setLocalOrders(orders)
     }
   }, [orders, localOrders.length])
-
-  useEffect(() => {
-    // Only sync with parent orders when there are meaningful changes and no pending updates
-    if (orders.length > 0 && updatingOrders.size === 0) {
-      const hasChanges = JSON.stringify(orders) !== JSON.stringify(localOrders)
-      if (hasChanges || localOrders.length === 0) {
-        console.log("[v0] Syncing with parent orders - database changes detected")
-        setLocalOrders(orders)
-      }
-    }
-  }, [orders, updatingOrders.size, localOrders])
 
   useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
