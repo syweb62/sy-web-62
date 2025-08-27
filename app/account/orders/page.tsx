@@ -104,20 +104,37 @@ export default function OrdersPage() {
       refetch()
     }
 
-    console.log("[v0] Setting up orderStatusChanged event listener")
-    window.addEventListener("orderStatusChanged", handleOrderStatusChange as EventListener)
-
     const handleOrderUpdated = (event: CustomEvent) => {
       console.log("[v0] Order updated event received:", event.detail)
       refetch()
     }
 
+    const handleStorageChange = (event: StorageEvent) => {
+      if (event.key === "orderUpdateTrigger" && event.newValue) {
+        console.log("[v0] Storage-based order update detected")
+        try {
+          const lastUpdate = localStorage.getItem("lastOrderUpdate")
+          if (lastUpdate) {
+            const updateData = JSON.parse(lastUpdate)
+            console.log("[v0] Processing storage-based order update:", updateData)
+            refetch()
+          }
+        } catch (e) {
+          console.log("[v0] Error processing storage-based update:", e)
+        }
+      }
+    }
+
+    console.log("[v0] Setting up orderStatusChanged event listener")
+    window.addEventListener("orderStatusChanged", handleOrderStatusChange as EventListener)
     window.addEventListener("orderUpdated", handleOrderUpdated as EventListener)
+    window.addEventListener("storage", handleStorageChange)
 
     return () => {
       console.log("[v0] Cleaning up event listeners")
       window.removeEventListener("orderStatusChanged", handleOrderStatusChange as EventListener)
       window.removeEventListener("orderUpdated", handleOrderUpdated as EventListener)
+      window.removeEventListener("storage", handleStorageChange)
     }
   }, [refetch])
 

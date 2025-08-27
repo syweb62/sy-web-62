@@ -97,6 +97,8 @@ const EnhancedOrdersTable = ({
   }, [])
 
   const handleStatusUpdateWithConfirmation = async (orderId: string, newStatus: string) => {
+    console.log("[v0] handleStatusUpdateWithConfirmation called:", { orderId, newStatus })
+
     if (!orderId || orderId === "undefined") {
       console.error("[v0] Invalid order ID provided:", orderId)
       return
@@ -107,6 +109,8 @@ const EnhancedOrdersTable = ({
       console.log("[v0] Request already in progress for:", requestKey)
       return
     }
+
+    console.log("[v0] Opening confirmation modal for:", { orderId, newStatus })
 
     processingEvents.current.add(requestKey)
     setPendingRequests((prev) => new Set(prev).add(requestKey))
@@ -123,6 +127,8 @@ const EnhancedOrdersTable = ({
   }
 
   const handleModalConfirm = async () => {
+    console.log("[v0] handleModalConfirm called with modal state:", confirmationModal)
+
     if (!confirmationModal.orderId || confirmationModal.orderId === "undefined") {
       console.error("[v0] Cannot update order: Invalid order ID in modal state:", confirmationModal.orderId)
       handleModalClose()
@@ -135,7 +141,14 @@ const EnhancedOrdersTable = ({
       "to status:",
       confirmationModal.newStatus,
     )
-    await handleStatusUpdate(confirmationModal.orderId, confirmationModal.newStatus)
+
+    try {
+      await handleStatusUpdate(confirmationModal.orderId, confirmationModal.newStatus)
+      console.log("[v0] handleStatusUpdate completed successfully")
+    } catch (error) {
+      console.error("[v0] Error in handleStatusUpdate:", error)
+    }
+
     handleModalClose()
   }
 
@@ -628,25 +641,37 @@ const EnhancedOrdersTable = ({
 
   const handleStatusUpdate = useCallback(
     async (orderId: string, newStatus: string) => {
+      console.log("[v0] handleStatusUpdate called with:", { orderId, newStatus })
+
       if (!orderId || orderId === "undefined") {
         console.error("[v0] Cannot update order: Invalid order ID:", orderId)
         return
       }
 
       try {
+        console.log("[v0] Starting status update process...")
         console.log("[v0] Updating order status:", orderId, "->", newStatus)
 
         const orderToUpdate = localOrders.find((order) => getValidOrderId(order) === orderId)
+        console.log("[v0] Found order to update:", orderToUpdate)
 
+        console.log("[v0] Applying optimistic update to local state")
         setLocalOrders((prevOrders) =>
           prevOrders.map((order) => {
             const validOrderId = getValidOrderId(order)
             if (validOrderId === orderId) {
+              console.log("[v0] Updating order in local state:", validOrderId, "->", newStatus)
               return { ...order, status: newStatus as Order["status"] }
             }
             return order
           }),
         )
+
+        console.log("[v0] Making API call to update order status:", {
+          orderId,
+          newStatus,
+          apiUrl: `/api/orders`,
+        })
 
         const response = await fetch("/api/orders", {
           method: "PATCH",
@@ -660,30 +685,12 @@ const EnhancedOrdersTable = ({
         })
 
         if (!response.ok) {
-          setLocalOrders((prevOrders) =>
-            prevOrders.map((order) => {
-              const validOrderId = getValidOrderId(order)
-              if (validOrderId === orderId) {
-                const originalOrder = orders.find((o) => getValidOrderId(o) === orderId)
-                return originalOrder || order
-              }
-              return order
-            }),
-          )
-          const errorData = await response.json()
-          throw new Error(errorData.error || `HTTP error! status: ${response.status}`)
+          const errorText = await response.text()
+          throw new Error(`HTTP ${response.status}: ${errorText}`)
         }
 
         const result = await response.json()
-        console.log("[v0] Order status updated successfully:", result.message)
-
-        if (onStatusUpdate) {
-          onStatusUpdate(orderId, newStatus)
-        }
-
-        if (onRefresh) {
-          setTimeout(onRefresh, 100)
-        }
+        console.log("[v0] Order status updated successfully:", result)
 
         console.log("[v0] Broadcasting orderStatusChanged event:", {
           orderId,
@@ -700,9 +707,30 @@ const EnhancedOrdersTable = ({
             customerName: orderToUpdate?.customer_name,
             totalPrice: orderToUpdate?.total_price,
             timestamp: new Date().toISOString(),
+            source: "dashboard",
           },
         })
+
+        // Dispatch to current window
         window.dispatchEvent(statusChangeEvent)
+
+        // Try to dispatch to parent window if in iframe
+        if (window.parent && window.parent !== window) {
+          try {
+            window.parent.dispatchEvent(statusChangeEvent)
+          } catch (e) {
+            console.log("[v0] Could not dispatch to parent window:", e)
+          }
+        }
+
+        // Try to dispatch to opener window if popup
+        if (window.opener) {
+          try {
+            window.opener.dispatchEvent(statusChangeEvent)
+          } catch (e) {
+            console.log("[v0] Could not dispatch to opener window:", e)
+          }
+        }
 
         console.log("[v0] Broadcasting orderUpdated event:", {
           orderId,
@@ -725,23 +753,56 @@ const EnhancedOrdersTable = ({
             source: "dashboard",
           },
         })
+
+        // Dispatch to current window
         window.dispatchEvent(orderUpdatedEvent)
 
+        // Try to dispatch to parent window if in iframe
         if (window.parent && window.parent !== window) {
-          console.log("[v0] Sending message to parent window")
-          window.parent.postMessage(
-            {
-              type: "ORDER_STATUS_CHANGED",
-              data: {
-                orderId: orderId,
-                shortOrderId: orderToUpdate?.short_order_id,
-                newStatus: newStatus,
-                customerName: orderToUpdate?.customer_name,
-                timestamp: new Date().toISOString(),
-              },
+          try {
+            window.parent.dispatchEvent(orderUpdatedEvent)
+          } catch (e) {
+            console.log("[v0] Could not dispatch orderUpdated to parent window:", e)
+          }
+        }
+
+        // Try to dispatch to opener window if popup
+        if (window.opener) {
+          try {
+            window.opener.dispatchEvent(orderUpdatedEvent)
+          } catch (e) {
+            console.log("[v0] Could not dispatch orderUpdated to opener window:", e)
+          }
+        }
+
+        try {
+          const storageEvent = {
+            type: "orderStatusChanged",
+            data: {
+              orderId: orderId,
+              shortOrderId: orderToUpdate?.short_order_id,
+              newStatus: newStatus,
+              timestamp: new Date().toISOString(),
+              source: "dashboard",
             },
-            "*",
-          )
+          }
+          localStorage.setItem("lastOrderUpdate", JSON.stringify(storageEvent))
+
+          // Trigger storage event by removing and setting again
+          localStorage.removeItem("orderUpdateTrigger")
+          localStorage.setItem("orderUpdateTrigger", Date.now().toString())
+        } catch (e) {
+          console.log("[v0] Could not use localStorage for cross-window communication:", e)
+        }
+
+        if (onStatusUpdate) {
+          console.log("[v0] Calling onStatusUpdate callback")
+          onStatusUpdate(orderId, newStatus)
+        }
+
+        if (onRefresh) {
+          console.log("[v0] Calling onRefresh callback")
+          setTimeout(onRefresh, 100)
         }
       } catch (error) {
         console.error("[v0] Failed to update order status:", error)
@@ -837,6 +898,17 @@ const EnhancedOrdersTable = ({
       setLocalOrders(orders)
     }
   }, [orders]) // Only depend on orders, not orders.length
+
+  useEffect(() => {
+    // Only sync when there are no pending operations and the data has actually changed
+    if (updatingOrders.size === 0 && pendingRequests.size === 0 && processingEvents.current.size === 0) {
+      const ordersChanged = JSON.stringify(orders) !== JSON.stringify(localOrders)
+      if (ordersChanged && orders.length > 0) {
+        console.log("[v0] Syncing local orders with fresh parent data")
+        setLocalOrders(orders)
+      }
+    }
+  }, [orders, updatingOrders.size, pendingRequests.size])
 
   if (loading) {
     return (
@@ -991,32 +1063,28 @@ const EnhancedOrdersTable = ({
         })}
       </div>
       {/* Custom Confirmation Modal */}
-      <ConfirmationModal
-        isOpen={confirmationModal.isOpen}
-        onClose={handleModalClose}
-        onConfirm={handleModalConfirm}
-        title={
-          confirmationModal.type === "confirm"
-            ? confirmationModal.newStatus === "completed"
-              ? "Complete Order"
-              : "Confirm Order"
-            : confirmationModal.type === "cancel"
-              ? "Cancel Order"
-              : "Confirm Action"
-        }
-        message={
-          confirmationModal.type === "confirm"
-            ? confirmationModal.newStatus === "completed"
-              ? "Are you sure you want to complete this order?"
-              : "Are you sure you want to confirm this order?"
-            : confirmationModal.type === "cancel"
-              ? "Are you sure you want to cancel this order?"
-              : "Are you sure you want to proceed?"
-        }
-        confirmText="OK"
-        cancelText="Cancel"
-        type={confirmationModal.type}
-      />
+      {confirmationModal.isOpen && (
+        <ConfirmationModal
+          isOpen={confirmationModal.isOpen}
+          onClose={handleModalClose}
+          onConfirm={handleModalConfirm}
+          title={
+            confirmationModal.type === "confirm"
+              ? "Confirm Order"
+              : confirmationModal.type === "cancel"
+                ? "Cancel Order"
+                : "Update Order"
+          }
+          message={
+            confirmationModal.type === "confirm"
+              ? "Are you sure you want to confirm this order?"
+              : confirmationModal.type === "cancel"
+                ? "Are you sure you want to cancel this order?"
+                : "Are you sure you want to update this order?"
+          }
+          type={confirmationModal.type}
+        />
+      )}
     </div>
   )
 }
