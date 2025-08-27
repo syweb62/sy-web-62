@@ -129,27 +129,13 @@ const EnhancedOrdersTable = ({
   const handleModalConfirm = async () => {
     console.log("[v0] handleModalConfirm called with modal state:", confirmationModal)
 
-    if (!confirmationModal.orderId || confirmationModal.orderId === "undefined") {
-      console.error("[v0] Cannot update order: Invalid order ID in modal state:", confirmationModal.orderId)
-      handleModalClose()
-      return
-    }
-
-    console.log(
-      "[v0] Modal confirm - updating order:",
-      confirmationModal.orderId,
-      "to status:",
-      confirmationModal.newStatus,
-    )
-
     try {
       await handleStatusUpdate(confirmationModal.orderId, confirmationModal.newStatus)
-      console.log("[v0] handleStatusUpdate completed successfully")
     } catch (error) {
-      console.error("[v0] Error in handleStatusUpdate:", error)
+      console.error("[v0] Status update failed:", error)
+    } finally {
+      handleModalClose()
     }
-
-    handleModalClose()
   }
 
   const handleModalClose = () => {
@@ -641,10 +627,10 @@ const EnhancedOrdersTable = ({
 
   const handleStatusUpdate = useCallback(
     async (orderId: string, newStatus: string) => {
-      console.log("[v0] handleStatusUpdate called with:", { orderId, newStatus })
+      console.log("[v0] handleStatusUpdate called:", { orderId, newStatus })
 
       if (!orderId || orderId === "undefined") {
-        console.error("[v0] Cannot update order: Invalid order ID:", orderId)
+        console.error("[v0] Invalid order ID provided:", orderId)
         return
       }
 
@@ -724,7 +710,7 @@ const EnhancedOrdersTable = ({
         }
 
         // Try to dispatch to opener window if popup
-        if (window.opener) {
+        if (window.opener && window.opener !== window) {
           try {
             window.opener.dispatchEvent(statusChangeEvent)
           } catch (e) {
@@ -732,97 +718,49 @@ const EnhancedOrdersTable = ({
           }
         }
 
-        console.log("[v0] Broadcasting orderUpdated event:", {
-          orderId,
-          status: newStatus,
-          source: "dashboard",
-        })
-
-        const orderUpdatedEvent = new CustomEvent("orderUpdated", {
-          detail: {
-            orderId: orderId,
-            shortOrderId: orderToUpdate?.short_order_id,
-            status: newStatus,
-            customerName: orderToUpdate?.customer_name,
-            phone: orderToUpdate?.phone,
-            address: orderToUpdate?.address,
-            totalPrice: orderToUpdate?.total_price,
-            paymentMethod: orderToUpdate?.payment_method,
-            specialInstructions: orderToUpdate?.special_instructions,
-            updatedAt: new Date().toISOString(),
-            source: "dashboard",
-          },
-        })
-
-        // Dispatch to current window
-        window.dispatchEvent(orderUpdatedEvent)
-
-        // Try to dispatch to parent window if in iframe
-        if (window.parent && window.parent !== window) {
-          try {
-            window.parent.dispatchEvent(orderUpdatedEvent)
-          } catch (e) {
-            console.log("[v0] Could not dispatch orderUpdated to parent window:", e)
-          }
-        }
-
-        // Try to dispatch to opener window if popup
-        if (window.opener) {
-          try {
-            window.opener.dispatchEvent(orderUpdatedEvent)
-          } catch (e) {
-            console.log("[v0] Could not dispatch orderUpdated to opener window:", e)
-          }
-        }
-
+        // Use localStorage as fallback for cross-window communication
         try {
-          const storageEvent = {
-            type: "orderStatusChanged",
-            data: {
-              orderId: orderId,
-              shortOrderId: orderToUpdate?.short_order_id,
-              newStatus: newStatus,
-              timestamp: new Date().toISOString(),
-              source: "dashboard",
-            },
-          }
-          localStorage.setItem("lastOrderUpdate", JSON.stringify(storageEvent))
-
-          // Trigger storage event by removing and setting again
-          localStorage.removeItem("orderUpdateTrigger")
-          localStorage.setItem("orderUpdateTrigger", Date.now().toString())
+          localStorage.setItem(
+            "orderStatusUpdate",
+            JSON.stringify({
+              orderId,
+              newStatus,
+              timestamp: Date.now(),
+            }),
+          )
+          // Clear after a short delay
+          setTimeout(() => {
+            localStorage.removeItem("orderStatusUpdate")
+          }, 1000)
         } catch (e) {
           console.log("[v0] Could not use localStorage for cross-window communication:", e)
+        }
+
+        if (onRefresh) {
+          console.log("[v0] Calling onRefresh to update parent component")
+          onRefresh()
         }
 
         if (onStatusUpdate) {
           console.log("[v0] Calling onStatusUpdate callback")
           onStatusUpdate(orderId, newStatus)
         }
-
-        if (onRefresh) {
-          console.log("[v0] Calling onRefresh callback")
-          setTimeout(onRefresh, 100)
-        }
       } catch (error) {
-        console.error("[v0] Failed to update order status:", error)
+        console.error("[v0] Error updating order status:", error)
+
         setLocalOrders((prevOrders) =>
           prevOrders.map((order) => {
             const validOrderId = getValidOrderId(order)
             if (validOrderId === orderId) {
+              // Find original order from props to revert
               const originalOrder = orders.find((o) => getValidOrderId(o) === orderId)
               return originalOrder || order
             }
             return order
           }),
         )
-        alert(`Failed to update order status: ${error instanceof Error ? error.message : "Unknown error"}`)
-      } finally {
-        setUpdatingOrders((prev) => {
-          const newSet = new Set(prev)
-          newSet.delete(orderId)
-          return newSet
-        })
+
+        throw error // Re-throw to be handled by handleModalConfirm
       }
     },
     [onStatusUpdate, onRefresh, orders, localOrders],
