@@ -961,6 +961,14 @@ const EnhancedOrdersTable = ({
     return () => window.removeEventListener("storage", handleStorageChange)
   }, [onRefresh])
 
+  useEffect(() => {
+    // Always sync with parent orders when they change, unless we have pending updates
+    if (orders.length > 0 && updatingOrders.size === 0 && recentUpdates.size === 0) {
+      console.log("[v0] Syncing with parent orders - database changes detected")
+      setLocalOrders(orders)
+    }
+  }, [orders, updatingOrders.size, recentUpdates.size])
+
   if (loading) {
     return (
       <div className="space-y-4">
