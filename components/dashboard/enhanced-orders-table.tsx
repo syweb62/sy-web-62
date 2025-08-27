@@ -815,6 +815,38 @@ const EnhancedOrdersTable = ({
     }
   }, [orders, localOrders.length])
 
+  useEffect(() => {
+    // Only sync with parent orders when there are meaningful changes and no pending updates
+    if (orders.length > 0 && updatingOrders.size === 0) {
+      const hasChanges = JSON.stringify(orders) !== JSON.stringify(localOrders)
+      if (hasChanges || localOrders.length === 0) {
+        console.log("[v0] Syncing with parent orders - database changes detected")
+        setLocalOrders(orders)
+      }
+    }
+  }, [orders, updatingOrders.size, localOrders])
+
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === "orderStatusUpdate" && e.newValue) {
+        try {
+          const update = JSON.parse(e.newValue)
+          console.log("[v0] Received cross-window order update:", update)
+
+          // Force refresh to get latest data from database
+          if (onRefresh) {
+            onRefresh()
+          }
+        } catch (error) {
+          console.error("[v0] Error parsing storage update:", error)
+        }
+      }
+    }
+
+    window.addEventListener("storage", handleStorageChange)
+    return () => window.removeEventListener("storage", handleStorageChange)
+  }, [onRefresh])
+
   if (loading) {
     return (
       <div className="space-y-4">
