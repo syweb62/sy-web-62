@@ -96,7 +96,7 @@ const GALLERY_IMAGES: GalleryImage[] = [
     description: "A quiet moment, perfectly brewed.",
   },
   {
-    src: "https://images.unsplash.com/photo-1562158078713-fc5400e7fe10?q=80&w=300&h=300&auto=format&fit=crop&fm=webp",
+    src: "https://images.unsplash.com/photo-1562158078-ef0fc409efce?q=80&w=300&h=300&auto=format&fit=crop&fm=webp",
     alt: "Crispy tempura vegetables and shrimp",
     title: "Crispy Tempura",
     description: "Light batter, golden crunch.",
@@ -218,7 +218,7 @@ export default function Home() {
           </div>
           <div className="p-6">
             <div className="flex justify-between items-center mb-3">
-              <h3 className="text-xl">{item.name}</h3>
+              <h3 className="text-xl font-serif">{item.name}</h3>
               <span className="text-gold font-medium" aria-label={`Price: ${item.price} BDT`}>
                 BDT {item.price}
               </span>
@@ -532,7 +532,7 @@ export default function Home() {
           </div>
 
           <header>
-            <h1 className="text-4xl md:text-6xl lg:text-7xl font-sans font-bold mb-6 leading-tight">
+            <h1 className="text-4xl md:text-6xl lg:text-7xl font-serif font-bold mb-6 leading-tight">
               THE PLEASURE OF <br /> VARIETY ON YOUR PLATE
             </h1>
             <p className="text-lg md:text-xl max-w-3xl mx-auto mb-12 text-gray-200">
@@ -561,7 +561,7 @@ export default function Home() {
 
           {/* Location Selector */}
           <div className="max-w-3xl mx-auto bg-black/10 p-8 rounded-lg backdrop-blur-sm">
-            <h2 className="text-2xl font-sans mb-6">Choose your location to see available restaurants</h2>
+            <h2 className="text-2xl font-serif mb-6">Choose your location to see available restaurants</h2>
             <form
               onSubmit={(e) => {
                 e.preventDefault()
@@ -648,7 +648,7 @@ export default function Home() {
       <section className="py-20 bg-black" aria-labelledby="gallery-heading">
         <div className="container mx-auto px-4">
           <header className="text-center mb-16">
-            <h2 id="gallery-heading" className="text-3xl md:text-4xl font-sans mb-2">
+            <h2 id="gallery-heading" className="text-3xl md:text-4xl font-serif mb-2">
               Our Gallery
             </h2>
             <div className="h-1 w-24 red-accent mx-auto" aria-hidden="true"></div>
@@ -672,7 +672,7 @@ export default function Home() {
       <section className="py-20 bg-gradient-to-b from-black to-darkBg" aria-labelledby="testimonials-heading">
         <div className="container mx-auto px-4">
           <header className="text-center mb-16">
-            <h2 id="testimonials-heading" className="text-3xl md:text-4xl font-sans mb-2">
+            <h2 id="testimonials-heading" className="text-3xl md:text-4xl font-serif mb-2">
               What Our Customers Say
             </h2>
             <div className="h-1 w-24 red-accent mx-auto" aria-hidden="true"></div>
@@ -696,7 +696,7 @@ export default function Home() {
         ></div>
         <div className="container mx-auto px-4 relative z-10">
           <div className="max-w-3xl mx-auto text-center">
-            <h2 id="cta-heading" className="text-3xl md:text-4xl font-sans mb-6">
+            <h2 id="cta-heading" className="text-3xl md:text-4xl font-serif mb-6">
               Ready to Experience Authentic Japanese Cuisine?
             </h2>
             <p className="text-gray-300 mb-8">
