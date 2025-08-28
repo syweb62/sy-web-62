@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { ConfirmationModal } from "@/components/ui/confirmation-modal"
 import { Eye, Printer, Clock, Check, X, CheckCircle } from "lucide-react"
-import { createClient } from "@/lib/supabase"
+import { createClient } from "@/lib/supabase/client"
 
 interface Order {
   order_id: string
@@ -18,6 +18,7 @@ interface Order {
   total_price: number
   status: "confirmed" | "cancelled" | "pending" | "completed"
   created_at: string
+  updated_at?: string
   special_instructions?: string
   order_items: Array<{
     item_name: string
@@ -43,8 +44,6 @@ const EnhancedOrdersTable = ({
 }: EnhancedOrdersTableProps) => {
   const [displayOrders, setDisplayOrders] = useState<Order[]>(orders)
   const [processingOrders, setProcessingOrders] = useState<Set<string>>(new Set())
-  const [lastUpdateTime, setLastUpdateTime] = useState<number>(0)
-  const [isInitialized, setIsInitialized] = useState<boolean>(false)
   const [confirmationModal, setConfirmationModal] = useState<{
     isOpen: boolean
     orderId: string
@@ -60,22 +59,13 @@ const EnhancedOrdersTable = ({
   const supabase = createClient()
 
   const getValidOrderId = (order: Order): string => {
-    return order.order_id || order.short_order_id || ""
+    return order.short_order_id || order.order_id || ""
   }
 
   useEffect(() => {
-    if (!isInitialized && orders.length > 0) {
-      console.log("[v0] Initial sync with parent orders")
-      setDisplayOrders(orders)
-      setIsInitialized(true)
-    } else if (isInitialized) {
-      console.log("[v0] Skipping sync - already initialized, preventing stale data override")
-    }
-  }, [orders, isInitialized])
-
-  const [localOrders, setLocalOrders] = useState<Order[]>(orders)
-  const [updatingOrders, setUpdatingOrders] = useState<Set<string>>(new Set())
-  const [recentUpdates, setRecentUpdates] = useState<Set<string>>(new Set())
+    console.log("[v0] Syncing display orders with parent orders")
+    setDisplayOrders(orders)
+  }, [orders])
 
   const formatDateTime = useCallback((dateString: string) => {
     const date = new Date(dateString)
@@ -111,19 +101,12 @@ const EnhancedOrdersTable = ({
   }, [])
 
   const handleStatusUpdateWithConfirmation = async (orderId: string, newStatus: string) => {
-    console.log("[v0] handleStatusUpdateWithConfirmation called:", { orderId, newStatus })
+    console.log("[v0] Opening confirmation modal:", { orderId, newStatus })
 
-    if (!orderId || orderId === "undefined") {
-      console.error("[v0] Invalid order ID provided:", orderId)
+    if (!orderId || processingOrders.has(orderId)) {
+      console.log("[v0] Skipping - invalid ID or already processing")
       return
     }
-
-    if (updatingOrders.has(orderId)) {
-      console.log("[v0] Order already being updated:", orderId)
-      return
-    }
-
-    console.log("[v0] Opening confirmation modal for:", { orderId, newStatus })
 
     setConfirmationModal({
       isOpen: true,
@@ -134,8 +117,6 @@ const EnhancedOrdersTable = ({
   }
 
   const handleModalConfirm = async () => {
-    console.log("[v0] handleModalConfirm called with modal state:", confirmationModal)
-
     const { orderId, newStatus } = confirmationModal
 
     setConfirmationModal({
@@ -289,11 +270,10 @@ const EnhancedOrdersTable = ({
         return
       }
 
-      setLastUpdateTime(Date.now())
       setProcessingOrders((prev) => new Set(prev).add(orderId))
 
       try {
-        console.log("[v0] Making API call to persist status change to database")
+        console.log("[v0] Making API call to update database")
         const response = await fetch("/api/orders", {
           method: "PATCH",
           headers: {
@@ -306,19 +286,19 @@ const EnhancedOrdersTable = ({
         })
 
         if (!response.ok) {
-          const errorText = await response.text()
-          throw new Error(`API call failed: ${response.status} - ${errorText}`)
+          const errorData = await response.json()
+          throw new Error(`API call failed: ${response.status} - ${errorData.details || errorData.error}`)
         }
 
         const result = await response.json()
-        console.log("[v0] Database update CONFIRMED successful:", result)
+        console.log("[v0] Database update successful:", result)
 
         setDisplayOrders((prevOrders) =>
           prevOrders.map((order) => {
             const validOrderId = getValidOrderId(order)
             if (validOrderId === orderId) {
               console.log("[v0] Updating UI after database confirmation:", validOrderId, "->", newStatus)
-              return { ...order, status: newStatus as Order["status"] }
+              return { ...order, status: newStatus as Order["status"], updated_at: new Date().toISOString() }
             }
             return order
           }),
@@ -331,91 +311,62 @@ const EnhancedOrdersTable = ({
           source: "dashboard",
         }
 
-        console.log("[v0] Broadcasting orderStatusChanged event")
         window.dispatchEvent(new CustomEvent("orderStatusChanged", { detail: eventData }))
-
-        console.log("[v0] Broadcasting orderUpdated event")
         window.dispatchEvent(new CustomEvent("orderUpdated", { detail: eventData }))
 
         try {
-          const updateData = {
-            orderId,
-            newStatus,
-            timestamp: Date.now(),
-            source: "dashboard",
-          }
-
-          localStorage.setItem("lastOrderUpdate", JSON.stringify(updateData))
+          localStorage.setItem("lastOrderUpdate", JSON.stringify(eventData))
           localStorage.setItem("orderUpdateTrigger", Date.now().toString())
-          console.log("[v0] Stored cross-window update data:", updateData)
 
           setTimeout(() => {
             try {
               localStorage.removeItem("orderUpdateTrigger")
             } catch (e) {
-              console.log("[v0] Could not clean up localStorage trigger:", e.message)
+              console.log("[v0] Could not clean up localStorage trigger")
             }
-          }, 2000)
-        } catch (storageError) {
-          console.log("[v0] Could not use localStorage for cross-window communication:", storageError.message)
+          }, 1000)
+        } catch (e) {
+          console.log("[v0] Could not use localStorage for cross-window communication")
         }
 
         try {
-          const broadcastMessage = {
-            type: "orderStatusChanged",
-            data: eventData,
-          }
-
+          const message = { type: "orderStatusChanged", data: eventData }
           if (window.parent && window.parent !== window) {
-            window.parent.postMessage(broadcastMessage, "*")
-            console.log("[v0] Posted message to parent window")
+            window.parent.postMessage(message, "*")
           }
-
           if (window.opener && window.opener !== window) {
-            window.opener.postMessage(broadcastMessage, "*")
-            console.log("[v0] Posted message to opener window")
+            window.opener.postMessage(message, "*")
           }
-        } catch (postMessageError) {
-          console.log("[v0] Could not broadcast via postMessage:", postMessageError.message)
+        } catch (e) {
+          console.log("[v0] Could not broadcast via postMessage")
         }
 
         if (onStatusUpdate) {
           onStatusUpdate(orderId, newStatus)
         }
 
-        console.log("[v0] Status update completed successfully - database persistence confirmed")
+        console.log("[v0] Status update completed successfully")
       } catch (error) {
         console.error("[v0] Status update failed:", error)
-        setDisplayOrders((prevOrders) =>
-          prevOrders.map((order) => {
-            const validOrderId = getValidOrderId(order)
-            if (validOrderId === orderId) {
-              console.log("[v0] Reverting failed update for order:", validOrderId)
-              return order // Keep original state
-            }
-            return order
-          }),
-        )
         throw error
       } finally {
         setTimeout(() => {
           setProcessingOrders((prev) => {
             const newSet = new Set(prev)
             newSet.delete(orderId)
-            console.log("[v0] Cleared processing state for order:", orderId)
             return newSet
           })
-        }, 2000) // Reduced timeout since we're not waiting for parent refresh
+        }, 1000)
       }
     },
     [processingOrders, onStatusUpdate],
   )
 
   useEffect(() => {
-    console.log("[v0] Setting up enhanced real-time subscription for orders")
+    console.log("[v0] Setting up real-time subscription for orders")
 
     const subscription = supabase
-      .channel("enhanced-orders-realtime")
+      .channel("orders-realtime")
       .on(
         "postgres_changes",
         {
@@ -425,13 +376,13 @@ const EnhancedOrdersTable = ({
         },
         (payload) => {
           try {
-            console.log("[v0] Real-time order update detected:", payload)
+            console.log("[v0] Real-time update received:", payload)
 
             if (payload.eventType === "UPDATE" && payload.new) {
-              const orderId = payload.new.order_id || payload.new.short_order_id
+              const orderId = payload.new.short_order_id || payload.new.order_id
 
               if (!orderId) {
-                console.warn("[v0] Real-time update received but no valid order ID found")
+                console.warn("[v0] Real-time update missing order ID")
                 return
               }
 
@@ -440,7 +391,11 @@ const EnhancedOrdersTable = ({
                   const validOrderId = getValidOrderId(order)
                   if (validOrderId === orderId) {
                     console.log("[v0] Updating order from real-time:", validOrderId, "->", payload.new.status)
-                    return { ...order, status: payload.new.status as Order["status"] }
+                    return {
+                      ...order,
+                      status: payload.new.status as Order["status"],
+                      updated_at: payload.new.updated_at,
+                    }
                   }
                   return order
                 }),
@@ -452,143 +407,30 @@ const EnhancedOrdersTable = ({
                 return newSet
               })
 
-              try {
-                const statusChangeEvent = new CustomEvent("orderStatusChanged", {
-                  detail: {
-                    orderId: orderId,
-                    shortOrderId: payload.new.short_order_id,
-                    newStatus: payload.new.status,
-                    customerName: payload.new.customer_name,
-                    totalPrice: payload.new.total_price,
-                    timestamp: new Date().toISOString(),
-                    source: "realtime",
-                    eventType: payload.eventType,
-                  },
-                })
-
-                window.dispatchEvent(statusChangeEvent)
-                console.log("[v0] Dispatched orderStatusChanged event:", statusChangeEvent.detail)
-
-                const orderUpdatedEvent = new CustomEvent("orderUpdated", {
-                  detail: {
-                    orderId: orderId,
-                    shortOrderId: payload.new.short_order_id,
-                    status: payload.new.status,
-                    customerName: payload.new.customer_name,
-                    phone: payload.new.phone,
-                    address: payload.new.address,
-                    totalPrice: payload.new.total_price,
-                    paymentMethod: payload.new.payment_method,
-                    specialInstructions: payload.new.message,
-                    updatedAt: new Date().toISOString(),
-                    source: "realtime",
-                    eventType: payload.eventType,
-                  },
-                })
-                window.dispatchEvent(orderUpdatedEvent)
-              } catch (eventError) {
-                console.error("[v0] Error dispatching custom events:", eventError)
+              const eventData = {
+                orderId,
+                newStatus: payload.new.status,
+                timestamp: new Date().toISOString(),
+                source: "realtime",
               }
 
-              try {
-                const updateData = {
-                  orderId,
-                  newStatus: payload.new.status,
-                  timestamp: Date.now(),
-                  source: "realtime",
-                  eventType: payload.eventType,
-                }
-
-                localStorage.setItem("lastOrderUpdate", JSON.stringify(updateData))
-                localStorage.setItem("orderUpdateTrigger", Date.now().toString())
-                console.log("[v0] Stored real-time cross-window update data:", updateData)
-
-                setTimeout(() => {
-                  try {
-                    localStorage.removeItem("orderUpdateTrigger")
-                  } catch (e) {
-                    console.log("[v0] Could not clean up localStorage trigger:", e.message)
-                  }
-                }, 2000)
-              } catch (storageError) {
-                console.log("[v0] Could not use localStorage for cross-window communication:", storageError.message)
-              }
-
-              try {
-                const broadcastToWindows = (eventData: any) => {
-                  const message = {
-                    type: "orderStatusChanged",
-                    data: eventData,
-                  }
-
-                  if (window.parent && window.parent !== window) {
-                    try {
-                      window.parent.postMessage(message, "*")
-                      console.log("[v0] Posted real-time message to parent window")
-                    } catch (e) {
-                      console.log("[v0] Could not post message to parent:", e.message)
-                    }
-                  }
-
-                  if (window.opener && window.opener !== window) {
-                    try {
-                      window.opener.postMessage(message, "*")
-                      console.log("[v0] Posted real-time message to opener window")
-                    } catch (e) {
-                      console.log("[v0] Could not post message to opener:", e.message)
-                    }
-                  }
-                }
-
-                broadcastToWindows({
-                  orderId: orderId,
-                  shortOrderId: payload.new.short_order_id,
-                  newStatus: payload.new.status,
-                  timestamp: new Date().toISOString(),
-                  source: "realtime",
-                })
-              } catch (postMessageError) {
-                console.error("[v0] Error with postMessage communication:", postMessageError.message)
-              }
-            }
-
-            try {
-              setTimeout(() => {
-                console.log("[v0] Triggering parent refresh after real-time update")
-                if (onRefresh) {
-                  onRefresh()
-                }
-              }, 300)
-            } catch (refreshError) {
-              console.error("[v0] Error triggering parent refresh:", refreshError)
+              window.dispatchEvent(new CustomEvent("orderStatusChanged", { detail: eventData }))
+              window.dispatchEvent(new CustomEvent("orderUpdated", { detail: eventData }))
             }
           } catch (error) {
-            console.error("[v0] Error in real-time subscription callback:", error)
+            console.error("[v0] Error in real-time subscription:", error)
           }
         },
       )
       .subscribe((status) => {
         console.log("[v0] Real-time subscription status:", status)
-        if (status === "SUBSCRIBED") {
-          console.log("[v0] Successfully subscribed to real-time order updates")
-        } else if (status === "CHANNEL_ERROR") {
-          console.error("[v0] Real-time subscription error")
-        } else if (status === "TIMED_OUT") {
-          console.error("[v0] Real-time subscription timed out")
-        } else if (status === "CLOSED") {
-          console.log("[v0] Real-time subscription closed")
-        }
       })
 
     return () => {
-      try {
-        console.log("[v0] Cleaning up real-time subscription")
-        subscription.unsubscribe()
-      } catch (error) {
-        console.error("[v0] Error cleaning up subscription:", error)
-      }
+      console.log("[v0] Cleaning up real-time subscription")
+      subscription.unsubscribe()
     }
-  }, [onRefresh, supabase])
+  }, [supabase])
 
   useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
@@ -860,7 +702,8 @@ const EnhancedOrdersTable = ({
           )
         })}
       </div>
-      {/* Custom Confirmation Modal */}
+
+      {/* Confirmation Modal */}
       {confirmationModal.isOpen && (
         <ConfirmationModal
           isOpen={confirmationModal.isOpen}

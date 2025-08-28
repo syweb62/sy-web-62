@@ -219,7 +219,9 @@ export default function OrdersPage() {
         {/* Header */}
         <div className="mb-5">
           <h1 className="text-2xl md:text-3xl font-semibold text-gold">Order History</h1>
-          <p className="text-xs md:text-sm text-gray-400 mt-1">Search, filter, download receipt, and reorder.</p>
+          <p className="text-xs md:text-sm text-gray-400 mt-1">
+            Search, filter, download receipt, and reorder • Real-time updates enabled
+          </p>
         </div>
 
         {/* Filters - simplified minimal UI */}

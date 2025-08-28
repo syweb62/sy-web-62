@@ -1,13 +1,12 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getSupabaseClient } from "@/lib/supabase-server"
+import { createClient } from "@/lib/supabase-server"
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = getSupabaseClient()
+    const supabase = createClient()
     const { searchParams } = new URL(request.url)
 
     const status = searchParams.get("status")
-    const type = searchParams.get("type")
     const search = searchParams.get("search")
 
     let query = supabase
@@ -27,6 +26,7 @@ export async function GET(request: NextRequest) {
         payment_method,
         message,
         created_at,
+        updated_at,
         order_items (
           item_name,
           quantity,
@@ -45,7 +45,12 @@ export async function GET(request: NextRequest) {
 
     const { data: orders, error } = await query
 
-    if (error) throw error
+    if (error) {
+      console.error("[v0] API GET: Database error:", error)
+      throw error
+    }
+
+    console.log("[v0] API GET: Successfully fetched", orders?.length || 0, "orders")
 
     const formattedOrders =
       orders?.map((order) => ({
@@ -56,33 +61,39 @@ export async function GET(request: NextRequest) {
         phone: order.phone || "N/A",
         address: order.address || "No address provided",
         total_price: order.total_price,
+        subtotal: order.subtotal,
+        vat: order.vat,
+        delivery_charge: order.delivery_charge,
+        discount: order.discount,
         status: order.status,
         created_at: order.created_at,
+        updated_at: order.updated_at,
         special_instructions: order.message,
+        payment_method: order.payment_method || "cash",
         order_items:
           order.order_items?.map((item: any) => ({
             item_name: item.item_name,
             quantity: item.quantity,
             price_at_purchase: item.price_at_purchase,
           })) || [],
-        payment_method: order.payment_method || "cash",
-        message: order.message,
-        customer: order.customer_name || "Guest",
-        email: order.phone || "N/A",
+        // Additional fields for compatibility
         items:
           order.order_items?.map((item: any) => ({
-            name: item.item_name,
+            id: `${order.order_id}-${item.item_name}`,
+            menu_item_id: `${order.order_id}-${item.item_name}`,
+            item_name: item.item_name,
+            item_description: item.item_name,
+            item_image: "/sushi-thumbnail.png",
             quantity: item.quantity,
-            price: item.price_at_purchase,
+            price_at_purchase: item.price_at_purchase,
           })) || [],
-        order_type: "delivery",
       })) || []
 
     return NextResponse.json({ orders: formattedOrders })
   } catch (error) {
-    console.error("Orders API error:", error)
+    console.error("[v0] API GET: Error:", error)
     return NextResponse.json(
-      { error: "Internal server error", details: error instanceof Error ? error.message : "Unknown error" },
+      { error: "Failed to fetch orders", details: error instanceof Error ? error.message : "Unknown error" },
       { status: 500 },
     )
   }
@@ -90,32 +101,44 @@ export async function GET(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    const supabase = getSupabaseClient()
+    const supabase = createClient()
     const { orderId, status } = await request.json()
 
-    console.log("[v0] API: Updating order status:", { orderId, status })
+    console.log("[v0] API PATCH: Updating order status:", { orderId, status })
 
     if (!orderId || !status) {
-      console.error("[v0] API: Missing orderId or status")
+      console.error("[v0] API PATCH: Missing required fields")
       return NextResponse.json({ error: "Order ID and status are required" }, { status: 400 })
     }
 
     let updateResult
+    let updatedOrder
 
-    // Try updating by order_id first (UUID)
-    const { data: orderData, error: orderError } = await supabase
-      .from("orders")
-      .update({
-        status,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("order_id", orderId)
-      .select()
+    // Try updating by order_id first (UUID format)
+    if (orderId.length === 36 && orderId.includes("-")) {
+      console.log("[v0] API PATCH: Attempting UUID update")
+      const { data, error } = await supabase
+        .from("orders")
+        .update({
+          status,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("order_id", orderId)
+        .select()
+        .single()
 
-    if (orderError && orderError.message.includes("invalid input syntax for type uuid")) {
-      console.log("[v0] API: UUID failed, trying short_order_id")
-      // If orderId is not a valid UUID, try updating by short_order_id
-      const { data: shortOrderData, error: shortIdError } = await supabase
+      if (!error && data) {
+        updateResult = { data: [data], error: null }
+        updatedOrder = data
+      } else if (error) {
+        console.log("[v0] API PATCH: UUID update failed, trying short_order_id:", error.message)
+      }
+    }
+
+    // If UUID failed or orderId is not UUID format, try short_order_id
+    if (!updateResult) {
+      console.log("[v0] API PATCH: Attempting short_order_id update")
+      const { data, error } = await supabase
         .from("orders")
         .update({
           status,
@@ -123,35 +146,35 @@ export async function PATCH(request: NextRequest) {
         })
         .eq("short_order_id", orderId)
         .select()
+        .single()
 
-      if (shortIdError) {
-        console.error("[v0] API: Both UUID and short_order_id failed:", shortIdError)
-        throw shortIdError
+      if (error) {
+        console.error("[v0] API PATCH: Both update methods failed:", error)
+        throw new Error(`Failed to update order: ${error.message}`)
       }
-      updateResult = shortOrderData
-    } else if (orderError) {
-      console.error("[v0] API: Order update failed:", orderError)
-      throw orderError
-    } else {
-      updateResult = orderData
+
+      updateResult = { data: [data], error: null }
+      updatedOrder = data
     }
 
-    console.log("[v0] API: Order status updated successfully:", updateResult)
+    console.log("[v0] API PATCH: Order status updated successfully:", updatedOrder)
 
     return NextResponse.json({
       success: true,
       message: "Order status updated successfully",
       orderId,
       newStatus: status,
-      updatedOrder: updateResult?.[0] || null,
+      updatedOrder,
+      timestamp: new Date().toISOString(),
     })
   } catch (error) {
-    console.error("[v0] API: Order update error:", error)
+    console.error("[v0] API PATCH: Update failed:", error)
     return NextResponse.json(
       {
-        error: "Internal server error",
+        success: false,
+        error: "Failed to update order status",
         details: error instanceof Error ? error.message : "Unknown error",
-        orderId: request.body ? JSON.parse(await request.text()).orderId : null,
+        orderId: null,
       },
       { status: 500 },
     )
@@ -160,7 +183,7 @@ export async function PATCH(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = getSupabaseClient()
+    const supabase = createClient()
     const orderData = await request.json()
 
     const { data: order, error: orderError } = await supabase

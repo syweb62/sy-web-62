@@ -36,3 +36,5 @@ export function getSupabaseClient() {
 
 // Added alias export for consistency with API routes
 export const createSupabaseServerClient = getSupabaseClient
+
+export const createClient = getSupabaseClient
