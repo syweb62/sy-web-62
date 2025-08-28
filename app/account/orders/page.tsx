@@ -95,99 +95,24 @@ export default function OrdersPage() {
   }
 
   useEffect(() => {
-    console.log("[v0] Setting up comprehensive real-time event listeners for website")
-    console.log("[v0] Current window location:", window.location.href)
-
     const handleOrderStatusChange = (event: CustomEvent) => {
-      console.log("[v0] Order status changed event received on website:", event.detail)
-      console.log("[v0] Event source:", event.detail.source)
-      console.log("[v0] Event timestamp:", event.detail.timestamp)
-      console.log("[v0] Order ID:", event.detail.orderId)
-      console.log("[v0] New status:", event.detail.newStatus)
-
-      console.log("[v0] Refreshing order history due to status change")
-      setTimeout(() => {
-        refetch()
-      }, 100)
-    }
-
-    const handleOrderUpdated = (event: CustomEvent) => {
-      console.log("[v0] Order updated event received on website:", event.detail)
-      console.log("[v0] Updated order ID:", event.detail.orderId)
-      console.log("[v0] New status:", event.detail.status || event.detail.newStatus)
-
-      setTimeout(() => {
-        refetch()
-      }, 100)
+      if (event.detail?.orderId) {
+        setTimeout(() => refetch(), 200)
+      }
     }
 
     const handleStorageChange = (event: StorageEvent) => {
-      if (event.key === "orderUpdateTrigger" && event.newValue) {
-        console.log("[v0] Storage-based order update detected on website")
-        try {
-          const lastUpdate = localStorage.getItem("lastOrderUpdate")
-          if (lastUpdate) {
-            const updateData = JSON.parse(lastUpdate)
-            console.log("[v0] Processing storage-based order update on website:", updateData)
-            console.log("[v0] Update source:", updateData.source)
-            console.log("[v0] Order ID:", updateData.orderId)
-            console.log("[v0] New status:", updateData.newStatus)
-
-            setTimeout(() => {
-              refetch()
-            }, 200)
-          }
-        } catch (e) {
-          console.error("[v0] Error processing storage-based update on website:", e)
-        }
+      if (event.key === "orderUpdate" && event.newValue) {
+        setTimeout(() => refetch(), 300)
       }
     }
 
-    const handleMessage = (event: MessageEvent) => {
-      if (event.data && event.data.type === "orderStatusChanged") {
-        console.log("[v0] Received cross-window order status change on website:", event.data.data)
-        console.log("[v0] Message origin:", event.origin)
-        console.log("[v0] Updated order:", event.data.data.orderId)
-        console.log("[v0] New status:", event.data.data.newStatus)
-
-        setTimeout(() => {
-          refetch()
-        }, 150)
-      }
-    }
-
-    // Set up all event listeners
-    console.log("[v0] Adding orderStatusChanged event listener")
     window.addEventListener("orderStatusChanged", handleOrderStatusChange as EventListener)
-
-    console.log("[v0] Adding orderUpdated event listener")
-    window.addEventListener("orderUpdated", handleOrderUpdated as EventListener)
-
-    console.log("[v0] Adding storage event listener")
     window.addEventListener("storage", handleStorageChange)
 
-    console.log("[v0] Adding message event listener")
-    window.addEventListener("message", handleMessage)
-
-    console.log("[v0] Real-time listeners setup complete")
-    console.log("[v0] Window has parent:", window.parent !== window)
-    console.log("[v0] Window has opener:", window.opener !== null)
-    console.log("[v0] LocalStorage available:", typeof Storage !== "undefined")
-
-    try {
-      const testEvent = new CustomEvent("test", { detail: { test: true } })
-      window.dispatchEvent(testEvent)
-      console.log("[v0] Event dispatching capability confirmed")
-    } catch (e) {
-      console.error("[v0] Event dispatching not available:", e)
-    }
-
     return () => {
-      console.log("[v0] Cleaning up real-time event listeners on website")
       window.removeEventListener("orderStatusChanged", handleOrderStatusChange as EventListener)
-      window.removeEventListener("orderUpdated", handleOrderUpdated as EventListener)
       window.removeEventListener("storage", handleStorageChange)
-      window.removeEventListener("message", handleMessage)
     }
   }, [refetch])
 
