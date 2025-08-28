@@ -64,10 +64,10 @@ const EnhancedOrdersTable = ({
 
   useEffect(() => {
     const timeSinceLastUpdate = Date.now() - lastUpdateTime
-    const hasRecentUpdate = timeSinceLastUpdate < 5000 // 5 seconds
+    const hasRecentUpdate = timeSinceLastUpdate < 10000 // Increased to 10 seconds
 
-    if (processingOrders.size === 0 && !hasRecentUpdate) {
-      console.log("[v0] Syncing display orders with parent orders (no processing, no recent updates)")
+    if (displayOrders.length === 0 || (processingOrders.size === 0 && !hasRecentUpdate)) {
+      console.log("[v0] Syncing display orders with parent orders (safe to sync)")
       setDisplayOrders(orders)
     } else {
       console.log("[v0] Skipping sync - processing:", Array.from(processingOrders), "recent update:", hasRecentUpdate)
@@ -294,18 +294,7 @@ const EnhancedOrdersTable = ({
       setProcessingOrders((prev) => new Set(prev).add(orderId))
 
       try {
-        setDisplayOrders((prevOrders) =>
-          prevOrders.map((order) => {
-            const validOrderId = getValidOrderId(order)
-            if (validOrderId === orderId) {
-              console.log("[v0] Optimistically updating order:", validOrderId, "->", newStatus)
-              return { ...order, status: newStatus as Order["status"] }
-            }
-            return order
-          }),
-        )
-
-        console.log("[v0] Making API call to persist status change")
+        console.log("[v0] Making API call to persist status change FIRST")
         const response = await fetch("/api/orders", {
           method: "PATCH",
           headers: {
@@ -322,7 +311,18 @@ const EnhancedOrdersTable = ({
         }
 
         const result = await response.json()
-        console.log("[v0] Status update successful:", result)
+        console.log("[v0] Database update confirmed successful:", result)
+
+        setDisplayOrders((prevOrders) =>
+          prevOrders.map((order) => {
+            const validOrderId = getValidOrderId(order)
+            if (validOrderId === orderId) {
+              console.log("[v0] Updating UI after database confirmation:", validOrderId, "->", newStatus)
+              return { ...order, status: newStatus as Order["status"] }
+            }
+            return order
+          }),
+        )
 
         const eventData = {
           orderId: orderId,
@@ -385,13 +385,12 @@ const EnhancedOrdersTable = ({
 
         if (onRefresh) {
           setTimeout(() => {
-            console.log("[v0] Triggering parent refresh after status update")
+            console.log("[v0] Triggering parent refresh after database confirmation")
             onRefresh()
-          }, 3000) // Increased delay to 3 seconds
+          }, 5000) // Increased delay to 5 seconds to ensure database propagation
         }
       } catch (error) {
         console.error("[v0] Status update failed:", error)
-        setDisplayOrders(orders)
         throw error
       } finally {
         setTimeout(() => {
@@ -401,10 +400,10 @@ const EnhancedOrdersTable = ({
             console.log("[v0] Cleared processing state for order:", orderId)
             return newSet
           })
-        }, 4000) // Increased to 4 seconds
+        }, 6000) // Increased to 6 seconds to prevent premature sync
       }
     },
-    [orders, processingOrders, onStatusUpdate, onRefresh],
+    [processingOrders, onStatusUpdate, onRefresh],
   )
 
   useEffect(() => {
