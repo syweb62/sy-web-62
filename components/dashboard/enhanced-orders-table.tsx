@@ -44,6 +44,7 @@ const EnhancedOrdersTable = ({
   const [displayOrders, setDisplayOrders] = useState<Order[]>(orders)
   const [processingOrders, setProcessingOrders] = useState<Set<string>>(new Set())
   const [lastUpdateTime, setLastUpdateTime] = useState<number>(0)
+  const [isInitialized, setIsInitialized] = useState<boolean>(false)
   const [confirmationModal, setConfirmationModal] = useState<{
     isOpen: boolean
     orderId: string
@@ -63,16 +64,14 @@ const EnhancedOrdersTable = ({
   }
 
   useEffect(() => {
-    const timeSinceLastUpdate = Date.now() - lastUpdateTime
-    const hasRecentUpdate = timeSinceLastUpdate < 10000 // Increased to 10 seconds
-
-    if (displayOrders.length === 0 || (processingOrders.size === 0 && !hasRecentUpdate)) {
-      console.log("[v0] Syncing display orders with parent orders (safe to sync)")
+    if (!isInitialized && orders.length > 0) {
+      console.log("[v0] Initial sync with parent orders")
       setDisplayOrders(orders)
-    } else {
-      console.log("[v0] Skipping sync - processing:", Array.from(processingOrders), "recent update:", hasRecentUpdate)
+      setIsInitialized(true)
+    } else if (isInitialized) {
+      console.log("[v0] Skipping sync - already initialized, preventing stale data override")
     }
-  }, [orders, processingOrders, lastUpdateTime])
+  }, [orders, isInitialized])
 
   const [localOrders, setLocalOrders] = useState<Order[]>(orders)
   const [updatingOrders, setUpdatingOrders] = useState<Set<string>>(new Set())
@@ -294,7 +293,7 @@ const EnhancedOrdersTable = ({
       setProcessingOrders((prev) => new Set(prev).add(orderId))
 
       try {
-        console.log("[v0] Making API call to persist status change FIRST")
+        console.log("[v0] Making API call to persist status change to database")
         const response = await fetch("/api/orders", {
           method: "PATCH",
           headers: {
@@ -307,11 +306,12 @@ const EnhancedOrdersTable = ({
         })
 
         if (!response.ok) {
-          throw new Error(`API call failed: ${response.status}`)
+          const errorText = await response.text()
+          throw new Error(`API call failed: ${response.status} - ${errorText}`)
         }
 
         const result = await response.json()
-        console.log("[v0] Database update confirmed successful:", result)
+        console.log("[v0] Database update CONFIRMED successful:", result)
 
         setDisplayOrders((prevOrders) =>
           prevOrders.map((order) => {
@@ -383,14 +383,19 @@ const EnhancedOrdersTable = ({
           onStatusUpdate(orderId, newStatus)
         }
 
-        if (onRefresh) {
-          setTimeout(() => {
-            console.log("[v0] Triggering parent refresh after database confirmation")
-            onRefresh()
-          }, 5000) // Increased delay to 5 seconds to ensure database propagation
-        }
+        console.log("[v0] Status update completed successfully - database persistence confirmed")
       } catch (error) {
         console.error("[v0] Status update failed:", error)
+        setDisplayOrders((prevOrders) =>
+          prevOrders.map((order) => {
+            const validOrderId = getValidOrderId(order)
+            if (validOrderId === orderId) {
+              console.log("[v0] Reverting failed update for order:", validOrderId)
+              return order // Keep original state
+            }
+            return order
+          }),
+        )
         throw error
       } finally {
         setTimeout(() => {
@@ -400,10 +405,10 @@ const EnhancedOrdersTable = ({
             console.log("[v0] Cleared processing state for order:", orderId)
             return newSet
           })
-        }, 6000) // Increased to 6 seconds to prevent premature sync
+        }, 2000) // Reduced timeout since we're not waiting for parent refresh
       }
     },
-    [processingOrders, onStatusUpdate, onRefresh],
+    [processingOrders, onStatusUpdate],
   )
 
   useEffect(() => {
