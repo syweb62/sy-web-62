@@ -93,25 +93,66 @@ export async function PATCH(request: NextRequest) {
     const supabase = getSupabaseClient()
     const { orderId, status } = await request.json()
 
+    console.log("[v0] API: Updating order status:", { orderId, status })
+
     if (!orderId || !status) {
+      console.error("[v0] API: Missing orderId or status")
       return NextResponse.json({ error: "Order ID and status are required" }, { status: 400 })
     }
 
-    const { error } = await supabase.from("orders").update({ status }).eq("order_id", orderId)
+    let updateResult
 
-    if (error && error.message.includes("invalid input syntax for type uuid")) {
+    // Try updating by order_id first (UUID)
+    const { data: orderData, error: orderError } = await supabase
+      .from("orders")
+      .update({
+        status,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("order_id", orderId)
+      .select()
+
+    if (orderError && orderError.message.includes("invalid input syntax for type uuid")) {
+      console.log("[v0] API: UUID failed, trying short_order_id")
       // If orderId is not a valid UUID, try updating by short_order_id
-      const { error: shortIdError } = await supabase.from("orders").update({ status }).eq("short_order_id", orderId)
-      if (shortIdError) throw shortIdError
-    } else if (error) {
-      throw error
+      const { data: shortOrderData, error: shortIdError } = await supabase
+        .from("orders")
+        .update({
+          status,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("short_order_id", orderId)
+        .select()
+
+      if (shortIdError) {
+        console.error("[v0] API: Both UUID and short_order_id failed:", shortIdError)
+        throw shortIdError
+      }
+      updateResult = shortOrderData
+    } else if (orderError) {
+      console.error("[v0] API: Order update failed:", orderError)
+      throw orderError
+    } else {
+      updateResult = orderData
     }
 
-    return NextResponse.json({ success: true, message: "Order status updated successfully" })
+    console.log("[v0] API: Order status updated successfully:", updateResult)
+
+    return NextResponse.json({
+      success: true,
+      message: "Order status updated successfully",
+      orderId,
+      newStatus: status,
+      updatedOrder: updateResult?.[0] || null,
+    })
   } catch (error) {
-    console.error("Order update API error:", error)
+    console.error("[v0] API: Order update error:", error)
     return NextResponse.json(
-      { error: "Internal server error", details: error instanceof Error ? error.message : "Unknown error" },
+      {
+        error: "Internal server error",
+        details: error instanceof Error ? error.message : "Unknown error",
+        orderId: request.body ? JSON.parse(await request.text()).orderId : null,
+      },
       { status: 500 },
     )
   }
