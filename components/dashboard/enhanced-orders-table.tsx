@@ -43,6 +43,7 @@ const EnhancedOrdersTable = ({
 }: EnhancedOrdersTableProps) => {
   const [displayOrders, setDisplayOrders] = useState<Order[]>(orders)
   const [processingOrders, setProcessingOrders] = useState<Set<string>>(new Set())
+  const [lastUpdateTime, setLastUpdateTime] = useState<number>(0)
   const [confirmationModal, setConfirmationModal] = useState<{
     isOpen: boolean
     orderId: string
@@ -62,9 +63,16 @@ const EnhancedOrdersTable = ({
   }
 
   useEffect(() => {
-    console.log("[v0] Syncing display orders with parent orders")
-    setDisplayOrders(orders)
-  }, [orders])
+    const timeSinceLastUpdate = Date.now() - lastUpdateTime
+    const hasRecentUpdate = timeSinceLastUpdate < 5000 // 5 seconds
+
+    if (processingOrders.size === 0 && !hasRecentUpdate) {
+      console.log("[v0] Syncing display orders with parent orders (no processing, no recent updates)")
+      setDisplayOrders(orders)
+    } else {
+      console.log("[v0] Skipping sync - processing:", Array.from(processingOrders), "recent update:", hasRecentUpdate)
+    }
+  }, [orders, processingOrders, lastUpdateTime])
 
   const [localOrders, setLocalOrders] = useState<Order[]>(orders)
   const [updatingOrders, setUpdatingOrders] = useState<Set<string>>(new Set())
@@ -282,7 +290,7 @@ const EnhancedOrdersTable = ({
         return
       }
 
-      // Mark as processing
+      setLastUpdateTime(Date.now())
       setProcessingOrders((prev) => new Set(prev).add(orderId))
 
       try {
@@ -323,7 +331,6 @@ const EnhancedOrdersTable = ({
           source: "dashboard",
         }
 
-        // Dispatch custom events for website
         console.log("[v0] Broadcasting orderStatusChanged event")
         window.dispatchEvent(new CustomEvent("orderStatusChanged", { detail: eventData }))
 
@@ -331,7 +338,6 @@ const EnhancedOrdersTable = ({
         window.dispatchEvent(new CustomEvent("orderUpdated", { detail: eventData }))
 
         try {
-          // Cross-window communication via localStorage with trigger
           const updateData = {
             orderId,
             newStatus,
@@ -343,7 +349,6 @@ const EnhancedOrdersTable = ({
           localStorage.setItem("orderUpdateTrigger", Date.now().toString())
           console.log("[v0] Stored cross-window update data:", updateData)
 
-          // Clean up trigger after 2 seconds
           setTimeout(() => {
             try {
               localStorage.removeItem("orderUpdateTrigger")
@@ -361,13 +366,11 @@ const EnhancedOrdersTable = ({
             data: eventData,
           }
 
-          // Try parent window
           if (window.parent && window.parent !== window) {
             window.parent.postMessage(broadcastMessage, "*")
             console.log("[v0] Posted message to parent window")
           }
 
-          // Try opener window
           if (window.opener && window.opener !== window) {
             window.opener.postMessage(broadcastMessage, "*")
             console.log("[v0] Posted message to opener window")
@@ -376,7 +379,6 @@ const EnhancedOrdersTable = ({
           console.log("[v0] Could not broadcast via postMessage:", postMessageError.message)
         }
 
-        // Call parent callback
         if (onStatusUpdate) {
           onStatusUpdate(orderId, newStatus)
         }
@@ -385,20 +387,21 @@ const EnhancedOrdersTable = ({
           setTimeout(() => {
             console.log("[v0] Triggering parent refresh after status update")
             onRefresh()
-          }, 500)
+          }, 3000) // Increased delay to 3 seconds
         }
       } catch (error) {
         console.error("[v0] Status update failed:", error)
-
         setDisplayOrders(orders)
-
         throw error
       } finally {
-        setProcessingOrders((prev) => {
-          const newSet = new Set(prev)
-          newSet.delete(orderId)
-          return newSet
-        })
+        setTimeout(() => {
+          setProcessingOrders((prev) => {
+            const newSet = new Set(prev)
+            newSet.delete(orderId)
+            console.log("[v0] Cleared processing state for order:", orderId)
+            return newSet
+          })
+        }, 4000) // Increased to 4 seconds
       }
     },
     [orders, processingOrders, onStatusUpdate, onRefresh],
@@ -439,7 +442,6 @@ const EnhancedOrdersTable = ({
                 }),
               )
 
-              // Clear updating state for this order
               setProcessingOrders((prev) => {
                 const newSet = new Set(prev)
                 newSet.delete(orderId)
@@ -585,13 +587,6 @@ const EnhancedOrdersTable = ({
   }, [onRefresh, supabase])
 
   useEffect(() => {
-    if (orders.length > 0 && localOrders.length === 0) {
-      console.log("[v0] Initial sync with parent orders")
-      setLocalOrders(orders)
-    }
-  }, [orders, localOrders.length])
-
-  useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === "orderUpdateTrigger" && e.newValue) {
         try {
@@ -600,7 +595,6 @@ const EnhancedOrdersTable = ({
             const update = JSON.parse(lastUpdate)
             console.log("[v0] Received cross-window order update:", update)
 
-            // Force refresh to get latest data from database
             if (onRefresh) {
               onRefresh()
             }
@@ -614,57 +608,6 @@ const EnhancedOrdersTable = ({
     window.addEventListener("storage", handleStorageChange)
     return () => window.removeEventListener("storage", handleStorageChange)
   }, [onRefresh])
-
-  useEffect(() => {
-    // Always sync with parent orders when they change, unless we have pending updates
-    if (orders.length > 0 && updatingOrders.size === 0 && recentUpdates.size === 0) {
-      console.log("[v0] Syncing with parent orders - database changes detected")
-      setLocalOrders(orders)
-    }
-  }, [orders, updatingOrders.size, recentUpdates.size])
-
-  if (loading) {
-    return (
-      <div className="space-y-4">
-        {[...Array(3)].map((_, i) => (
-          <Card key={i} className="bg-gray-900/30 border-gray-700/50">
-            <CardContent className="p-6">
-              <div className="animate-pulse space-y-4">
-                <div className="h-4 bg-gray-700 rounded w-1/4"></div>
-                <div className="h-4 bg-gray-700 rounded w-1/2"></div>
-                <div className="h-4 bg-gray-700 rounded w-3/4"></div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-    )
-  }
-
-  if (displayOrders.length === 0) {
-    return (
-      <Card className="bg-gray-900/30 border-gray-700/50">
-        <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-          <div className="w-16 h-16 bg-gray-800/50 rounded-full flex items-center justify-center mb-4">
-            <Clock className="w-8 h-8 text-gray-400" />
-          </div>
-          <h3 className="text-xl font-medium text-white mb-2">No Orders Found</h3>
-          <p className="text-gray-400 text-sm mt-1">
-            Orders will appear here when customers place them. The system is ready to receive new orders.
-          </p>
-          {onRefresh && (
-            <Button
-              onClick={onRefresh}
-              variant="outline"
-              className="border-gray-600 text-gray-300 hover:bg-gray-800 bg-transparent"
-            >
-              Refresh Orders
-            </Button>
-          )}
-        </CardContent>
-      </Card>
-    )
-  }
 
   const getActionButtons = (order: Order) => {
     const validOrderId = getValidOrderId(order)
@@ -775,7 +718,6 @@ const EnhancedOrdersTable = ({
       )
     }
 
-    // For completed or cancelled orders
     return (
       <div className="space-y-3">
         <div className="flex gap-2">
