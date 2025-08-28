@@ -111,8 +111,7 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "Order ID and status are required" }, { status: 400 })
     }
 
-    let updateResult
-    let updatedOrder
+    let updatedOrder = null
 
     // Try updating by order_id first (UUID format)
     if (orderId.length === 36 && orderId.includes("-")) {
@@ -125,18 +124,17 @@ export async function PATCH(request: NextRequest) {
         })
         .eq("order_id", orderId)
         .select()
-        .single()
 
-      if (!error && data) {
-        updateResult = { data: [data], error: null }
-        updatedOrder = data
-      } else if (error) {
-        console.log("[v0] API PATCH: UUID update failed, trying short_order_id:", error.message)
+      if (!error && data && data.length > 0) {
+        updatedOrder = data[0]
+        console.log("[v0] API PATCH: UUID update successful")
+      } else {
+        console.log("[v0] API PATCH: UUID update failed or no records found:", error?.message || "No matching records")
       }
     }
 
     // If UUID failed or orderId is not UUID format, try short_order_id
-    if (!updateResult) {
+    if (!updatedOrder) {
       console.log("[v0] API PATCH: Attempting short_order_id update")
       const { data, error } = await supabase
         .from("orders")
@@ -146,15 +144,24 @@ export async function PATCH(request: NextRequest) {
         })
         .eq("short_order_id", orderId)
         .select()
-        .single()
 
       if (error) {
-        console.error("[v0] API PATCH: Both update methods failed:", error)
+        console.error("[v0] API PATCH: short_order_id update failed:", error)
         throw new Error(`Failed to update order: ${error.message}`)
       }
 
-      updateResult = { data: [data], error: null }
-      updatedOrder = data
+      if (!data || data.length === 0) {
+        console.error("[v0] API PATCH: No order found with ID:", orderId)
+        return NextResponse.json({ error: "Order not found", orderId }, { status: 404 })
+      }
+
+      updatedOrder = data[0]
+      console.log("[v0] API PATCH: short_order_id update successful")
+    }
+
+    if (!updatedOrder) {
+      console.error("[v0] API PATCH: No order found with ID:", orderId)
+      return NextResponse.json({ error: "Order not found", orderId }, { status: 404 })
     }
 
     console.log("[v0] API PATCH: Order status updated successfully:", updatedOrder)

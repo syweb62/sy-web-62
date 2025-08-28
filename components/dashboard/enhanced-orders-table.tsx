@@ -4,8 +4,7 @@ import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
-import { ConfirmationModal } from "@/components/ui/confirmation-modal"
-import { Eye, Printer, Clock, Check, X, CheckCircle } from "lucide-react"
+import { Eye, Printer, Check, X, CheckCircle } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 
 interface Order {
@@ -43,34 +42,15 @@ const EnhancedOrdersTable = ({
   loading = false,
 }: EnhancedOrdersTableProps) => {
   const [displayOrders, setDisplayOrders] = useState<Order[]>(orders)
-  const [processingOrders, setProcessingOrders] = useState<Set<string>>(new Set())
-  const [isInitialized, setIsInitialized] = useState(false)
-  const [confirmationModal, setConfirmationModal] = useState<{
-    isOpen: boolean
-    orderId: string
-    newStatus: string
-    type: "confirm" | "cancel" | "warning"
-  }>({
-    isOpen: false,
-    orderId: "",
-    newStatus: "",
-    type: "confirm",
-  })
-
   const supabase = createClient()
 
-  const getValidOrderId = (order: Order): string => {
+  const getOrderId = (order: Order): string => {
     return order.short_order_id || order.order_id || ""
   }
 
   useEffect(() => {
-    if (!isInitialized || (processingOrders.size === 0 && orders.length > 0)) {
-      setDisplayOrders(orders)
-      if (!isInitialized) {
-        setIsInitialized(true)
-      }
-    }
-  }, [orders, processingOrders.size, isInitialized])
+    setDisplayOrders(orders)
+  }, [orders])
 
   const formatDateTime = useCallback((dateString: string) => {
     const date = new Date(dateString)
@@ -97,176 +77,99 @@ const EnhancedOrdersTable = ({
 
     if (diffInMinutes < 1) return "Just now"
     if (diffInMinutes < 60) return `${diffInMinutes}m ago`
-
     const diffInHours = Math.floor(diffInMinutes / 60)
     if (diffInHours < 24) return `${diffInHours}h ago`
-
     const diffInDays = Math.floor(diffInHours / 24)
     return `${diffInDays}d ago`
   }, [])
 
-  const handleStatusUpdateWithConfirmation = async (orderId: string, newStatus: string) => {
-    if (!orderId || processingOrders.has(orderId)) {
+  const updateOrderStatus = async (orderId: string, newStatus: string) => {
+    console.log("[v0] Button clicked - Order ID:", orderId, "New Status:", newStatus)
+
+    if (!orderId) {
+      console.log("[v0] Error: No order ID provided")
       return
     }
 
-    setConfirmationModal({
-      isOpen: true,
-      orderId,
-      newStatus,
-      type: newStatus === "confirmed" ? "confirm" : newStatus === "cancelled" ? "cancel" : "confirm",
-    })
-  }
+    try {
+      console.log("[v0] Making API call to update order status...")
 
-  const handleModalConfirm = async () => {
-    const { orderId, newStatus } = confirmationModal
+      const response = await fetch("/api/orders", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId, status: newStatus }),
+      })
 
-    setConfirmationModal({
-      isOpen: false,
-      orderId: "",
-      newStatus: "",
-      type: "confirm",
-    })
+      console.log("[v0] API response status:", response.status)
 
-    await handleStatusUpdate(orderId, newStatus)
-  }
+      if (response.ok) {
+        const responseData = await response.json()
+        console.log("[v0] API response data:", responseData)
 
-  const handleModalClose = () => {
-    setConfirmationModal({
-      isOpen: false,
-      orderId: "",
-      newStatus: "",
-      type: "confirm",
-    })
-  }
-
-  const handleStatusUpdate = useCallback(
-    async (orderId: string, newStatus: string) => {
-      if (!orderId || processingOrders.has(orderId)) {
-        return
-      }
-
-      setProcessingOrders((prev) => new Set(prev).add(orderId))
-
-      try {
-        const response = await fetch("/api/orders", {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            orderId: orderId,
-            status: newStatus,
-          }),
-        })
-
-        if (!response.ok) {
-          throw new Error(`Failed to update order status`)
-        }
-
-        setDisplayOrders((prevOrders) =>
-          prevOrders.map((order) => {
-            const validOrderId = getValidOrderId(order)
-            if (validOrderId === orderId) {
-              return { ...order, status: newStatus as Order["status"], updated_at: new Date().toISOString() }
-            }
-            return order
-          }),
+        // Update local state immediately
+        setDisplayOrders((prev) =>
+          prev.map((order) =>
+            getOrderId(order) === orderId
+              ? { ...order, status: newStatus as Order["status"], updated_at: new Date().toISOString() }
+              : order,
+          ),
         )
 
-        const eventData = {
-          orderId: orderId,
-          newStatus: newStatus,
-          timestamp: new Date().toISOString(),
-        }
+        console.log("[v0] Local state updated successfully")
 
+        // Dispatch events for cross-window communication
+        const eventData = { orderId, newStatus, timestamp: new Date().toISOString() }
         window.dispatchEvent(new CustomEvent("orderStatusChanged", { detail: eventData }))
 
         try {
-          localStorage.setItem("orderUpdate", JSON.stringify(eventData))
-          setTimeout(() => localStorage.removeItem("orderUpdate"), 1000)
-        } catch (e) {}
+          localStorage.setItem("orderStatusUpdate", JSON.stringify(eventData))
+          setTimeout(() => localStorage.removeItem("orderStatusUpdate"), 500)
+        } catch (e) {
+          console.log("[v0] localStorage error (ignored):", e)
+        }
 
         if (onStatusUpdate) {
           onStatusUpdate(orderId, newStatus)
         }
-      } catch (error) {
-        console.error("Status update failed:", error)
-        setDisplayOrders((prevOrders) =>
-          prevOrders.map((order) => {
-            const validOrderId = getValidOrderId(order)
-            if (validOrderId === orderId) {
-              return { ...order }
-            }
-            return order
-          }),
-        )
-      } finally {
-        setTimeout(() => {
-          setProcessingOrders((prev) => {
-            const newSet = new Set(prev)
-            newSet.delete(orderId)
-            return newSet
-          })
-        }, 2000)
+
+        console.log("[v0] Order status update completed successfully")
+      } else {
+        const errorData = await response.text()
+        console.log("[v0] API error response:", errorData)
       }
-    },
-    [processingOrders, onStatusUpdate],
-  )
+    } catch (error) {
+      console.error("[v0] Failed to update order status:", error)
+    }
+  }
 
   useEffect(() => {
     const subscription = supabase
-      .channel("orders-realtime")
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "orders",
-        },
-        (payload) => {
-          if (payload.new) {
-            const orderId = payload.new.short_order_id || payload.new.order_id
-
-            if (orderId && !processingOrders.has(orderId)) {
-              setDisplayOrders((prevOrders) =>
-                prevOrders.map((order) => {
-                  const validOrderId = getValidOrderId(order)
-                  if (validOrderId === orderId) {
-                    return {
-                      ...order,
-                      status: payload.new.status as Order["status"],
-                      updated_at: payload.new.updated_at,
-                    }
-                  }
-                  return order
-                }),
-              )
-
-              const eventData = {
-                orderId,
-                newStatus: payload.new.status,
-                timestamp: new Date().toISOString(),
-              }
-              window.dispatchEvent(new CustomEvent("orderStatusChanged", { detail: eventData }))
-            }
+      .channel("orders-updates")
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "orders" }, (payload) => {
+        if (payload.new) {
+          const orderId = payload.new.short_order_id || payload.new.order_id
+          if (orderId) {
+            setDisplayOrders((prev) =>
+              prev.map((order) =>
+                getOrderId(order) === orderId
+                  ? { ...order, status: payload.new.status, updated_at: payload.new.updated_at }
+                  : order,
+              ),
+            )
           }
-        },
-      )
+        }
+      })
       .subscribe()
 
-    return () => {
-      subscription.unsubscribe()
-    }
-  }, [supabase, processingOrders])
+    return () => subscription.unsubscribe()
+  }, [supabase])
 
   useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === "orderUpdate" && e.newValue && onRefresh) {
-        setTimeout(onRefresh, 500)
+      if (e.key === "orderStatusUpdate" && e.newValue && onRefresh) {
+        setTimeout(onRefresh, 200)
       }
     }
-
     window.addEventListener("storage", handleStorageChange)
     return () => window.removeEventListener("storage", handleStorageChange)
   }, [onRefresh])
@@ -280,7 +183,6 @@ const EnhancedOrdersTable = ({
     }
 
     const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.confirmed
-
     return <Badge className={`${config.color} px-3 py-1 font-medium rounded-full`}>{config.label}</Badge>
   }
 
@@ -391,8 +293,7 @@ const EnhancedOrdersTable = ({
   )
 
   const getActionButtons = (order: Order) => {
-    const validOrderId = getValidOrderId(order)
-    const isProcessing = processingOrders.has(validOrderId)
+    const validOrderId = getOrderId(order)
 
     if (!validOrderId) {
       return (
@@ -433,23 +334,21 @@ const EnhancedOrdersTable = ({
           </div>
           <div className="flex gap-2">
             <Button
-              onClick={() => handleStatusUpdateWithConfirmation(validOrderId, "confirmed")}
+              onClick={() => updateOrderStatus(validOrderId, "confirmed")}
               size="sm"
-              disabled={isProcessing}
               className="bg-green-600 hover:bg-green-700 text-white flex-1"
             >
-              {isProcessing ? <Clock className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-              {isProcessing ? "Processing..." : "Confirm"}
+              <Check className="w-4 h-4" />
+              Confirm
             </Button>
             <Button
-              onClick={() => handleStatusUpdateWithConfirmation(validOrderId, "cancelled")}
+              onClick={() => updateOrderStatus(validOrderId, "cancelled")}
               size="sm"
-              disabled={isProcessing}
               variant="destructive"
               className="flex-1"
             >
-              {isProcessing ? <Clock className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
-              {isProcessing ? "Processing..." : "Cancel"}
+              <X className="w-4 h-4" />
+              Cancel
             </Button>
           </div>
         </div>
@@ -478,13 +377,12 @@ const EnhancedOrdersTable = ({
             </Button>
           </div>
           <Button
-            onClick={() => handleStatusUpdateWithConfirmation(validOrderId, "completed")}
+            onClick={() => updateOrderStatus(validOrderId, "completed")}
             size="sm"
-            disabled={isProcessing}
             className="bg-blue-600 hover:bg-blue-700 text-white w-full"
           >
-            {isProcessing ? <Clock className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
-            {isProcessing ? "Processing..." : "Complete"}
+            <CheckCircle className="w-4 h-4" />
+            Complete
           </Button>
         </div>
       )
@@ -537,7 +435,7 @@ const EnhancedOrdersTable = ({
       <div className="space-y-4">
         {displayOrders.map((order) => {
           const dateTime = formatDateTime(order.created_at)
-          const validOrderId = getValidOrderId(order)
+          const validOrderId = getOrderId(order)
 
           return (
             <Card
@@ -546,7 +444,6 @@ const EnhancedOrdersTable = ({
             >
               <CardContent className="p-6">
                 <div className="grid grid-cols-12 gap-6 items-center">
-                  {/* Order ID */}
                   <div className="col-span-2">
                     <div className="space-y-2">
                       <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">ORDER ID</p>
@@ -555,7 +452,6 @@ const EnhancedOrdersTable = ({
                     </div>
                   </div>
 
-                  {/* Customer */}
                   <div className="col-span-3">
                     <div className="space-y-2">
                       <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">CUSTOMER</p>
@@ -572,7 +468,6 @@ const EnhancedOrdersTable = ({
                     </div>
                   </div>
 
-                  {/* Items */}
                   <div className="col-span-2">
                     <div className="space-y-2">
                       <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">ITEMS</p>
@@ -589,7 +484,6 @@ const EnhancedOrdersTable = ({
                     </div>
                   </div>
 
-                  {/* Special Instructions */}
                   <div className="col-span-2">
                     <div className="space-y-2">
                       <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">SPECIAL INSTRUCTIONS</p>
@@ -603,7 +497,6 @@ const EnhancedOrdersTable = ({
                     </div>
                   </div>
 
-                  {/* Total */}
                   <div className="col-span-1">
                     <div className="space-y-2">
                       <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">TOTAL</p>
@@ -611,11 +504,9 @@ const EnhancedOrdersTable = ({
                     </div>
                   </div>
 
-                  {/* Actions */}
                   <div className="col-span-2">{getActionButtons(order)}</div>
                 </div>
 
-                {/* Placed Time */}
                 <div className="absolute top-4 right-4">
                   <div className="text-right">
                     <p className="text-xs text-gray-500">{dateTime.date}</p>
@@ -628,30 +519,6 @@ const EnhancedOrdersTable = ({
           )
         })}
       </div>
-
-      {/* Confirmation Modal */}
-      {confirmationModal.isOpen && (
-        <ConfirmationModal
-          isOpen={confirmationModal.isOpen}
-          onClose={handleModalClose}
-          onConfirm={handleModalConfirm}
-          title={
-            confirmationModal.type === "confirm"
-              ? "Confirm Order"
-              : confirmationModal.type === "cancel"
-                ? "Cancel Order"
-                : "Update Order"
-          }
-          message={
-            confirmationModal.type === "confirm"
-              ? "Are you sure you want to confirm this order?"
-              : confirmationModal.type === "cancel"
-                ? "Are you sure you want to cancel this order?"
-                : "Are you sure you want to update this order?"
-          }
-          type={confirmationModal.type}
-        />
-      )}
     </div>
   )
 }
