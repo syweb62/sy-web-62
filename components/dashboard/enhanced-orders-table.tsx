@@ -106,33 +106,6 @@ const EnhancedOrdersTable = ({
       return
     }
 
-    try {
-      const validateResponse = await fetch(`/api/orders?orderId=${encodeURIComponent(orderId)}`, {
-        method: "GET",
-        headers: { "Content-Type": "application/json" },
-      })
-
-      if (!validateResponse.ok) {
-        const errorText = await validateResponse.text()
-        console.log("[v0] Order validation failed:", errorText)
-
-        setDisplayOrders((prev) => prev.filter((order) => getOrderId(order) !== orderId))
-
-        alert(
-          `Error: Order ${orderId} not found in database.\nThis order may have been deleted.\nThe page will refresh to sync with current data.`,
-        )
-
-        if (onRefresh) {
-          setTimeout(onRefresh, 1000)
-        }
-        return
-      }
-    } catch (error) {
-      console.error("[v0] Order validation error:", error)
-      alert("Network error during validation. Please check your connection.")
-      return
-    }
-
     setConfirmationModal((prev) => ({ ...prev, isProcessing: true }))
 
     try {
@@ -213,14 +186,25 @@ const EnhancedOrdersTable = ({
         }
 
         console.log("[v0] API error response:", errorText)
-        alert(
-          `Error: ${errorMessage}\n\nThis order may no longer exist in the database.\nThe page will refresh automatically to sync with current data.`,
-        )
 
-        setDisplayOrders((prev) => prev.filter((order) => getOrderId(order) !== orderId))
+        if (response.status === 404) {
+          alert(
+            `Error: Order ${orderId} not found in database.\nThis order may have been deleted or doesn't exist.\nRemoving from display and refreshing data...`,
+          )
 
-        if (onRefresh) {
-          setTimeout(onRefresh, 1000)
+          // Remove the non-existent order from display
+          setDisplayOrders((prev) => prev.filter((order) => getOrderId(order) !== orderId))
+
+          // Trigger parent refresh to sync with database
+          if (onRefresh) {
+            setTimeout(onRefresh, 1000)
+          }
+        } else {
+          alert(`Error: ${errorMessage}\n\nPlease refresh the page to sync with current data.`)
+
+          if (onRefresh) {
+            setTimeout(onRefresh, 1000)
+          }
         }
       }
     } catch (error) {
@@ -476,7 +460,7 @@ const EnhancedOrdersTable = ({
     const orderExists = displayOrders.find((order) => getOrderId(order) === orderId)
     if (!orderExists) {
       console.log("[v0] Cannot show confirmation - order not found:", orderId)
-      alert(`Error: Order ${orderId} not found. The page will refresh to sync with current data.`)
+      alert(`Error: Order ${orderId} not found. Please refresh the page to sync with current data.`)
       if (onRefresh) {
         setTimeout(onRefresh, 1000)
       }
