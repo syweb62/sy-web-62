@@ -511,6 +511,35 @@ const EnhancedOrdersTable = ({
       return
     }
 
+    const order = orderExists
+    const displayId = getDisplayOrderId(order)
+    const databaseId = getDatabaseOrderId(order)
+
+    if (!displayId || !databaseId) {
+      console.log("[v0] Data integrity issue - missing order IDs:", { displayId, databaseId, order })
+      alert(
+        `Error: Order data is corrupted (missing IDs).\nDisplay ID: ${displayId}\nDatabase ID: ${databaseId}\n\nPlease refresh the page to sync with current data.`,
+      )
+      if (onRefresh) {
+        setTimeout(onRefresh, 1000)
+      }
+      return
+    }
+
+    // Additional validation to ensure the order has valid structure
+    if (!order.short_order_id || !order.order_id) {
+      console.log("[v0] Data integrity issue - invalid order structure:", order)
+      alert(
+        `Error: Order data is corrupted.\nShort ID: ${order.short_order_id}\nOrder ID: ${order.order_id}\n\nThis order may have been deleted or corrupted.\nPlease refresh the page to sync with current data.`,
+      )
+      if (onRefresh) {
+        setTimeout(onRefresh, 1000)
+      }
+      return
+    }
+
+    console.log("[v0] Order validation passed:", { displayId, databaseId, action })
+
     setConfirmationModal({
       isOpen: true,
       orderId, // This is the database ID (UUID)
