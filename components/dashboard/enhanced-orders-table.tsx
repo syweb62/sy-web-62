@@ -58,8 +58,12 @@ const EnhancedOrdersTable = ({
     isProcessing: false, // Added processing state
   })
 
-  const getOrderId = (order: Order): string => {
+  const getDisplayOrderId = (order: Order): string => {
     return order.short_order_id || order.order_id || ""
+  }
+
+  const getDatabaseOrderId = (order: Order): string => {
+    return order.order_id || ""
   }
 
   useEffect(() => {
@@ -125,7 +129,7 @@ const EnhancedOrdersTable = ({
 
         setDisplayOrders((prev) =>
           prev.map((order) =>
-            getOrderId(order) === orderId
+            order.order_id === orderId
               ? { ...order, status: newStatus as Order["status"], updated_at: new Date().toISOString() }
               : order,
           ),
@@ -134,7 +138,8 @@ const EnhancedOrdersTable = ({
         console.log("[v0] Local state updated successfully")
         alert(`Order ${newStatus} successfully!`)
 
-        const eventData = { orderId, newStatus, timestamp: new Date().toISOString() }
+        const displayId = displayOrders.find((order) => order.order_id === orderId)?.short_order_id || orderId
+        const eventData = { orderId: displayId, newStatus, timestamp: new Date().toISOString() }
 
         // Dispatch custom event
         window.dispatchEvent(new CustomEvent("orderStatusChanged", { detail: eventData }))
@@ -233,13 +238,14 @@ const EnhancedOrdersTable = ({
 
             if (payload.eventType === "UPDATE" && payload.new) {
               const updatedOrder = payload.new
-              const orderId = updatedOrder.short_order_id || updatedOrder.order_id
+              const databaseId = updatedOrder.order_id
+              const displayId = updatedOrder.short_order_id || updatedOrder.order_id
 
-              if (orderId) {
-                console.log("[v0] Updating local order display for:", orderId)
+              if (databaseId) {
+                console.log("[v0] Updating local order display for:", displayId)
                 setDisplayOrders((prev) =>
                   prev.map((order) =>
-                    getOrderId(order) === orderId
+                    order.order_id === databaseId
                       ? {
                           ...order,
                           status: updatedOrder.status as Order["status"],
@@ -250,7 +256,7 @@ const EnhancedOrdersTable = ({
                 )
 
                 const eventData = {
-                  orderId,
+                  orderId: displayId, // Use display ID for events
                   newStatus: updatedOrder.status,
                   timestamp: new Date().toISOString(),
                 }
@@ -287,11 +293,12 @@ const EnhancedOrdersTable = ({
 
             if (payload.eventType === "DELETE" && payload.old) {
               const deletedOrder = payload.old
-              const orderId = deletedOrder.short_order_id || deletedOrder.order_id
+              const databaseId = deletedOrder.order_id
+              const displayId = deletedOrder.short_order_id || deletedOrder.order_id
 
-              if (orderId) {
-                console.log("[v0] Removing deleted order from display:", orderId)
-                setDisplayOrders((prev) => prev.filter((order) => getOrderId(order) !== orderId))
+              if (databaseId) {
+                console.log("[v0] Removing deleted order from display:", displayId)
+                setDisplayOrders((prev) => prev.filter((order) => order.order_id !== databaseId))
               }
             }
           },
@@ -493,10 +500,11 @@ const EnhancedOrdersTable = ({
   )
 
   const showConfirmation = (orderId: string, action: string, actionLabel: string) => {
-    const orderExists = displayOrders.find((order) => getOrderId(order) === orderId)
+    const orderExists = displayOrders.find((order) => getDatabaseOrderId(order) === orderId)
     if (!orderExists) {
       console.log("[v0] Cannot show confirmation - order not found:", orderId)
-      alert(`Error: Order ${orderId} not found. Please refresh the page to sync with current data.`)
+      const displayId = displayOrders.find((order) => order.order_id === orderId)?.short_order_id || orderId
+      alert(`Error: Order ${displayId} not found. Please refresh the page to sync with current data.`)
       if (onRefresh) {
         setTimeout(onRefresh, 1000)
       }
@@ -505,10 +513,10 @@ const EnhancedOrdersTable = ({
 
     setConfirmationModal({
       isOpen: true,
-      orderId,
+      orderId, // This is the database ID (UUID)
       action,
       actionLabel,
-      isProcessing: false, // Reset processing state when opening modal
+      isProcessing: false,
     })
   }
 
@@ -549,9 +557,10 @@ const EnhancedOrdersTable = ({
   }
 
   const getActionButtons = (order: Order) => {
-    const validOrderId = getOrderId(order)
+    const displayId = getDisplayOrderId(order)
+    const databaseId = getDatabaseOrderId(order)
 
-    if (!validOrderId) {
+    if (!displayId || !databaseId) {
       return (
         <div className="space-y-3">
           <div className="flex gap-2">
@@ -572,7 +581,7 @@ const EnhancedOrdersTable = ({
         <div className="space-y-3">
           <div className="flex gap-2">
             <Button
-              onClick={() => window.open(`/dashboard/orders/${validOrderId}`, "_blank")}
+              onClick={() => window.open(`/dashboard/orders/${displayId}`, "_blank")}
               size="sm"
               variant="outline"
               className="border-gray-600 text-gray-300 hover:bg-gray-800 bg-transparent p-2"
@@ -593,7 +602,7 @@ const EnhancedOrdersTable = ({
               onClick={(e) => {
                 e.preventDefault()
                 e.stopPropagation()
-                showConfirmation(validOrderId, "confirmed", "confirm")
+                showConfirmation(databaseId, "confirmed", "confirm")
               }}
               size="sm"
               className="bg-green-600 hover:bg-green-700 text-white flex-1 cursor-pointer"
@@ -606,7 +615,7 @@ const EnhancedOrdersTable = ({
               onClick={(e) => {
                 e.preventDefault()
                 e.stopPropagation()
-                showConfirmation(validOrderId, "cancelled", "cancel")
+                showConfirmation(databaseId, "cancelled", "cancel")
               }}
               size="sm"
               variant="destructive"
@@ -626,7 +635,7 @@ const EnhancedOrdersTable = ({
         <div className="space-y-3">
           <div className="flex gap-2">
             <Button
-              onClick={() => window.open(`/dashboard/orders/${validOrderId}`, "_blank")}
+              onClick={() => window.open(`/dashboard/orders/${displayId}`, "_blank")}
               size="sm"
               variant="outline"
               className="border-gray-600 text-gray-300 hover:bg-gray-800 bg-transparent p-2"
@@ -646,7 +655,7 @@ const EnhancedOrdersTable = ({
             onClick={(e) => {
               e.preventDefault()
               e.stopPropagation()
-              showConfirmation(validOrderId, "completed", "complete")
+              showConfirmation(databaseId, "completed", "complete")
             }}
             size="sm"
             className="bg-blue-600 hover:bg-blue-700 text-white w-full cursor-pointer"
@@ -663,7 +672,7 @@ const EnhancedOrdersTable = ({
       <div className="space-y-3">
         <div className="flex gap-2">
           <Button
-            onClick={() => window.open(`/dashboard/orders/${validOrderId}`, "_blank")}
+            onClick={() => window.open(`/dashboard/orders/${displayId}`, "_blank")}
             size="sm"
             variant="outline"
             className="border-gray-600 text-gray-300 hover:bg-gray-800 bg-transparent p-2"
@@ -706,11 +715,11 @@ const EnhancedOrdersTable = ({
       <div className="space-y-4">
         {displayOrders.map((order) => {
           const dateTime = formatDateTime(order.created_at)
-          const validOrderId = getOrderId(order)
+          const displayId = getDisplayOrderId(order)
 
           return (
             <Card
-              key={validOrderId || `order-${order.customer_name}-${order.created_at}`}
+              key={order.order_id || `order-${order.customer_name}-${order.created_at}`}
               className="bg-gray-900/50 border-gray-700/30 hover:bg-gray-900/70 transition-all duration-200 relative"
             >
               <CardContent className="p-6">
@@ -809,7 +818,11 @@ const EnhancedOrdersTable = ({
 
               <p className="text-gray-300 mb-2">Are you sure you want to {confirmationModal.actionLabel} this order?</p>
               <p className="text-gray-400 text-sm mb-8">
-                Order ID: <span className="font-mono font-semibold text-white">{confirmationModal.orderId}</span>
+                Order ID:{" "}
+                <span className="font-mono font-semibold text-white">
+                  {displayOrders.find((order) => order.order_id === confirmationModal.orderId)?.short_order_id ||
+                    confirmationModal.orderId}
+                </span>
               </p>
 
               <div className="flex gap-3">
