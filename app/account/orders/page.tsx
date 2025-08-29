@@ -100,7 +100,7 @@ export default function OrdersPage() {
       console.log("[v0] Order status change event received:", event.detail)
       if (event.detail?.orderId) {
         console.log("[v0] Refreshing order history due to status change")
-        setTimeout(() => refetch(), 100)
+        setTimeout(() => refetch(), 300)
       }
     }
 
@@ -110,10 +110,10 @@ export default function OrdersPage() {
         try {
           const data = JSON.parse(event.newValue)
           console.log("[v0] Order update data:", data)
-          setTimeout(() => refetch(), 100)
+          setTimeout(() => refetch(), 300)
         } catch (e) {
           console.log("[v0] Could not parse storage data:", e)
-          setTimeout(() => refetch(), 100)
+          setTimeout(() => refetch(), 300)
         }
       }
     }
@@ -121,7 +121,7 @@ export default function OrdersPage() {
     const handleMessage = (event: MessageEvent) => {
       if (event.data?.type === "orderStatusChanged" && event.data?.orderId) {
         console.log("[v0] Message event received for order status change:", event.data)
-        setTimeout(() => refetch(), 100)
+        setTimeout(() => refetch(), 300)
       }
     }
 
@@ -137,7 +137,7 @@ export default function OrdersPage() {
         (payload) => {
           console.log("[v0] Website received real-time order update:", payload)
           if (payload.new) {
-            setTimeout(() => refetch(), 50)
+            setTimeout(() => refetch(), 200)
           }
         },
       )
@@ -147,11 +147,22 @@ export default function OrdersPage() {
           console.error("[v0] Website real-time subscription error, attempting to reconnect...")
           setTimeout(() => {
             subscription.unsubscribe()
+            setTimeout(() => {
+              const newSubscription = supabase
+                .channel("website-orders-realtime-retry")
+                .on("postgres_changes", { event: "UPDATE", schema: "public", table: "orders" }, (payload) => {
+                  console.log("[v0] Website received real-time order update (retry):", payload)
+                  if (payload.new) {
+                    setTimeout(() => refetch(), 200)
+                  }
+                })
+                .subscribe()
+            }, 2000)
           }, 5000)
         }
       })
 
-    refetch()
+    setTimeout(() => refetch(), 100)
 
     window.addEventListener("orderStatusChanged", handleOrderStatusChange as EventListener)
     window.addEventListener("storage", handleStorageChange)
