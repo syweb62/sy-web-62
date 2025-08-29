@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase-server"
+import { generateShortOrderId } from "@/lib/order-id-generator" // Import short order ID generator
 
 export async function GET(request: NextRequest) {
   try {
@@ -231,10 +232,14 @@ export async function POST(request: NextRequest) {
     const supabase = createClient()
     const orderData = await request.json()
 
+    const shortOrderId = generateShortOrderId()
+    console.log("[v0] API POST: Generated short order ID:", shortOrderId)
+
     const { data: order, error: orderError } = await supabase
       .from("orders")
       .insert([
         {
+          short_order_id: shortOrderId, // Add short order ID for user display
           customer_name: orderData.customer_name,
           phone: orderData.phone,
           address: orderData.address,
@@ -251,11 +256,19 @@ export async function POST(request: NextRequest) {
       .select()
       .single()
 
-    if (orderError) throw orderError
+    if (orderError) {
+      console.error("[v0] API POST: Order creation failed:", orderError)
+      throw orderError
+    }
+
+    console.log("[v0] API POST: Order created successfully with both IDs:", {
+      order_id: order.order_id,
+      short_order_id: order.short_order_id,
+    })
 
     if (orderData.items && orderData.items.length > 0) {
       const orderItems = orderData.items.map((item: any) => ({
-        order_id: order.order_id,
+        order_id: order.order_id, // Use the database-generated UUID for order items
         menu_item_id: item.menu_item_id,
         item_name: item.name,
         item_description: item.description,
@@ -267,12 +280,23 @@ export async function POST(request: NextRequest) {
 
       const { error: itemsError } = await supabase.from("order_items").insert(orderItems)
 
-      if (itemsError) throw itemsError
+      if (itemsError) {
+        console.error("[v0] API POST: Order items creation failed:", itemsError)
+        throw itemsError
+      }
+
+      console.log("[v0] API POST: Order items created successfully")
     }
 
-    return NextResponse.json({ success: true, order })
+    return NextResponse.json({
+      success: true,
+      order: {
+        ...order,
+        display_id: order.short_order_id, // Include display ID in response
+      },
+    })
   } catch (error) {
-    console.error("Order creation API error:", error)
+    console.error("[v0] API POST: Order creation error:", error)
     return NextResponse.json(
       { error: "Internal server error", details: error instanceof Error ? error.message : "Unknown error" },
       { status: 500 },
