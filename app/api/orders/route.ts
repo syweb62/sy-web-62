@@ -126,27 +126,27 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "Order ID and status are required" }, { status: 400 })
     }
 
-    console.log("[v0] API PATCH: Attempting short_order_id update")
+    console.log("[v0] API PATCH: Attempting order_id (UUID) update")
     const { data, error } = await supabase
       .from("orders")
       .update({
         status,
         updated_at: new Date().toISOString(),
       })
-      .eq("short_order_id", orderId)
+      .eq("order_id", orderId) // Use order_id (UUID) instead of short_order_id
       .select()
 
     if (error) {
-      console.error("[v0] API PATCH: short_order_id update failed:", error)
+      console.error("[v0] API PATCH: order_id update failed:", error)
       return NextResponse.json({ error: `Order ${orderId} not found in database`, orderId }, { status: 404 })
     }
 
     if (!data || data.length === 0) {
-      console.error("[v0] API PATCH: No order found with short_order_id:", orderId)
+      console.error("[v0] API PATCH: No order found with order_id:", orderId)
       return NextResponse.json({ error: `Order ${orderId} not found in database`, orderId }, { status: 404 })
     }
 
-    console.log("[v0] API PATCH: short_order_id update successful")
+    console.log("[v0] API PATCH: order_id update successful")
 
     return NextResponse.json({
       success: true,
