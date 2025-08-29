@@ -70,8 +70,8 @@ export async function GET(request: NextRequest) {
     const formattedOrders =
       orders?.map((order) => ({
         id: order.short_order_id || order.order_id,
-        order_id: order.short_order_id || order.order_id,
-        short_order_id: order.short_order_id,
+        order_id: order.order_id, // Keep the real UUID for database operations
+        short_order_id: order.short_order_id, // Keep short_order_id for display
         customer_name: order.customer_name || "Guest",
         phone: order.phone || "N/A",
         address: order.address || "No address provided",
