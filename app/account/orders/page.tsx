@@ -96,23 +96,41 @@ export default function OrdersPage() {
 
   useEffect(() => {
     const handleOrderStatusChange = (event: CustomEvent) => {
+      console.log("[v0] Order status change event received:", event.detail)
       if (event.detail?.orderId) {
+        console.log("[v0] Refreshing order history due to status change")
         setTimeout(() => refetch(), 200)
       }
     }
 
     const handleStorageChange = (event: StorageEvent) => {
-      if (event.key === "orderUpdate" && event.newValue) {
+      if ((event.key === "orderUpdate" || event.key === "orderStatusUpdate") && event.newValue) {
+        console.log("[v0] Storage change detected, refreshing order history")
+        try {
+          const data = JSON.parse(event.newValue)
+          console.log("[v0] Order update data:", data)
+        } catch (e) {
+          console.log("[v0] Could not parse storage data:", e)
+        }
         setTimeout(() => refetch(), 300)
+      }
+    }
+
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type === "orderStatusChanged" && event.data?.orderId) {
+        console.log("[v0] Message event received for order status change:", event.data)
+        setTimeout(() => refetch(), 200)
       }
     }
 
     window.addEventListener("orderStatusChanged", handleOrderStatusChange as EventListener)
     window.addEventListener("storage", handleStorageChange)
+    window.addEventListener("message", handleMessage)
 
     return () => {
       window.removeEventListener("orderStatusChanged", handleOrderStatusChange as EventListener)
       window.removeEventListener("storage", handleStorageChange)
+      window.removeEventListener("message", handleMessage)
     }
   }, [refetch])
 
