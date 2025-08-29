@@ -64,8 +64,40 @@ const EnhancedOrdersTable = ({
   }
 
   useEffect(() => {
-    setDisplayOrders(orders)
+    // Only sync with parent orders if we have valid data
+    if (orders && orders.length >= 0) {
+      console.log("[v0] Syncing with parent orders:", orders.length, "orders")
+      setDisplayOrders(orders)
+    }
   }, [orders])
+
+  const validateOrderExists = async (orderId: string): Promise<boolean> => {
+    try {
+      const response = await fetch(`/api/orders?search=${orderId}`)
+      if (response.ok) {
+        const data = await response.json()
+        const orderExists = data.orders?.some(
+          (order: any) => order.short_order_id === orderId || order.order_id === orderId,
+        )
+        console.log("[v0] Order validation result for", orderId, ":", orderExists)
+        return orderExists
+      }
+      return false
+    } catch (error) {
+      console.error("[v0] Order validation failed:", error)
+      return false
+    }
+  }
+
+  const removeOrderFromDisplay = (orderId: string) => {
+    console.log("[v0] Removing order from display:", orderId)
+    setDisplayOrders((prev) => prev.filter((order) => getOrderId(order) !== orderId))
+
+    // Notify parent component to refresh data
+    if (onRefresh) {
+      setTimeout(onRefresh, 500)
+    }
+  }
 
   const formatDateTime = useCallback((dateString: string) => {
     const date = new Date(dateString)
@@ -188,14 +220,14 @@ const EnhancedOrdersTable = ({
         }
 
         console.log("[v0] API error response:", errorText)
-        alert(
-          `Error: ${errorMessage}\n\nThis order may no longer exist in the database.\nThe page will refresh automatically to sync with current data.`,
-        )
 
-        setDisplayOrders((prev) => prev.filter((order) => getOrderId(order) !== orderId))
-
-        if (onRefresh) {
-          setTimeout(onRefresh, 1000)
+        if (response.status === 404) {
+          alert(
+            `Error: Order not found (Order ID: ${orderId})\n\nThis order may no longer exist in the database.\nThe page will refresh automatically to sync with current data.`,
+          )
+          removeOrderFromDisplay(orderId)
+        } else {
+          alert(`Error: ${errorMessage}`)
         }
       }
     } catch (error) {
@@ -225,6 +257,16 @@ const EnhancedOrdersTable = ({
 
             const eventData = { orderId, newStatus: payload.new.status, timestamp: new Date().toISOString() }
             window.dispatchEvent(new CustomEvent("orderStatusChanged", { detail: eventData }))
+          }
+        }
+      })
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "orders" }, (payload) => {
+        console.log("[v0] Real-time database delete received:", payload)
+        if (payload.old) {
+          const orderId = payload.old.short_order_id || payload.old.order_id
+          if (orderId) {
+            console.log("[v0] Removing deleted order from display:", orderId)
+            removeOrderFromDisplay(orderId)
           }
         }
       })
@@ -382,10 +424,10 @@ const EnhancedOrdersTable = ({
     [generatePrintContent],
   )
 
-  const showConfirmation = (orderId: string, action: string, actionLabel: string) => {
+  const showConfirmation = async (orderId: string, action: string, actionLabel: string) => {
     const orderExists = displayOrders.find((order) => getOrderId(order) === orderId)
     if (!orderExists) {
-      console.log("[v0] Cannot show confirmation - order not found:", orderId)
+      console.log("[v0] Cannot show confirmation - order not found in display:", orderId)
       alert(`Error: Order ${orderId} not found. The page will refresh to sync with current data.`)
       if (onRefresh) {
         setTimeout(onRefresh, 1000)
@@ -393,12 +435,25 @@ const EnhancedOrdersTable = ({
       return
     }
 
+    console.log("[v0] Validating order exists in database:", orderId)
+    const isValidOrder = await validateOrderExists(orderId)
+
+    if (!isValidOrder) {
+      console.log("[v0] Order validation failed - removing from display:", orderId)
+      alert(
+        `Error: Order ${orderId} no longer exists in the database.\n\nThis order has been removed from the display.`,
+      )
+      removeOrderFromDisplay(orderId)
+      return
+    }
+
+    console.log("[v0] Order validation successful - showing confirmation:", orderId)
     setConfirmationModal({
       isOpen: true,
       orderId,
       action,
       actionLabel,
-      isProcessing: false, // Reset processing state when opening modal
+      isProcessing: false,
     })
   }
 
