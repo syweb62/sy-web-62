@@ -126,7 +126,7 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "Order ID and status are required" }, { status: 400 })
     }
 
-    console.log("[v0] API PATCH: Attempting short_order_id update first")
+    console.log("[v0] API PATCH: Attempting short_order_id update")
     const { data, error } = await supabase
       .from("orders")
       .update({
@@ -138,34 +138,6 @@ export async function PATCH(request: NextRequest) {
 
     if (error) {
       console.error("[v0] API PATCH: short_order_id update failed:", error)
-
-      if (orderId.length === 36 && orderId.includes("-")) {
-        console.log("[v0] API PATCH: Falling back to UUID update")
-        const { data: uuidData, error: uuidError } = await supabase
-          .from("orders")
-          .update({
-            status,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("order_id", orderId)
-          .select()
-
-        if (uuidError || !uuidData || uuidData.length === 0) {
-          console.error("[v0] API PATCH: Both update methods failed:", uuidError?.message || "No matching records")
-          return NextResponse.json({ error: `Order ${orderId} not found in database`, orderId }, { status: 404 })
-        }
-
-        console.log("[v0] API PATCH: UUID update successful")
-        return NextResponse.json({
-          success: true,
-          message: "Order status updated successfully",
-          orderId,
-          newStatus: status,
-          updatedOrder: uuidData[0],
-          timestamp: new Date().toISOString(),
-        })
-      }
-
       return NextResponse.json({ error: `Order ${orderId} not found in database`, orderId }, { status: 404 })
     }
 
@@ -203,10 +175,13 @@ export async function POST(request: NextRequest) {
     const supabase = createClient()
     const orderData = await request.json()
 
+    const shortOrderId = Math.floor(10000 + Math.random() * 90000).toString()
+
     const { data: order, error: orderError } = await supabase
       .from("orders")
       .insert([
         {
+          short_order_id: shortOrderId,
           customer_name: orderData.customer_name,
           phone: orderData.phone,
           address: orderData.address,

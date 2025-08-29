@@ -108,7 +108,7 @@ const EnhancedOrdersTable = ({
       return
     }
 
-    const orderExists = displayOrders.find((order) => getOrderId(order) === orderId)
+    const orderExists = displayOrders.find((order) => order.short_order_id === orderId)
     if (!orderExists) {
       console.log("[v0] Error: Order not found in current display orders:", orderId)
       alert(`Error: Order ${orderId} not found in current orders. Please refresh the page.`)
@@ -134,10 +134,9 @@ const EnhancedOrdersTable = ({
         const responseData = await response.json()
         console.log("[v0] API response data:", responseData)
 
-        // Update local state immediately
         setDisplayOrders((prev) =>
           prev.map((order) =>
-            getOrderId(order) === orderId
+            order.short_order_id === orderId
               ? { ...order, status: newStatus as Order["status"], updated_at: new Date().toISOString() }
               : order,
           ),
@@ -210,7 +209,7 @@ const EnhancedOrdersTable = ({
             console.log("[v0] Updating local order display for:", orderId)
             setDisplayOrders((prev) =>
               prev.map((order) =>
-                getOrderId(order) === orderId
+                order.short_order_id === orderId
                   ? { ...order, status: payload.new.status, updated_at: payload.new.updated_at }
                   : order,
               ),
