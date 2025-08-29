@@ -11,11 +11,7 @@ export async function GET(request: NextRequest) {
     const orderId = searchParams.get("orderId") // Added orderId parameter for validation
 
     if (orderId) {
-      const { data: order, error } = await supabase
-        .from("orders")
-        .select("order_id, short_order_id, status")
-        .eq("short_order_id", orderId)
-        .single()
+      const { data: order, error } = await supabase.rpc("get_order_by_identifier", { identifier: orderId }).single()
 
       if (error || !order) {
         return NextResponse.json({ error: "Order not found", orderId }, { status: 404 })
@@ -69,7 +65,7 @@ export async function GET(request: NextRequest) {
 
     const formattedOrders =
       orders?.map((order) => ({
-        id: order.short_order_id || order.order_id,
+        id: order.short_order_id,
         order_id: order.order_id, // Keep the real UUID for database operations
         short_order_id: order.short_order_id, // Keep short_order_id for display
         customer_name: order.customer_name || "Guest",
@@ -126,27 +122,23 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "Order ID and status are required" }, { status: 400 })
     }
 
-    console.log("[v0] API PATCH: Attempting order_id (UUID) update")
-    const { data, error } = await supabase
-      .from("orders")
-      .update({
-        status,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("order_id", orderId) // Use order_id (UUID) instead of short_order_id
-      .select()
+    console.log("[v0] API PATCH: Using universal update function")
+    const { data, error } = await supabase.rpc("update_order_status_by_identifier", {
+      identifier: orderId,
+      new_status: status,
+    })
 
     if (error) {
-      console.error("[v0] API PATCH: order_id update failed:", error)
+      console.error("[v0] API PATCH: Universal update failed:", error)
       return NextResponse.json({ error: `Order ${orderId} not found in database`, orderId }, { status: 404 })
     }
 
     if (!data || data.length === 0) {
-      console.error("[v0] API PATCH: No order found with order_id:", orderId)
+      console.error("[v0] API PATCH: No order found with identifier:", orderId)
       return NextResponse.json({ error: `Order ${orderId} not found in database`, orderId }, { status: 404 })
     }
 
-    console.log("[v0] API PATCH: order_id update successful")
+    console.log("[v0] API PATCH: Universal update successful")
 
     return NextResponse.json({
       success: true,
