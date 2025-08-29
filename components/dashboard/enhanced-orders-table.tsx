@@ -316,23 +316,19 @@ const EnhancedOrdersTable = ({
               reconnectTimeout = null
             }
           } else if (status === "CHANNEL_ERROR" || status === "CLOSED") {
-            console.error("[v0] Real-time subscription error:", status)
-
             // Clean up current subscription
             if (subscription) {
               subscription.unsubscribe()
               subscription = null
             }
 
-            // Attempt to reconnect after a delay
             if (!reconnectTimeout && isComponentMounted) {
               reconnectTimeout = setTimeout(() => {
                 if (isComponentMounted) {
-                  console.log("[v0] Attempting to reconnect real-time subscription...")
                   createSubscription()
                 }
                 reconnectTimeout = null
-              }, 3000) // Wait 3 seconds before reconnecting
+              }, 10000) // Wait 10 seconds before reconnecting
             }
           }
         })
