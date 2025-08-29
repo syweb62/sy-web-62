@@ -5,6 +5,44 @@ export async function GET(request: NextRequest) {
   try {
     const supabase = createClient()
     const { searchParams } = new URL(request.url)
+    const orderId = searchParams.get("orderId")
+
+    // If orderId is provided, validate the order exists
+    if (orderId) {
+      console.log("[v0] API GET: Validating order existence:", orderId)
+
+      let orderExists = false
+
+      // Try UUID format first
+      if (orderId.length === 36 && orderId.includes("-")) {
+        const { data, error } = await supabase.from("orders").select("order_id").eq("order_id", orderId).limit(1)
+
+        if (!error && data && data.length > 0) {
+          orderExists = true
+        }
+      }
+
+      // Try short_order_id if UUID failed
+      if (!orderExists) {
+        const { data, error } = await supabase
+          .from("orders")
+          .select("short_order_id")
+          .eq("short_order_id", orderId)
+          .limit(1)
+
+        if (!error && data && data.length > 0) {
+          orderExists = true
+        }
+      }
+
+      if (!orderExists) {
+        console.log("[v0] API GET: Order validation failed - order not found:", orderId)
+        return NextResponse.json({ error: "Order not found", orderId }, { status: 404 })
+      }
+
+      console.log("[v0] API GET: Order validation successful:", orderId)
+      return NextResponse.json({ success: true, orderId, exists: true })
+    }
 
     const status = searchParams.get("status")
     const search = searchParams.get("search")

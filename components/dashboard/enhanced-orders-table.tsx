@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { Eye, Printer, Check, X, CheckCircle, AlertTriangle, Loader2 } from "lucide-react"
-import { createClient } from "@/lib/supabase/client"
+import { supabase } from "@/lib/supabase"
 
 interface Order {
   order_id: string
@@ -57,34 +57,14 @@ const EnhancedOrdersTable = ({
     actionLabel: "",
     isProcessing: false, // Added processing state
   })
-  const supabase = createClient()
 
   const getOrderId = (order: Order): string => {
     return order.short_order_id || order.order_id || ""
   }
 
-  const validateOrderExists = async (orderId: string): Promise<boolean> => {
-    try {
-      console.log("[v0] Validating order exists:", orderId)
-      const response = await fetch(`/api/orders?search=${encodeURIComponent(orderId)}`)
-      if (!response.ok) return false
-
-      const data = await response.json()
-      const orders = data.orders || []
-      const exists = orders.some((order: any) => order.short_order_id === orderId || order.order_id === orderId)
-
-      console.log("[v0] Order validation result:", { orderId, exists })
-      return exists
-    } catch (error) {
-      console.error("[v0] Order validation failed:", error)
-      return false
-    }
-  }
-
   useEffect(() => {
-    console.log("[v0] Initial orders sync:", orders.length)
     setDisplayOrders(orders)
-  }, [orders]) // Updated to trigger when orders change
+  }, [orders])
 
   const formatDateTime = useCallback((dateString: string) => {
     const date = new Date(dateString)
@@ -126,15 +106,30 @@ const EnhancedOrdersTable = ({
       return
     }
 
-    const orderExists = displayOrders.find((order) => getOrderId(order) === orderId)
-    if (!orderExists) {
-      console.log("[v0] Error: Order not found in current display orders:", orderId)
-      alert(`Error: Order ${orderId} not found. Refreshing to sync with database...`)
+    try {
+      const validateResponse = await fetch(`/api/orders?orderId=${encodeURIComponent(orderId)}`, {
+        method: "GET",
+        headers: { "Content-Type": "application/json" },
+      })
 
-      setDisplayOrders((prev) => prev.filter((order) => getOrderId(order) !== orderId))
-      if (onRefresh) {
-        setTimeout(onRefresh, 1000)
+      if (!validateResponse.ok) {
+        const errorText = await validateResponse.text()
+        console.log("[v0] Order validation failed:", errorText)
+
+        setDisplayOrders((prev) => prev.filter((order) => getOrderId(order) !== orderId))
+
+        alert(
+          `Error: Order ${orderId} not found in database.\nThis order may have been deleted.\nThe page will refresh to sync with current data.`,
+        )
+
+        if (onRefresh) {
+          setTimeout(onRefresh, 1000)
+        }
+        return
       }
+    } catch (error) {
+      console.error("[v0] Order validation error:", error)
+      alert("Network error during validation. Please check your connection.")
       return
     }
 
@@ -168,10 +163,10 @@ const EnhancedOrdersTable = ({
 
         const eventData = { orderId, newStatus, timestamp: new Date().toISOString() }
 
-        // Method 1: Custom event
+        // Dispatch custom event
         window.dispatchEvent(new CustomEvent("orderStatusChanged", { detail: eventData }))
 
-        // Method 2: localStorage (multiple keys for compatibility)
+        // Update localStorage
         try {
           localStorage.setItem("orderStatusUpdate", JSON.stringify(eventData))
           localStorage.setItem("orderUpdate", JSON.stringify(eventData))
@@ -183,9 +178,15 @@ const EnhancedOrdersTable = ({
           console.log("[v0] localStorage error (ignored):", e)
         }
 
-        // Method 3: postMessage for cross-window communication
+        // Post message for cross-window communication
         try {
-          window.postMessage({ type: "orderStatusChanged", ...eventData }, "*")
+          window.postMessage(
+            {
+              type: "orderStatusChanged",
+              ...eventData,
+            },
+            window.location.origin,
+          )
         } catch (e) {
           console.log("[v0] postMessage error (ignored):", e)
         }
@@ -212,17 +213,11 @@ const EnhancedOrdersTable = ({
         }
 
         console.log("[v0] API error response:", errorText)
+        alert(
+          `Error: ${errorMessage}\n\nThis order may no longer exist in the database.\nThe page will refresh automatically to sync with current data.`,
+        )
 
-        if (response.status === 404) {
-          alert(
-            `Error: Order not found (Order ID: ${orderId})\n\nThis order may no longer exist in the database.\nThe page will refresh automatically to sync with current data.`,
-          )
-
-          // Remove non-existent order from display
-          setDisplayOrders((prev) => prev.filter((order) => getOrderId(order) !== orderId))
-        } else {
-          alert(`Error: ${errorMessage}`)
-        }
+        setDisplayOrders((prev) => prev.filter((order) => getOrderId(order) !== orderId))
 
         if (onRefresh) {
           setTimeout(onRefresh, 1000)
@@ -238,45 +233,100 @@ const EnhancedOrdersTable = ({
 
   useEffect(() => {
     const subscription = supabase
-      .channel("orders-updates")
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "orders" }, (payload) => {
-        console.log("[v0] Real-time UPDATE received:", payload)
-        if (payload.new) {
-          const orderId = payload.new.short_order_id || payload.new.order_id
-          if (orderId) {
-            console.log("[v0] Updating local order display for:", orderId)
-            setDisplayOrders((prev) =>
-              prev.map((order) =>
-                getOrderId(order) === orderId
-                  ? { ...order, status: payload.new.status, updated_at: payload.new.updated_at }
-                  : order,
-              ),
-            )
+      .channel("orders-realtime")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "orders",
+        },
+        (payload) => {
+          console.log("[v0] Real-time database change received:", payload)
 
-            const eventData = { orderId, newStatus: payload.new.status, timestamp: new Date().toISOString() }
-            window.dispatchEvent(new CustomEvent("orderStatusChanged", { detail: eventData }))
+          if (payload.eventType === "UPDATE" && payload.new) {
+            const updatedOrder = payload.new
+            const orderId = updatedOrder.short_order_id || updatedOrder.order_id
+
+            if (orderId) {
+              console.log("[v0] Updating local order display for:", orderId)
+              setDisplayOrders((prev) =>
+                prev.map((order) =>
+                  getOrderId(order) === orderId
+                    ? {
+                        ...order,
+                        status: updatedOrder.status as Order["status"],
+                        updated_at: updatedOrder.updated_at || new Date().toISOString(),
+                      }
+                    : order,
+                ),
+              )
+
+              const eventData = {
+                orderId,
+                newStatus: updatedOrder.status,
+                timestamp: new Date().toISOString(),
+              }
+
+              // Dispatch custom event
+              window.dispatchEvent(new CustomEvent("orderStatusChanged", { detail: eventData }))
+
+              // Update localStorage for cross-window sync
+              try {
+                localStorage.setItem("orderStatusUpdate", JSON.stringify(eventData))
+                localStorage.setItem("orderUpdate", JSON.stringify(eventData))
+                setTimeout(() => {
+                  localStorage.removeItem("orderStatusUpdate")
+                  localStorage.removeItem("orderUpdate")
+                }, 1000)
+              } catch (e) {
+                console.log("[v0] localStorage error (ignored):", e)
+              }
+
+              // Post message for cross-window communication
+              try {
+                window.postMessage(
+                  {
+                    type: "orderStatusChanged",
+                    ...eventData,
+                  },
+                  window.location.origin,
+                )
+              } catch (e) {
+                console.log("[v0] postMessage error (ignored):", e)
+              }
+            }
           }
-        }
-      })
-      .on("postgres_changes", { event: "DELETE", schema: "public", table: "orders" }, (payload) => {
-        console.log("[v0] Real-time DELETE received:", payload)
-        if (payload.old) {
-          const orderId = payload.old.short_order_id || payload.old.order_id
-          if (orderId) {
-            console.log("[v0] Removing deleted order from display:", orderId)
-            setDisplayOrders((prev) => prev.filter((order) => getOrderId(order) !== orderId))
+
+          if (payload.eventType === "DELETE" && payload.old) {
+            const deletedOrder = payload.old
+            const orderId = deletedOrder.short_order_id || deletedOrder.order_id
+
+            if (orderId) {
+              console.log("[v0] Removing deleted order from display:", orderId)
+              setDisplayOrders((prev) => prev.filter((order) => getOrderId(order) !== orderId))
+            }
           }
-        }
-      })
+        },
+      )
       .subscribe((status) => {
         console.log("[v0] Real-time subscription status:", status)
+
+        if (status === "SUBSCRIBED") {
+          console.log("[v0] Successfully subscribed to real-time updates")
+        } else if (status === "CHANNEL_ERROR") {
+          console.error("[v0] Real-time subscription error, attempting to reconnect...")
+          setTimeout(() => {
+            subscription.unsubscribe()
+          }, 5000)
+        }
       })
 
     return () => {
       console.log("[v0] Unsubscribing from real-time updates")
       subscription.unsubscribe()
     }
-  }, [supabase])
+  }, []) // Removed supabase dependency to prevent recreation
 
   useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
@@ -422,26 +472,10 @@ const EnhancedOrdersTable = ({
     [generatePrintContent],
   )
 
-  const showConfirmation = async (orderId: string, action: string, actionLabel: string) => {
-    const exists = await validateOrderExists(orderId)
-    if (!exists) {
-      console.log("[v0] Cannot show confirmation - order not found in database:", orderId)
-      alert(
-        `Error: Order ${orderId} not found in database.\n\nThis order may have been deleted or doesn't exist.\nThe page will refresh to sync with current data.`,
-      )
-
-      // Remove non-existent order from display
-      setDisplayOrders((prev) => prev.filter((order) => getOrderId(order) !== orderId))
-
-      if (onRefresh) {
-        setTimeout(onRefresh, 1000)
-      }
-      return
-    }
-
+  const showConfirmation = (orderId: string, action: string, actionLabel: string) => {
     const orderExists = displayOrders.find((order) => getOrderId(order) === orderId)
     if (!orderExists) {
-      console.log("[v0] Cannot show confirmation - order not found in display:", orderId)
+      console.log("[v0] Cannot show confirmation - order not found:", orderId)
       alert(`Error: Order ${orderId} not found. The page will refresh to sync with current data.`)
       if (onRefresh) {
         setTimeout(onRefresh, 1000)
@@ -454,7 +488,7 @@ const EnhancedOrdersTable = ({
       orderId,
       action,
       actionLabel,
-      isProcessing: false,
+      isProcessing: false, // Reset processing state when opening modal
     })
   }
 
