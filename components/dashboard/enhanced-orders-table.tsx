@@ -112,6 +112,9 @@ const EnhancedOrdersTable = ({
     if (!orderExists) {
       console.log("[v0] Error: Order not found in current display orders:", orderId)
       alert(`Error: Order ${orderId} not found in current orders. Please refresh the page.`)
+      if (onRefresh) {
+        setTimeout(onRefresh, 1000)
+      }
       return
     }
 
@@ -185,7 +188,11 @@ const EnhancedOrdersTable = ({
         }
 
         console.log("[v0] API error response:", errorText)
-        alert(`Error: ${errorMessage}\n\nPlease refresh the page and try again.`)
+        alert(
+          `Error: ${errorMessage}\n\nThis order may no longer exist in the database.\nThe page will refresh automatically to sync with current data.`,
+        )
+
+        setDisplayOrders((prev) => prev.filter((order) => getOrderId(order) !== orderId))
 
         if (onRefresh) {
           setTimeout(onRefresh, 1000)
@@ -376,6 +383,16 @@ const EnhancedOrdersTable = ({
   )
 
   const showConfirmation = (orderId: string, action: string, actionLabel: string) => {
+    const orderExists = displayOrders.find((order) => getOrderId(order) === orderId)
+    if (!orderExists) {
+      console.log("[v0] Cannot show confirmation - order not found:", orderId)
+      alert(`Error: Order ${orderId} not found. The page will refresh to sync with current data.`)
+      if (onRefresh) {
+        setTimeout(onRefresh, 1000)
+      }
+      return
+    }
+
     setConfirmationModal({
       isOpen: true,
       orderId,
