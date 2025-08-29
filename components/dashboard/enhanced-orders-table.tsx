@@ -63,41 +63,28 @@ const EnhancedOrdersTable = ({
     return order.short_order_id || order.order_id || ""
   }
 
-  useEffect(() => {
-    // Only sync with parent orders if we have valid data
-    if (orders && orders.length >= 0) {
-      console.log("[v0] Syncing with parent orders:", orders.length, "orders")
-      setDisplayOrders(orders)
-    }
-  }, [orders])
-
   const validateOrderExists = async (orderId: string): Promise<boolean> => {
     try {
-      const response = await fetch(`/api/orders?search=${orderId}`)
-      if (response.ok) {
-        const data = await response.json()
-        const orderExists = data.orders?.some(
-          (order: any) => order.short_order_id === orderId || order.order_id === orderId,
-        )
-        console.log("[v0] Order validation result for", orderId, ":", orderExists)
-        return orderExists
-      }
-      return false
+      console.log("[v0] Validating order exists:", orderId)
+      const response = await fetch(`/api/orders?search=${encodeURIComponent(orderId)}`)
+      if (!response.ok) return false
+
+      const data = await response.json()
+      const orders = data.orders || []
+      const exists = orders.some((order: any) => order.short_order_id === orderId || order.order_id === orderId)
+
+      console.log("[v0] Order validation result:", { orderId, exists })
+      return exists
     } catch (error) {
       console.error("[v0] Order validation failed:", error)
       return false
     }
   }
 
-  const removeOrderFromDisplay = (orderId: string) => {
-    console.log("[v0] Removing order from display:", orderId)
-    setDisplayOrders((prev) => prev.filter((order) => getOrderId(order) !== orderId))
-
-    // Notify parent component to refresh data
-    if (onRefresh) {
-      setTimeout(onRefresh, 500)
-    }
-  }
+  useEffect(() => {
+    console.log("[v0] Initial orders sync:", orders.length)
+    setDisplayOrders(orders)
+  }, [orders]) // Updated to trigger when orders change
 
   const formatDateTime = useCallback((dateString: string) => {
     const date = new Date(dateString)
@@ -132,7 +119,6 @@ const EnhancedOrdersTable = ({
 
   const updateOrderStatus = async (orderId: string, newStatus: string) => {
     console.log("[v0] BUTTON CLICKED! Order ID:", orderId, "New Status:", newStatus)
-    console.log("[v0] Event fired at:", new Date().toISOString())
 
     if (!orderId) {
       console.log("[v0] Error: No order ID provided")
@@ -143,14 +129,14 @@ const EnhancedOrdersTable = ({
     const orderExists = displayOrders.find((order) => getOrderId(order) === orderId)
     if (!orderExists) {
       console.log("[v0] Error: Order not found in current display orders:", orderId)
-      alert(`Error: Order ${orderId} not found in current orders. Please refresh the page.`)
+      alert(`Error: Order ${orderId} not found. Refreshing to sync with database...`)
+
+      setDisplayOrders((prev) => prev.filter((order) => getOrderId(order) !== orderId))
       if (onRefresh) {
         setTimeout(onRefresh, 1000)
       }
       return
     }
-
-    console.log("[v0] Order found in display orders:", orderExists)
 
     setConfirmationModal((prev) => ({ ...prev, isProcessing: true }))
 
@@ -169,7 +155,6 @@ const EnhancedOrdersTable = ({
         const responseData = await response.json()
         console.log("[v0] API response data:", responseData)
 
-        // Update local state immediately
         setDisplayOrders((prev) =>
           prev.map((order) =>
             getOrderId(order) === orderId
@@ -179,23 +164,30 @@ const EnhancedOrdersTable = ({
         )
 
         console.log("[v0] Local state updated successfully")
+        alert(`Order ${newStatus} successfully!`)
 
-        const successMessage = `Order ${newStatus} successfully!`
-        alert(successMessage)
-
-        // Dispatch events for cross-window communication
         const eventData = { orderId, newStatus, timestamp: new Date().toISOString() }
+
+        // Method 1: Custom event
         window.dispatchEvent(new CustomEvent("orderStatusChanged", { detail: eventData }))
 
+        // Method 2: localStorage (multiple keys for compatibility)
         try {
           localStorage.setItem("orderStatusUpdate", JSON.stringify(eventData))
           localStorage.setItem("orderUpdate", JSON.stringify(eventData))
           setTimeout(() => {
             localStorage.removeItem("orderStatusUpdate")
             localStorage.removeItem("orderUpdate")
-          }, 500)
+          }, 1000)
         } catch (e) {
           console.log("[v0] localStorage error (ignored):", e)
+        }
+
+        // Method 3: postMessage for cross-window communication
+        try {
+          window.postMessage({ type: "orderStatusChanged", ...eventData }, "*")
+        } catch (e) {
+          console.log("[v0] postMessage error (ignored):", e)
         }
 
         if (onStatusUpdate) {
@@ -225,9 +217,15 @@ const EnhancedOrdersTable = ({
           alert(
             `Error: Order not found (Order ID: ${orderId})\n\nThis order may no longer exist in the database.\nThe page will refresh automatically to sync with current data.`,
           )
-          removeOrderFromDisplay(orderId)
+
+          // Remove non-existent order from display
+          setDisplayOrders((prev) => prev.filter((order) => getOrderId(order) !== orderId))
         } else {
           alert(`Error: ${errorMessage}`)
+        }
+
+        if (onRefresh) {
+          setTimeout(onRefresh, 1000)
         }
       }
     } catch (error) {
@@ -242,7 +240,7 @@ const EnhancedOrdersTable = ({
     const subscription = supabase
       .channel("orders-updates")
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "orders" }, (payload) => {
-        console.log("[v0] Real-time database update received:", payload)
+        console.log("[v0] Real-time UPDATE received:", payload)
         if (payload.new) {
           const orderId = payload.new.short_order_id || payload.new.order_id
           if (orderId) {
@@ -261,12 +259,12 @@ const EnhancedOrdersTable = ({
         }
       })
       .on("postgres_changes", { event: "DELETE", schema: "public", table: "orders" }, (payload) => {
-        console.log("[v0] Real-time database delete received:", payload)
+        console.log("[v0] Real-time DELETE received:", payload)
         if (payload.old) {
           const orderId = payload.old.short_order_id || payload.old.order_id
           if (orderId) {
             console.log("[v0] Removing deleted order from display:", orderId)
-            removeOrderFromDisplay(orderId)
+            setDisplayOrders((prev) => prev.filter((order) => getOrderId(order) !== orderId))
           }
         }
       })
@@ -425,6 +423,22 @@ const EnhancedOrdersTable = ({
   )
 
   const showConfirmation = async (orderId: string, action: string, actionLabel: string) => {
+    const exists = await validateOrderExists(orderId)
+    if (!exists) {
+      console.log("[v0] Cannot show confirmation - order not found in database:", orderId)
+      alert(
+        `Error: Order ${orderId} not found in database.\n\nThis order may have been deleted or doesn't exist.\nThe page will refresh to sync with current data.`,
+      )
+
+      // Remove non-existent order from display
+      setDisplayOrders((prev) => prev.filter((order) => getOrderId(order) !== orderId))
+
+      if (onRefresh) {
+        setTimeout(onRefresh, 1000)
+      }
+      return
+    }
+
     const orderExists = displayOrders.find((order) => getOrderId(order) === orderId)
     if (!orderExists) {
       console.log("[v0] Cannot show confirmation - order not found in display:", orderId)
@@ -435,19 +449,6 @@ const EnhancedOrdersTable = ({
       return
     }
 
-    console.log("[v0] Validating order exists in database:", orderId)
-    const isValidOrder = await validateOrderExists(orderId)
-
-    if (!isValidOrder) {
-      console.log("[v0] Order validation failed - removing from display:", orderId)
-      alert(
-        `Error: Order ${orderId} no longer exists in the database.\n\nThis order has been removed from the display.`,
-      )
-      removeOrderFromDisplay(orderId)
-      return
-    }
-
-    console.log("[v0] Order validation successful - showing confirmation:", orderId)
     setConfirmationModal({
       isOpen: true,
       orderId,
