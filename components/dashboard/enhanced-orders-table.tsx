@@ -59,6 +59,16 @@ const EnhancedOrdersTable = ({
   })
   const supabase = createClient()
 
+  const playNotificationSound = useCallback(() => {
+    try {
+      const audio = new Audio("/sounds/notification.mp3")
+      audio.volume = 0.5
+      audio.play().catch((e) => console.log("[v0] Could not play notification sound:", e))
+    } catch (e) {
+      console.log("[v0] Notification sound not available:", e)
+    }
+  }, [])
+
   const getOrderId = (order: Order): string => {
     return order.short_order_id || ""
   }
@@ -148,22 +158,33 @@ const EnhancedOrdersTable = ({
         alert(successMessage)
 
         const eventData = {
-          orderId: orderExists.short_order_id, // Use short_order_id for display purposes
-          realOrderId: orderId, // Same as orderId now since we're using short_order_id
+          orderId: orderExists.short_order_id,
+          realOrderId: orderId,
           newStatus,
           timestamp: new Date().toISOString(),
+          source: "dashboard",
         }
+
+        // Method 1: Custom Event
         window.dispatchEvent(new CustomEvent("orderStatusChanged", { detail: eventData }))
 
+        // Method 2: localStorage (for cross-window communication)
         try {
           localStorage.setItem("orderStatusUpdate", JSON.stringify(eventData))
           localStorage.setItem("orderUpdate", JSON.stringify(eventData))
           setTimeout(() => {
             localStorage.removeItem("orderStatusUpdate")
             localStorage.removeItem("orderUpdate")
-          }, 500)
+          }, 1000)
         } catch (e) {
           console.log("[v0] localStorage error (ignored):", e)
+        }
+
+        // Method 3: postMessage (for cross-window communication)
+        try {
+          window.postMessage({ type: "orderStatusChanged", ...eventData }, "*")
+        } catch (e) {
+          console.log("[v0] postMessage error (ignored):", e)
         }
 
         if (onStatusUpdate) {
@@ -188,7 +209,9 @@ const EnhancedOrdersTable = ({
         }
 
         console.log("[v0] API error response:", errorText)
-        alert(`Error: ${errorMessage}\n\nPlease refresh the page and try again.`)
+        alert(
+          `Error: ${errorMessage}\n\nThis order may have been deleted or doesn't exist.\nThe page will refresh automatically to sync with current data.`,
+        )
 
         if (onRefresh) {
           setTimeout(onRefresh, 1000)
@@ -223,8 +246,37 @@ const EnhancedOrdersTable = ({
               orderId: payload.new.short_order_id,
               newStatus: payload.new.status,
               timestamp: new Date().toISOString(),
+              source: "database",
             }
             window.dispatchEvent(new CustomEvent("orderStatusChanged", { detail: eventData }))
+          }
+        }
+      })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "orders" }, (payload) => {
+        console.log("[v0] New order detected:", payload)
+        if (payload.new) {
+          playNotificationSound()
+
+          // Show notification
+          if (Notification.permission === "granted") {
+            new Notification("New Order Received!", {
+              body: `Order #${payload.new.short_order_id || payload.new.order_id} from ${payload.new.customer_name}`,
+              icon: "/favicon.ico",
+            })
+          }
+
+          // Add to display orders if not already present
+          setDisplayOrders((prev) => {
+            const exists = prev.find((o) => o.order_id === payload.new.order_id)
+            if (!exists) {
+              return [payload.new as Order, ...prev]
+            }
+            return prev
+          })
+
+          // Trigger refresh to get complete order data
+          if (onRefresh) {
+            setTimeout(onRefresh, 500)
           }
         }
       })
@@ -232,11 +284,17 @@ const EnhancedOrdersTable = ({
         console.log("[v0] Real-time subscription status:", status)
       })
 
+    if (Notification.permission === "default") {
+      Notification.requestPermission().then((permission) => {
+        console.log("[v0] Notification permission:", permission)
+      })
+    }
+
     return () => {
       console.log("[v0] Unsubscribing from real-time updates")
       subscription.unsubscribe()
     }
-  }, [supabase])
+  }, [supabase, onRefresh, playNotificationSound])
 
   useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
@@ -574,7 +632,8 @@ const EnhancedOrdersTable = ({
         <div>
           <h2 className="text-2xl font-semibold text-white">Active Orders</h2>
           <p className="text-gray-400 text-sm mt-1">
-            {displayOrders.length} order{displayOrders.length !== 1 ? "s" : ""} • Real-time updates enabled
+            {displayOrders.length} order{displayOrders.length !== 1 ? "s" : ""} • Real-time updates enabled • Sound
+            notifications active
           </p>
         </div>
         <div className="flex items-center gap-2">

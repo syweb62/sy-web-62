@@ -13,6 +13,7 @@ import { InvoiceButton } from "@/components/invoice-button"
 import { useOrderHistory, type OrderHistoryItem } from "@/hooks/use-order-history"
 import { useCart } from "@/hooks/use-cart"
 import { TimeBD } from "@/components/TimeBD"
+import { createClient } from "@/supabase/client" // Assuming Supabase client is imported from here
 
 function money(n?: number) {
   const v = typeof n === "number" && isFinite(n) ? n : 0
@@ -99,7 +100,7 @@ export default function OrdersPage() {
       console.log("[v0] Order status change event received:", event.detail)
       if (event.detail?.orderId) {
         console.log("[v0] Refreshing order history due to status change")
-        setTimeout(() => refetch(), 100)
+        setTimeout(() => refetch(), 50)
       }
     }
 
@@ -109,19 +110,34 @@ export default function OrdersPage() {
         try {
           const data = JSON.parse(event.newValue)
           console.log("[v0] Order update data:", data)
+          if (data.source === "dashboard") {
+            console.log("[v0] Update from dashboard, refreshing immediately")
+            setTimeout(() => refetch(), 50)
+          }
         } catch (e) {
           console.log("[v0] Could not parse storage data:", e)
         }
-        setTimeout(() => refetch(), 150)
+        setTimeout(() => refetch(), 100)
       }
     }
 
     const handleMessage = (event: MessageEvent) => {
       if (event.data?.type === "orderStatusChanged" && event.data?.orderId) {
         console.log("[v0] Message event received for order status change:", event.data)
-        setTimeout(() => refetch(), 100)
+        setTimeout(() => refetch(), 50)
       }
     }
+
+    const supabase = createClient()
+    const subscription = supabase
+      .channel("website-orders-updates")
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "orders" }, (payload) => {
+        console.log("[v0] Website received real-time database update:", payload)
+        setTimeout(() => refetch(), 100)
+      })
+      .subscribe((status) => {
+        console.log("[v0] Website real-time subscription status:", status)
+      })
 
     window.addEventListener("orderStatusChanged", handleOrderStatusChange as EventListener)
     window.addEventListener("storage", handleStorageChange)
@@ -131,7 +147,13 @@ export default function OrdersPage() {
       window.removeEventListener("orderStatusChanged", handleOrderStatusChange as EventListener)
       window.removeEventListener("storage", handleStorageChange)
       window.removeEventListener("message", handleMessage)
+      subscription.unsubscribe()
     }
+  }, [refetch])
+
+  useEffect(() => {
+    const timer = setTimeout(() => refetch(), 100)
+    return () => clearTimeout(timer)
   }, [refetch])
 
   if (loading) {
@@ -163,7 +185,7 @@ export default function OrdersPage() {
         <div className="mb-5">
           <h1 className="text-2xl md:text-3xl font-semibold text-gold">Order History</h1>
           <p className="text-xs md:text-sm text-gray-400 mt-1">
-            Search, filter, download receipt, and reorder • Real-time updates enabled
+            Search, filter, download receipt, and reorder • Real-time updates enabled • Live sync with dashboard
           </p>
         </div>
 
