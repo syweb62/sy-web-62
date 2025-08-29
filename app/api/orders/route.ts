@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
 
     const formattedOrders =
       orders?.map((order) => ({
-        id: order.short_order_id,
+        id: order.order_id, // Use real UUID for database operations
         order_id: order.order_id, // Keep the real UUID for database operations
         short_order_id: order.short_order_id, // Keep short_order_id for display
         customer_name: order.customer_name || "Guest",
@@ -115,30 +115,64 @@ export async function PATCH(request: NextRequest) {
     const supabase = createClient()
     const { orderId, status } = await request.json()
 
-    console.log("[v0] API PATCH: Updating order status:", { orderId, status })
+    console.log("[v0] API PATCH: Received request:", { orderId, status, orderIdType: typeof orderId })
 
     if (!orderId || !status) {
       console.error("[v0] API PATCH: Missing required fields")
       return NextResponse.json({ error: "Order ID and status are required" }, { status: 400 })
     }
 
-    console.log("[v0] API PATCH: Using universal update function")
-    const { data, error } = await supabase.rpc("update_order_status_by_identifier", {
+    console.log("[v0] API PATCH: Attempting to find order with identifier:", orderId)
+
+    // First try the universal function
+    let { data, error } = await supabase.rpc("update_order_status_by_identifier", {
       identifier: orderId,
       new_status: status,
     })
 
-    if (error) {
-      console.error("[v0] API PATCH: Universal update failed:", error)
-      return NextResponse.json({ error: `Order ${orderId} not found in database`, orderId }, { status: 404 })
+    if (error || !data || data.length === 0) {
+      console.log("[v0] API PATCH: Universal function failed, trying direct lookup")
+
+      // Fallback: Try direct database lookup
+      let order = null
+
+      // Try UUID first
+      const { data: uuidOrder } = await supabase.from("orders").select("*").eq("order_id", orderId).single()
+
+      if (uuidOrder) {
+        order = uuidOrder
+        console.log("[v0] API PATCH: Found order by UUID")
+      } else {
+        // Try short_order_id
+        const { data: shortOrder } = await supabase.from("orders").select("*").eq("short_order_id", orderId).single()
+
+        if (shortOrder) {
+          order = shortOrder
+          console.log("[v0] API PATCH: Found order by short_order_id")
+        }
+      }
+
+      if (!order) {
+        console.error("[v0] API PATCH: Order not found with any method:", orderId)
+        return NextResponse.json({ error: `Order ${orderId} not found in database`, orderId }, { status: 404 })
+      }
+
+      // Update using the real UUID
+      const { data: updateData, error: updateError } = await supabase
+        .from("orders")
+        .update({ status, updated_at: new Date().toISOString() })
+        .eq("order_id", order.order_id)
+        .select()
+
+      if (updateError) {
+        console.error("[v0] API PATCH: Direct update failed:", updateError)
+        return NextResponse.json({ error: "Failed to update order status" }, { status: 500 })
+      }
+
+      data = updateData
     }
 
-    if (!data || data.length === 0) {
-      console.error("[v0] API PATCH: No order found with identifier:", orderId)
-      return NextResponse.json({ error: `Order ${orderId} not found in database`, orderId }, { status: 404 })
-    }
-
-    console.log("[v0] API PATCH: Universal update successful")
+    console.log("[v0] API PATCH: Update successful")
 
     return NextResponse.json({
       success: true,
