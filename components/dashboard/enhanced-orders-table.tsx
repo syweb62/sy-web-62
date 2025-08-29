@@ -189,22 +189,14 @@ const EnhancedOrdersTable = ({
 
         if (response.status === 404) {
           alert(
-            `Error: Order ${orderId} not found in database.\nThis order may have been deleted or doesn't exist.\nRemoving from display and refreshing data...`,
+            `Error: Order ${orderId} not found in database.\nThis order may have been deleted or doesn't exist.\nPlease refresh the page to sync with current data.`,
           )
-
-          // Remove the non-existent order from display
-          setDisplayOrders((prev) => prev.filter((order) => getOrderId(order) !== orderId))
-
-          // Trigger parent refresh to sync with database
-          if (onRefresh) {
-            setTimeout(onRefresh, 1000)
-          }
         } else {
           alert(`Error: ${errorMessage}\n\nPlease refresh the page to sync with current data.`)
+        }
 
-          if (onRefresh) {
-            setTimeout(onRefresh, 1000)
-          }
+        if (onRefresh) {
+          setTimeout(onRefresh, 1000)
         }
       }
     } catch (error) {

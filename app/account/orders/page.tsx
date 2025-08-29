@@ -100,7 +100,7 @@ export default function OrdersPage() {
       console.log("[v0] Order status change event received:", event.detail)
       if (event.detail?.orderId) {
         console.log("[v0] Refreshing order history due to status change")
-        setTimeout(() => refetch(), 300)
+        setTimeout(() => refetch(), 100)
       }
     }
 
@@ -110,10 +110,10 @@ export default function OrdersPage() {
         try {
           const data = JSON.parse(event.newValue)
           console.log("[v0] Order update data:", data)
-          setTimeout(() => refetch(), 300)
+          setTimeout(() => refetch(), 100)
         } catch (e) {
           console.log("[v0] Could not parse storage data:", e)
-          setTimeout(() => refetch(), 300)
+          setTimeout(() => refetch(), 100)
         }
       }
     }
@@ -121,7 +121,7 @@ export default function OrdersPage() {
     const handleMessage = (event: MessageEvent) => {
       if (event.data?.type === "orderStatusChanged" && event.data?.orderId) {
         console.log("[v0] Message event received for order status change:", event.data)
-        setTimeout(() => refetch(), 300)
+        setTimeout(() => refetch(), 100)
       }
     }
 
@@ -137,13 +137,21 @@ export default function OrdersPage() {
         (payload) => {
           console.log("[v0] Website received real-time order update:", payload)
           if (payload.new) {
-            setTimeout(() => refetch(), 200)
+            setTimeout(() => refetch(), 50)
           }
         },
       )
       .subscribe((status) => {
         console.log("[v0] Website real-time subscription status:", status)
+        if (status === "CHANNEL_ERROR") {
+          console.error("[v0] Website real-time subscription error, attempting to reconnect...")
+          setTimeout(() => {
+            subscription.unsubscribe()
+          }, 5000)
+        }
       })
+
+    refetch()
 
     window.addEventListener("orderStatusChanged", handleOrderStatusChange as EventListener)
     window.addEventListener("storage", handleStorageChange)
@@ -222,6 +230,7 @@ export default function OrdersPage() {
                 <SelectContent>
                   <SelectItem value="all">All statuses</SelectItem>
                   <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="confirmed">Confirmed</SelectItem>
                   <SelectItem value="processing">Processing</SelectItem>
                   <SelectItem value="completed">Completed</SelectItem>
                   <SelectItem value="cancelled">Cancelled</SelectItem>
