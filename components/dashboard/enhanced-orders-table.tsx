@@ -208,101 +208,145 @@ const EnhancedOrdersTable = ({
   }
 
   useEffect(() => {
-    const subscription = supabase
-      .channel("orders-realtime")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "orders",
-        },
-        (payload) => {
-          console.log("[v0] Real-time database change received:", payload)
+    let subscription: any = null
+    let reconnectTimeout: NodeJS.Timeout | null = null
+    let isComponentMounted = true
 
-          if (payload.eventType === "UPDATE" && payload.new) {
-            const updatedOrder = payload.new
-            const orderId = updatedOrder.short_order_id || updatedOrder.order_id
+    const createSubscription = () => {
+      if (!isComponentMounted) return
 
-            if (orderId) {
-              console.log("[v0] Updating local order display for:", orderId)
-              setDisplayOrders((prev) =>
-                prev.map((order) =>
-                  getOrderId(order) === orderId
-                    ? {
-                        ...order,
-                        status: updatedOrder.status as Order["status"],
-                        updated_at: updatedOrder.updated_at || new Date().toISOString(),
-                      }
-                    : order,
-                ),
-              )
+      console.log("[v0] Creating real-time subscription...")
 
-              const eventData = {
-                orderId,
-                newStatus: updatedOrder.status,
-                timestamp: new Date().toISOString(),
-              }
+      subscription = supabase
+        .channel(`orders-realtime-${Date.now()}`) // Unique channel name to prevent conflicts
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "orders",
+          },
+          (payload) => {
+            if (!isComponentMounted) return
 
-              // Dispatch custom event
-              window.dispatchEvent(new CustomEvent("orderStatusChanged", { detail: eventData }))
+            console.log("[v0] Real-time database change received:", payload)
 
-              // Update localStorage for cross-window sync
-              try {
-                localStorage.setItem("orderStatusUpdate", JSON.stringify(eventData))
-                localStorage.setItem("orderUpdate", JSON.stringify(eventData))
-                setTimeout(() => {
-                  localStorage.removeItem("orderStatusUpdate")
-                  localStorage.removeItem("orderUpdate")
-                }, 1000)
-              } catch (e) {
-                console.log("[v0] localStorage error (ignored):", e)
-              }
+            if (payload.eventType === "UPDATE" && payload.new) {
+              const updatedOrder = payload.new
+              const orderId = updatedOrder.short_order_id || updatedOrder.order_id
 
-              // Post message for cross-window communication
-              try {
-                window.postMessage(
-                  {
-                    type: "orderStatusChanged",
-                    ...eventData,
-                  },
-                  window.location.origin,
+              if (orderId) {
+                console.log("[v0] Updating local order display for:", orderId)
+                setDisplayOrders((prev) =>
+                  prev.map((order) =>
+                    getOrderId(order) === orderId
+                      ? {
+                          ...order,
+                          status: updatedOrder.status as Order["status"],
+                          updated_at: updatedOrder.updated_at || new Date().toISOString(),
+                        }
+                      : order,
+                  ),
                 )
-              } catch (e) {
-                console.log("[v0] postMessage error (ignored):", e)
+
+                const eventData = {
+                  orderId,
+                  newStatus: updatedOrder.status,
+                  timestamp: new Date().toISOString(),
+                }
+
+                // Dispatch custom event
+                window.dispatchEvent(new CustomEvent("orderStatusChanged", { detail: eventData }))
+
+                // Update localStorage for cross-window sync
+                try {
+                  localStorage.setItem("orderStatusUpdate", JSON.stringify(eventData))
+                  localStorage.setItem("orderUpdate", JSON.stringify(eventData))
+                  setTimeout(() => {
+                    localStorage.removeItem("orderStatusUpdate")
+                    localStorage.removeItem("orderUpdate")
+                  }, 1000)
+                } catch (e) {
+                  console.log("[v0] localStorage error (ignored):", e)
+                }
+
+                // Post message for cross-window communication
+                try {
+                  window.postMessage(
+                    {
+                      type: "orderStatusChanged",
+                      ...eventData,
+                    },
+                    window.location.origin,
+                  )
+                } catch (e) {
+                  console.log("[v0] postMessage error (ignored):", e)
+                }
               }
             }
-          }
 
-          if (payload.eventType === "DELETE" && payload.old) {
-            const deletedOrder = payload.old
-            const orderId = deletedOrder.short_order_id || deletedOrder.order_id
+            if (payload.eventType === "DELETE" && payload.old) {
+              const deletedOrder = payload.old
+              const orderId = deletedOrder.short_order_id || deletedOrder.order_id
 
-            if (orderId) {
-              console.log("[v0] Removing deleted order from display:", orderId)
-              setDisplayOrders((prev) => prev.filter((order) => getOrderId(order) !== orderId))
+              if (orderId) {
+                console.log("[v0] Removing deleted order from display:", orderId)
+                setDisplayOrders((prev) => prev.filter((order) => getOrderId(order) !== orderId))
+              }
+            }
+          },
+        )
+        .subscribe((status) => {
+          if (!isComponentMounted) return
+
+          console.log("[v0] Real-time subscription status:", status)
+
+          if (status === "SUBSCRIBED") {
+            console.log("[v0] Successfully subscribed to real-time updates")
+            // Clear any pending reconnection attempts
+            if (reconnectTimeout) {
+              clearTimeout(reconnectTimeout)
+              reconnectTimeout = null
+            }
+          } else if (status === "CHANNEL_ERROR" || status === "CLOSED") {
+            console.error("[v0] Real-time subscription error:", status)
+
+            // Clean up current subscription
+            if (subscription) {
+              subscription.unsubscribe()
+              subscription = null
+            }
+
+            // Attempt to reconnect after a delay
+            if (!reconnectTimeout && isComponentMounted) {
+              reconnectTimeout = setTimeout(() => {
+                if (isComponentMounted) {
+                  console.log("[v0] Attempting to reconnect real-time subscription...")
+                  createSubscription()
+                }
+                reconnectTimeout = null
+              }, 3000) // Wait 3 seconds before reconnecting
             }
           }
-        },
-      )
-      .subscribe((status) => {
-        console.log("[v0] Real-time subscription status:", status)
+        })
+    }
 
-        if (status === "SUBSCRIBED") {
-          console.log("[v0] Successfully subscribed to real-time updates")
-        } else if (status === "CHANNEL_ERROR") {
-          console.error("[v0] Real-time subscription error, attempting to reconnect...")
-          setTimeout(() => {
-            subscription.unsubscribe()
-          }, 5000)
-        }
-      })
+    // Initial subscription creation
+    createSubscription()
 
     return () => {
-      console.log("[v0] Unsubscribing from real-time updates")
-      subscription.unsubscribe()
+      console.log("[v0] Cleaning up real-time subscription")
+      isComponentMounted = false
+
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout)
+      }
+
+      if (subscription) {
+        subscription.unsubscribe()
+      }
     }
-  }, []) // Removed supabase dependency to prevent recreation
+  }, []) // Empty dependency array to prevent recreation
 
   useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
