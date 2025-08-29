@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { Eye, Printer, Check, X, CheckCircle, AlertTriangle, Loader2 } from "lucide-react"
-import { supabase } from "@/lib/supabase"
+import { createClient } from "@/lib/supabase/client"
 
 interface Order {
   order_id: string
@@ -57,13 +57,10 @@ const EnhancedOrdersTable = ({
     actionLabel: "",
     isProcessing: false, // Added processing state
   })
+  const supabase = createClient()
 
-  const getDisplayOrderId = (order: Order): string => {
-    return order.short_order_id || order.order_id || ""
-  }
-
-  const getDatabaseOrderId = (order: Order): string => {
-    return order.order_id || ""
+  const getOrderId = (order: Order): string => {
+    return order.short_order_id || ""
   }
 
   useEffect(() => {
@@ -103,12 +100,22 @@ const EnhancedOrdersTable = ({
 
   const updateOrderStatus = async (orderId: string, newStatus: string) => {
     console.log("[v0] BUTTON CLICKED! Order ID:", orderId, "New Status:", newStatus)
+    console.log("[v0] Event fired at:", new Date().toISOString())
 
     if (!orderId) {
       console.log("[v0] Error: No order ID provided")
       alert("Error: No order ID found")
       return
     }
+
+    const orderExists = displayOrders.find((order) => getOrderId(order) === orderId)
+    if (!orderExists) {
+      console.log("[v0] Error: Order not found in current display orders:", orderId)
+      alert(`Error: Order ${orderId} not found in current orders. Please refresh the page.`)
+      return
+    }
+
+    console.log("[v0] Order found in display orders:", orderExists)
 
     setConfirmationModal((prev) => ({ ...prev, isProcessing: true }))
 
@@ -127,46 +134,33 @@ const EnhancedOrdersTable = ({
         const responseData = await response.json()
         console.log("[v0] API response data:", responseData)
 
+        // Update local state immediately
         setDisplayOrders((prev) =>
           prev.map((order) =>
-            order.order_id === orderId
+            getOrderId(order) === orderId
               ? { ...order, status: newStatus as Order["status"], updated_at: new Date().toISOString() }
               : order,
           ),
         )
 
         console.log("[v0] Local state updated successfully")
-        alert(`Order ${newStatus} successfully!`)
 
-        const displayId = displayOrders.find((order) => order.order_id === orderId)?.short_order_id || orderId
-        const eventData = { orderId: displayId, newStatus, timestamp: new Date().toISOString() }
+        const successMessage = `Order ${newStatus} successfully!`
+        alert(successMessage)
 
-        // Dispatch custom event
+        // Dispatch events for cross-window communication
+        const eventData = { orderId, newStatus, timestamp: new Date().toISOString() }
         window.dispatchEvent(new CustomEvent("orderStatusChanged", { detail: eventData }))
 
-        // Update localStorage
         try {
           localStorage.setItem("orderStatusUpdate", JSON.stringify(eventData))
           localStorage.setItem("orderUpdate", JSON.stringify(eventData))
           setTimeout(() => {
             localStorage.removeItem("orderStatusUpdate")
             localStorage.removeItem("orderUpdate")
-          }, 1000)
+          }, 500)
         } catch (e) {
           console.log("[v0] localStorage error (ignored):", e)
-        }
-
-        // Post message for cross-window communication
-        try {
-          window.postMessage(
-            {
-              type: "orderStatusChanged",
-              ...eventData,
-            },
-            window.location.origin,
-          )
-        } catch (e) {
-          console.log("[v0] postMessage error (ignored):", e)
         }
 
         if (onStatusUpdate) {
@@ -191,14 +185,7 @@ const EnhancedOrdersTable = ({
         }
 
         console.log("[v0] API error response:", errorText)
-
-        if (response.status === 404) {
-          alert(
-            `Error: Order ${orderId} not found in database.\nThis order may have been deleted or doesn't exist.\nPlease refresh the page to sync with current data.`,
-          )
-        } else {
-          alert(`Error: ${errorMessage}\n\nPlease refresh the page to sync with current data.`)
-        }
+        alert(`Error: ${errorMessage}\n\nPlease refresh the page and try again.`)
 
         if (onRefresh) {
           setTimeout(onRefresh, 1000)
@@ -213,143 +200,36 @@ const EnhancedOrdersTable = ({
   }
 
   useEffect(() => {
-    let subscription: any = null
-    let reconnectTimeout: NodeJS.Timeout | null = null
-    let isComponentMounted = true
+    const subscription = supabase
+      .channel("orders-updates")
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "orders" }, (payload) => {
+        console.log("[v0] Real-time database update received:", payload)
+        if (payload.new) {
+          const orderId = payload.new.short_order_id
+          if (orderId) {
+            console.log("[v0] Updating local order display for:", orderId)
+            setDisplayOrders((prev) =>
+              prev.map((order) =>
+                getOrderId(order) === orderId
+                  ? { ...order, status: payload.new.status, updated_at: payload.new.updated_at }
+                  : order,
+              ),
+            )
 
-    const createSubscription = () => {
-      if (!isComponentMounted) return
-
-      console.log("[v0] Creating real-time subscription...")
-
-      subscription = supabase
-        .channel(`orders-realtime-${Date.now()}`) // Unique channel name to prevent conflicts
-        .on(
-          "postgres_changes",
-          {
-            event: "*",
-            schema: "public",
-            table: "orders",
-          },
-          (payload) => {
-            if (!isComponentMounted) return
-
-            console.log("[v0] Real-time database change received:", payload)
-
-            if (payload.eventType === "UPDATE" && payload.new) {
-              const updatedOrder = payload.new
-              const databaseId = updatedOrder.order_id
-              const displayId = updatedOrder.short_order_id || updatedOrder.order_id
-
-              if (databaseId) {
-                console.log("[v0] Updating local order display for:", displayId)
-                setDisplayOrders((prev) =>
-                  prev.map((order) =>
-                    order.order_id === databaseId
-                      ? {
-                          ...order,
-                          status: updatedOrder.status as Order["status"],
-                          updated_at: updatedOrder.updated_at || new Date().toISOString(),
-                        }
-                      : order,
-                  ),
-                )
-
-                const eventData = {
-                  orderId: displayId, // Use display ID for events
-                  newStatus: updatedOrder.status,
-                  timestamp: new Date().toISOString(),
-                }
-
-                // Dispatch custom event
-                window.dispatchEvent(new CustomEvent("orderStatusChanged", { detail: eventData }))
-
-                // Update localStorage for cross-window sync
-                try {
-                  localStorage.setItem("orderStatusUpdate", JSON.stringify(eventData))
-                  localStorage.setItem("orderUpdate", JSON.stringify(eventData))
-                  setTimeout(() => {
-                    localStorage.removeItem("orderStatusUpdate")
-                    localStorage.removeItem("orderUpdate")
-                  }, 1000)
-                } catch (e) {
-                  console.log("[v0] localStorage error (ignored):", e)
-                }
-
-                // Post message for cross-window communication
-                try {
-                  window.postMessage(
-                    {
-                      type: "orderStatusChanged",
-                      ...eventData,
-                    },
-                    window.location.origin,
-                  )
-                } catch (e) {
-                  console.log("[v0] postMessage error (ignored):", e)
-                }
-              }
-            }
-
-            if (payload.eventType === "DELETE" && payload.old) {
-              const deletedOrder = payload.old
-              const databaseId = deletedOrder.order_id
-              const displayId = deletedOrder.short_order_id || deletedOrder.order_id
-
-              if (databaseId) {
-                console.log("[v0] Removing deleted order from display:", displayId)
-                setDisplayOrders((prev) => prev.filter((order) => order.order_id !== databaseId))
-              }
-            }
-          },
-        )
-        .subscribe((status) => {
-          if (!isComponentMounted) return
-
-          console.log("[v0] Real-time subscription status:", status)
-
-          if (status === "SUBSCRIBED") {
-            console.log("[v0] Successfully subscribed to real-time updates")
-            // Clear any pending reconnection attempts
-            if (reconnectTimeout) {
-              clearTimeout(reconnectTimeout)
-              reconnectTimeout = null
-            }
-          } else if (status === "CHANNEL_ERROR" || status === "CLOSED") {
-            // Clean up current subscription
-            if (subscription) {
-              subscription.unsubscribe()
-              subscription = null
-            }
-
-            if (!reconnectTimeout && isComponentMounted) {
-              reconnectTimeout = setTimeout(() => {
-                if (isComponentMounted) {
-                  createSubscription()
-                }
-                reconnectTimeout = null
-              }, 10000) // Wait 10 seconds before reconnecting
-            }
+            const eventData = { orderId, newStatus: payload.new.status, timestamp: new Date().toISOString() }
+            window.dispatchEvent(new CustomEvent("orderStatusChanged", { detail: eventData }))
           }
-        })
-    }
-
-    // Initial subscription creation
-    createSubscription()
+        }
+      })
+      .subscribe((status) => {
+        console.log("[v0] Real-time subscription status:", status)
+      })
 
     return () => {
-      console.log("[v0] Cleaning up real-time subscription")
-      isComponentMounted = false
-
-      if (reconnectTimeout) {
-        clearTimeout(reconnectTimeout)
-      }
-
-      if (subscription) {
-        subscription.unsubscribe()
-      }
+      console.log("[v0] Unsubscribing from real-time updates")
+      subscription.unsubscribe()
     }
-  }, []) // Empty dependency array to prevent recreation
+  }, [supabase])
 
   useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
@@ -496,52 +376,12 @@ const EnhancedOrdersTable = ({
   )
 
   const showConfirmation = (orderId: string, action: string, actionLabel: string) => {
-    const orderExists = displayOrders.find((order) => getDatabaseOrderId(order) === orderId)
-    if (!orderExists) {
-      console.log("[v0] Cannot show confirmation - order not found:", orderId)
-      const displayId = displayOrders.find((order) => order.order_id === orderId)?.short_order_id || orderId
-      alert(`Error: Order ${displayId} not found. Please refresh the page to sync with current data.`)
-      if (onRefresh) {
-        setTimeout(onRefresh, 1000)
-      }
-      return
-    }
-
-    const order = orderExists
-    const displayId = getDisplayOrderId(order)
-    const databaseId = getDatabaseOrderId(order)
-
-    if (!displayId || !databaseId) {
-      console.log("[v0] Data integrity issue - missing order IDs:", { displayId, databaseId, order })
-      alert(
-        `Error: Order data is corrupted (missing IDs).\nDisplay ID: ${displayId}\nDatabase ID: ${databaseId}\n\nPlease refresh the page to sync with current data.`,
-      )
-      if (onRefresh) {
-        setTimeout(onRefresh, 1000)
-      }
-      return
-    }
-
-    // Additional validation to ensure the order has valid structure
-    if (!order.short_order_id || !order.order_id) {
-      console.log("[v0] Data integrity issue - invalid order structure:", order)
-      alert(
-        `Error: Order data is corrupted.\nShort ID: ${order.short_order_id}\nOrder ID: ${order.order_id}\n\nThis order may have been deleted or corrupted.\nPlease refresh the page to sync with current data.`,
-      )
-      if (onRefresh) {
-        setTimeout(onRefresh, 1000)
-      }
-      return
-    }
-
-    console.log("[v0] Order validation passed:", { displayId, databaseId, action })
-
     setConfirmationModal({
       isOpen: true,
-      orderId, // This is the database ID (UUID)
+      orderId,
       action,
       actionLabel,
-      isProcessing: false,
+      isProcessing: false, // Reset processing state when opening modal
     })
   }
 
@@ -582,10 +422,9 @@ const EnhancedOrdersTable = ({
   }
 
   const getActionButtons = (order: Order) => {
-    const displayId = getDisplayOrderId(order)
-    const databaseId = getDatabaseOrderId(order)
+    const validOrderId = getOrderId(order)
 
-    if (!displayId || !databaseId) {
+    if (!validOrderId) {
       return (
         <div className="space-y-3">
           <div className="flex gap-2">
@@ -606,7 +445,7 @@ const EnhancedOrdersTable = ({
         <div className="space-y-3">
           <div className="flex gap-2">
             <Button
-              onClick={() => window.open(`/dashboard/orders/${displayId}`, "_blank")}
+              onClick={() => window.open(`/dashboard/orders/${validOrderId}`, "_blank")}
               size="sm"
               variant="outline"
               className="border-gray-600 text-gray-300 hover:bg-gray-800 bg-transparent p-2"
@@ -627,7 +466,7 @@ const EnhancedOrdersTable = ({
               onClick={(e) => {
                 e.preventDefault()
                 e.stopPropagation()
-                showConfirmation(databaseId, "confirmed", "confirm")
+                showConfirmation(validOrderId, "confirmed", "confirm")
               }}
               size="sm"
               className="bg-green-600 hover:bg-green-700 text-white flex-1 cursor-pointer"
@@ -640,7 +479,7 @@ const EnhancedOrdersTable = ({
               onClick={(e) => {
                 e.preventDefault()
                 e.stopPropagation()
-                showConfirmation(databaseId, "cancelled", "cancel")
+                showConfirmation(validOrderId, "cancelled", "cancel")
               }}
               size="sm"
               variant="destructive"
@@ -660,7 +499,7 @@ const EnhancedOrdersTable = ({
         <div className="space-y-3">
           <div className="flex gap-2">
             <Button
-              onClick={() => window.open(`/dashboard/orders/${displayId}`, "_blank")}
+              onClick={() => window.open(`/dashboard/orders/${validOrderId}`, "_blank")}
               size="sm"
               variant="outline"
               className="border-gray-600 text-gray-300 hover:bg-gray-800 bg-transparent p-2"
@@ -680,7 +519,7 @@ const EnhancedOrdersTable = ({
             onClick={(e) => {
               e.preventDefault()
               e.stopPropagation()
-              showConfirmation(databaseId, "completed", "complete")
+              showConfirmation(validOrderId, "completed", "complete")
             }}
             size="sm"
             className="bg-blue-600 hover:bg-blue-700 text-white w-full cursor-pointer"
@@ -697,7 +536,7 @@ const EnhancedOrdersTable = ({
       <div className="space-y-3">
         <div className="flex gap-2">
           <Button
-            onClick={() => window.open(`/dashboard/orders/${displayId}`, "_blank")}
+            onClick={() => window.open(`/dashboard/orders/${validOrderId}`, "_blank")}
             size="sm"
             variant="outline"
             className="border-gray-600 text-gray-300 hover:bg-gray-800 bg-transparent p-2"
@@ -740,11 +579,11 @@ const EnhancedOrdersTable = ({
       <div className="space-y-4">
         {displayOrders.map((order) => {
           const dateTime = formatDateTime(order.created_at)
-          const displayId = getDisplayOrderId(order)
+          const validOrderId = getOrderId(order)
 
           return (
             <Card
-              key={order.order_id || `order-${order.customer_name}-${order.created_at}`}
+              key={validOrderId || `order-${order.customer_name}-${order.created_at}`}
               className="bg-gray-900/50 border-gray-700/30 hover:bg-gray-900/70 transition-all duration-200 relative"
             >
               <CardContent className="p-6">
@@ -843,11 +682,7 @@ const EnhancedOrdersTable = ({
 
               <p className="text-gray-300 mb-2">Are you sure you want to {confirmationModal.actionLabel} this order?</p>
               <p className="text-gray-400 text-sm mb-8">
-                Order ID:{" "}
-                <span className="font-mono font-semibold text-white">
-                  {displayOrders.find((order) => order.order_id === confirmationModal.orderId)?.short_order_id ||
-                    confirmationModal.orderId}
-                </span>
+                Order ID: <span className="font-mono font-semibold text-white">{confirmationModal.orderId}</span>
               </p>
 
               <div className="flex gap-3">

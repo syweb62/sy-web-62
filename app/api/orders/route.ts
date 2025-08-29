@@ -1,52 +1,28 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase-server"
-import { generateShortOrderId } from "@/lib/order-id-generator" // Import short order ID generator
 
 export async function GET(request: NextRequest) {
   try {
     const supabase = createClient()
     const { searchParams } = new URL(request.url)
-    const orderId = searchParams.get("orderId")
-
-    // If orderId is provided, validate the order exists
-    if (orderId) {
-      console.log("[v0] API GET: Validating order existence:", orderId)
-
-      let orderExists = false
-
-      // Try UUID format first
-      if (orderId.length === 36 && orderId.includes("-")) {
-        const { data, error } = await supabase.from("orders").select("order_id").eq("order_id", orderId).limit(1)
-
-        if (!error && data && data.length > 0) {
-          orderExists = true
-        }
-      }
-
-      // Try short_order_id if UUID failed
-      if (!orderExists) {
-        const { data, error } = await supabase
-          .from("orders")
-          .select("short_order_id")
-          .eq("short_order_id", orderId)
-          .limit(1)
-
-        if (!error && data && data.length > 0) {
-          orderExists = true
-        }
-      }
-
-      if (!orderExists) {
-        console.log("[v0] API GET: Order validation failed - order not found:", orderId)
-        return NextResponse.json({ error: "Order not found", orderId }, { status: 404 })
-      }
-
-      console.log("[v0] API GET: Order validation successful:", orderId)
-      return NextResponse.json({ success: true, orderId, exists: true })
-    }
 
     const status = searchParams.get("status")
     const search = searchParams.get("search")
+    const orderId = searchParams.get("orderId") // Added orderId parameter for validation
+
+    if (orderId) {
+      const { data: order, error } = await supabase
+        .from("orders")
+        .select("order_id, short_order_id, status")
+        .eq("short_order_id", orderId)
+        .single()
+
+      if (error || !order) {
+        return NextResponse.json({ error: "Order not found", orderId }, { status: 404 })
+      }
+
+      return NextResponse.json({ order, exists: true })
+    }
 
     let query = supabase
       .from("orders")
@@ -79,7 +55,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (search) {
-      query = query.or(`customer_name.ilike.%${search}%,phone.ilike.%${search}%,order_id.ilike.%${search}%`)
+      query = query.or(`customer_name.ilike.%${search}%,phone.ilike.%${search}%,short_order_id.ilike.%${search}%`)
     }
 
     const { data: orders, error } = await query
@@ -93,8 +69,8 @@ export async function GET(request: NextRequest) {
 
     const formattedOrders =
       orders?.map((order) => ({
-        id: order.order_id || order.short_order_id,
-        order_id: order.order_id || order.short_order_id,
+        id: order.short_order_id || order.order_id,
+        order_id: order.short_order_id || order.order_id,
         short_order_id: order.short_order_id,
         customer_name: order.customer_name || "Guest",
         phone: order.phone || "N/A",
@@ -118,8 +94,8 @@ export async function GET(request: NextRequest) {
         // Additional fields for compatibility
         items:
           order.order_items?.map((item: any) => ({
-            id: `${order.order_id}-${item.item_name}`,
-            menu_item_id: `${order.order_id}-${item.item_name}`,
+            id: `${order.short_order_id}-${item.item_name}`,
+            menu_item_id: `${order.short_order_id}-${item.item_name}`,
             item_name: item.item_name,
             item_description: item.item_name,
             item_image: "/sushi-thumbnail.png",
@@ -150,67 +126,62 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "Order ID and status are required" }, { status: 400 })
     }
 
-    let updatedOrder = null
+    console.log("[v0] API PATCH: Attempting short_order_id update first")
+    const { data, error } = await supabase
+      .from("orders")
+      .update({
+        status,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("short_order_id", orderId)
+      .select()
 
-    // Try updating by order_id first (UUID format)
-    if (orderId.length === 36 && orderId.includes("-")) {
-      console.log("[v0] API PATCH: Attempting UUID update")
-      const { data, error } = await supabase
-        .from("orders")
-        .update({
-          status,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("order_id", orderId)
-        .select()
+    if (error) {
+      console.error("[v0] API PATCH: short_order_id update failed:", error)
 
-      if (!error && data && data.length > 0) {
-        updatedOrder = data[0]
+      if (orderId.length === 36 && orderId.includes("-")) {
+        console.log("[v0] API PATCH: Falling back to UUID update")
+        const { data: uuidData, error: uuidError } = await supabase
+          .from("orders")
+          .update({
+            status,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("order_id", orderId)
+          .select()
+
+        if (uuidError || !uuidData || uuidData.length === 0) {
+          console.error("[v0] API PATCH: Both update methods failed:", uuidError?.message || "No matching records")
+          return NextResponse.json({ error: `Order ${orderId} not found in database`, orderId }, { status: 404 })
+        }
+
         console.log("[v0] API PATCH: UUID update successful")
-      } else {
-        console.log("[v0] API PATCH: UUID update failed or no records found:", error?.message || "No matching records")
-      }
-    }
-
-    // If UUID failed or orderId is not UUID format, try short_order_id
-    if (!updatedOrder) {
-      console.log("[v0] API PATCH: Attempting short_order_id update")
-      const { data, error } = await supabase
-        .from("orders")
-        .update({
-          status,
-          updated_at: new Date().toISOString(),
+        return NextResponse.json({
+          success: true,
+          message: "Order status updated successfully",
+          orderId,
+          newStatus: status,
+          updatedOrder: uuidData[0],
+          timestamp: new Date().toISOString(),
         })
-        .eq("short_order_id", orderId)
-        .select()
-
-      if (error) {
-        console.error("[v0] API PATCH: short_order_id update failed:", error)
-        throw new Error(`Failed to update order: ${error.message}`)
       }
 
-      if (!data || data.length === 0) {
-        console.error("[v0] API PATCH: No order found with ID:", orderId)
-        return NextResponse.json({ error: "Order not found", orderId }, { status: 404 })
-      }
-
-      updatedOrder = data[0]
-      console.log("[v0] API PATCH: short_order_id update successful")
+      return NextResponse.json({ error: `Order ${orderId} not found in database`, orderId }, { status: 404 })
     }
 
-    if (!updatedOrder) {
-      console.error("[v0] API PATCH: No order found with ID:", orderId)
-      return NextResponse.json({ error: "Order not found", orderId }, { status: 404 })
+    if (!data || data.length === 0) {
+      console.error("[v0] API PATCH: No order found with short_order_id:", orderId)
+      return NextResponse.json({ error: `Order ${orderId} not found in database`, orderId }, { status: 404 })
     }
 
-    console.log("[v0] API PATCH: Order status updated successfully:", updatedOrder)
+    console.log("[v0] API PATCH: short_order_id update successful")
 
     return NextResponse.json({
       success: true,
       message: "Order status updated successfully",
       orderId,
       newStatus: status,
-      updatedOrder,
+      updatedOrder: data[0],
       timestamp: new Date().toISOString(),
     })
   } catch (error) {
@@ -232,14 +203,10 @@ export async function POST(request: NextRequest) {
     const supabase = createClient()
     const orderData = await request.json()
 
-    const shortOrderId = generateShortOrderId()
-    console.log("[v0] API POST: Generated short order ID:", shortOrderId)
-
     const { data: order, error: orderError } = await supabase
       .from("orders")
       .insert([
         {
-          short_order_id: shortOrderId, // Add short order ID for user display
           customer_name: orderData.customer_name,
           phone: orderData.phone,
           address: orderData.address,
@@ -256,19 +223,11 @@ export async function POST(request: NextRequest) {
       .select()
       .single()
 
-    if (orderError) {
-      console.error("[v0] API POST: Order creation failed:", orderError)
-      throw orderError
-    }
-
-    console.log("[v0] API POST: Order created successfully with both IDs:", {
-      order_id: order.order_id,
-      short_order_id: order.short_order_id,
-    })
+    if (orderError) throw orderError
 
     if (orderData.items && orderData.items.length > 0) {
       const orderItems = orderData.items.map((item: any) => ({
-        order_id: order.order_id, // Use the database-generated UUID for order items
+        order_id: order.order_id,
         menu_item_id: item.menu_item_id,
         item_name: item.name,
         item_description: item.description,
@@ -280,23 +239,12 @@ export async function POST(request: NextRequest) {
 
       const { error: itemsError } = await supabase.from("order_items").insert(orderItems)
 
-      if (itemsError) {
-        console.error("[v0] API POST: Order items creation failed:", itemsError)
-        throw itemsError
-      }
-
-      console.log("[v0] API POST: Order items created successfully")
+      if (itemsError) throw itemsError
     }
 
-    return NextResponse.json({
-      success: true,
-      order: {
-        ...order,
-        display_id: order.short_order_id, // Include display ID in response
-      },
-    })
+    return NextResponse.json({ success: true, order })
   } catch (error) {
-    console.error("[v0] API POST: Order creation error:", error)
+    console.error("Order creation API error:", error)
     return NextResponse.json(
       { error: "Internal server error", details: error instanceof Error ? error.message : "Unknown error" },
       { status: 500 },

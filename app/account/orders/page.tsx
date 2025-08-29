@@ -13,7 +13,6 @@ import { InvoiceButton } from "@/components/invoice-button"
 import { useOrderHistory, type OrderHistoryItem } from "@/hooks/use-order-history"
 import { useCart } from "@/hooks/use-cart"
 import { TimeBD } from "@/components/TimeBD"
-import { supabase } from "@/lib/supabase"
 
 function money(n?: number) {
   const v = typeof n === "number" && isFinite(n) ? n : 0
@@ -96,14 +95,11 @@ export default function OrdersPage() {
   }
 
   useEffect(() => {
-    let subscription: any = null
-    let isComponentMounted = true
-
     const handleOrderStatusChange = (event: CustomEvent) => {
       console.log("[v0] Order status change event received:", event.detail)
       if (event.detail?.orderId) {
         console.log("[v0] Refreshing order history due to status change")
-        setTimeout(() => refetch(), 100)
+        setTimeout(() => refetch(), 200)
       }
     }
 
@@ -113,75 +109,28 @@ export default function OrdersPage() {
         try {
           const data = JSON.parse(event.newValue)
           console.log("[v0] Order update data:", data)
-          setTimeout(() => refetch(), 100)
         } catch (e) {
           console.log("[v0] Could not parse storage data:", e)
-          setTimeout(() => refetch(), 100)
         }
+        setTimeout(() => refetch(), 300)
       }
     }
 
     const handleMessage = (event: MessageEvent) => {
       if (event.data?.type === "orderStatusChanged" && event.data?.orderId) {
         console.log("[v0] Message event received for order status change:", event.data)
-        setTimeout(() => refetch(), 100)
+        setTimeout(() => refetch(), 200)
       }
     }
-
-    const createSubscription = () => {
-      if (!isComponentMounted) return
-
-      subscription = supabase
-        .channel("website-orders-realtime")
-        .on(
-          "postgres_changes",
-          {
-            event: "UPDATE",
-            schema: "public",
-            table: "orders",
-          },
-          (payload) => {
-            if (!isComponentMounted) return
-            console.log("[v0] Website received real-time order update:", payload)
-            if (payload.new) {
-              setTimeout(() => refetch(), 50)
-            }
-          },
-        )
-        .subscribe((status) => {
-          if (!isComponentMounted) return
-          console.log("[v0] Website real-time subscription status:", status)
-
-          if (status === "CHANNEL_ERROR" || status === "CLOSED") {
-            if (subscription) {
-              subscription.unsubscribe()
-              subscription = null
-            }
-            setTimeout(() => {
-              if (isComponentMounted) {
-                createSubscription()
-              }
-            }, 5000)
-          }
-        })
-    }
-
-    createSubscription()
-
-    setTimeout(() => refetch(), 50)
 
     window.addEventListener("orderStatusChanged", handleOrderStatusChange as EventListener)
     window.addEventListener("storage", handleStorageChange)
     window.addEventListener("message", handleMessage)
 
     return () => {
-      isComponentMounted = false
       window.removeEventListener("orderStatusChanged", handleOrderStatusChange as EventListener)
       window.removeEventListener("storage", handleStorageChange)
       window.removeEventListener("message", handleMessage)
-      if (subscription) {
-        subscription.unsubscribe()
-      }
     }
   }, [refetch])
 
@@ -250,7 +199,6 @@ export default function OrdersPage() {
                 <SelectContent>
                   <SelectItem value="all">All statuses</SelectItem>
                   <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="confirmed">Confirmed</SelectItem>
                   <SelectItem value="processing">Processing</SelectItem>
                   <SelectItem value="completed">Completed</SelectItem>
                   <SelectItem value="cancelled">Cancelled</SelectItem>
