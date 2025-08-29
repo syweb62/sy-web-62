@@ -60,7 +60,7 @@ const EnhancedOrdersTable = ({
   const supabase = createClient()
 
   const getOrderId = (order: Order): string => {
-    return order.short_order_id || ""
+    return order.order_id || ""
   }
 
   useEffect(() => {
@@ -108,7 +108,7 @@ const EnhancedOrdersTable = ({
       return
     }
 
-    const orderExists = displayOrders.find((order) => order.short_order_id === orderId)
+    const orderExists = displayOrders.find((order) => order.order_id === orderId)
     if (!orderExists) {
       console.log("[v0] Error: Order not found in current display orders:", orderId)
       alert(`Error: Order ${orderId} not found in current orders. Please refresh the page.`)
@@ -136,7 +136,7 @@ const EnhancedOrdersTable = ({
 
         setDisplayOrders((prev) =>
           prev.map((order) =>
-            order.short_order_id === orderId
+            order.order_id === orderId
               ? { ...order, status: newStatus as Order["status"], updated_at: new Date().toISOString() }
               : order,
           ),
@@ -147,8 +147,12 @@ const EnhancedOrdersTable = ({
         const successMessage = `Order ${newStatus} successfully!`
         alert(successMessage)
 
-        // Dispatch events for cross-window communication
-        const eventData = { orderId, newStatus, timestamp: new Date().toISOString() }
+        const eventData = {
+          orderId: orderExists.short_order_id, // Use short_order_id for display purposes
+          realOrderId: orderId, // Include real UUID for backend operations
+          newStatus,
+          timestamp: new Date().toISOString(),
+        }
         window.dispatchEvent(new CustomEvent("orderStatusChanged", { detail: eventData }))
 
         try {
@@ -204,18 +208,22 @@ const EnhancedOrdersTable = ({
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "orders" }, (payload) => {
         console.log("[v0] Real-time database update received:", payload)
         if (payload.new) {
-          const orderId = payload.new.short_order_id
+          const orderId = payload.new.order_id
           if (orderId) {
             console.log("[v0] Updating local order display for:", orderId)
             setDisplayOrders((prev) =>
               prev.map((order) =>
-                order.short_order_id === orderId
+                order.order_id === orderId
                   ? { ...order, status: payload.new.status, updated_at: payload.new.updated_at }
                   : order,
               ),
             )
 
-            const eventData = { orderId, newStatus: payload.new.status, timestamp: new Date().toISOString() }
+            const eventData = {
+              orderId: payload.new.short_order_id,
+              newStatus: payload.new.status,
+              timestamp: new Date().toISOString(),
+            }
             window.dispatchEvent(new CustomEvent("orderStatusChanged", { detail: eventData }))
           }
         }
@@ -681,7 +689,11 @@ const EnhancedOrdersTable = ({
 
               <p className="text-gray-300 mb-2">Are you sure you want to {confirmationModal.actionLabel} this order?</p>
               <p className="text-gray-400 text-sm mb-8">
-                Order ID: <span className="font-mono font-semibold text-white">{confirmationModal.orderId}</span>
+                Order ID:{" "}
+                <span className="font-mono font-semibold text-white">
+                  {displayOrders.find((order) => order.order_id === confirmationModal.orderId)?.short_order_id ||
+                    confirmationModal.orderId}
+                </span>
               </p>
 
               <div className="flex gap-3">
