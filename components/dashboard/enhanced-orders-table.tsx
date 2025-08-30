@@ -112,7 +112,7 @@ const EnhancedOrdersTable = ({
       const { data, error } = await supabase
         .from("orders")
         .update({ status: newStatus })
-        .eq("short_order_id", orderId) // Use simple .eq() like the working solution
+        .eq("short_order_id", orderId.toLowerCase()) // Case-insensitive matching
         .select()
 
       console.log("[v0] Update result - data:", data, "error:", error)
@@ -130,6 +130,7 @@ const EnhancedOrdersTable = ({
 
       alert("✅ Order updated successfully!")
 
+      // Added refresh orders after update like the working solution
       if (onRefresh) {
         onRefresh()
       }
