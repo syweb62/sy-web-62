@@ -121,25 +121,20 @@ const EnhancedOrdersTable = ({
       console.log("[v0] Update result - data:", data, "error:", error)
 
       if (error) {
-        console.error("[v0] Supabase update error:", error)
-        alert(`Error: ${error.message}`)
+        console.error("[v0] Error updating order:", error.message)
+        alert("Error: " + error.message)
         return
       }
 
       if (!data || data.length === 0) {
-        alert(`Error: Order ${orderId} not found in database`)
-        console.log("[v0] No rows updated - order may not exist or ID mismatch")
-        return
+        alert(`❌ Error: Order ${orderId} not found in database`)
+      } else {
+        alert("✅ Order updated successfully!")
       }
-
-      alert("✅ Order updated successfully!")
-      console.log("[v0] Successfully updated order:", data[0])
 
       if (onRefresh) {
         onRefresh()
       }
-
-      console.log("[v0] Order status update completed successfully")
     } catch (error) {
       console.error("[v0] Failed to update order status:", error)
       alert(`Network Error: ${error}`)
@@ -149,7 +144,7 @@ const EnhancedOrdersTable = ({
   }
 
   useEffect(() => {
-    console.log("[v0] Setting up comprehensive real-time subscription...")
+    console.log("[v0] Setting up real-time subscription...")
 
     const subscription = supabase
       .channel("orders-realtime")
@@ -163,54 +158,15 @@ const EnhancedOrdersTable = ({
         (payload) => {
           console.log("[v0] Real-time database change received:", payload)
 
-          if (payload.eventType === "INSERT") {
-            console.log("[v0] New order detected:", payload.new)
-            playNotificationSound()
-
-            // Show browser notification if permission granted
-            if (Notification.permission === "granted") {
-              new Notification(`🆕 New Order Received!`, {
-                body: `Order ID: ${payload.new.short_order_id}\nCustomer: ${payload.new.customer_name}`,
-                icon: "/favicon.ico",
-              })
-            }
-
-            setDisplayOrders((prev) => [payload.new as Order, ...prev])
-
-            // Alert popup
-            alert(`🆕 New order received!\nID: ${payload.new.short_order_id}\nCustomer: ${payload.new.customer_name}`)
-          }
-
-          if (payload.eventType === "UPDATE") {
-            const shortOrderId = payload.new.short_order_id
-            if (shortOrderId) {
-              console.log("[v0] Updating local order display for:", shortOrderId)
-              setDisplayOrders((prev) =>
-                prev.map((order) =>
-                  order.short_order_id === shortOrderId
-                    ? { ...order, status: payload.new.status, updated_at: payload.new.updated_at }
-                    : order,
-                ),
-              )
-
-              const eventData = {
-                orderId: payload.new.short_order_id,
-                newStatus: payload.new.status,
-                timestamp: new Date().toISOString(),
-              }
-              window.dispatchEvent(new CustomEvent("orderStatusChanged", { detail: eventData }))
-            }
+          if (onRefresh) {
+            onRefresh()
           }
         },
       )
       .subscribe((status) => {
         console.log("[v0] Real-time subscription status:", status)
-        if (status === "SUBSCRIBED") {
-          console.log("[v0] Successfully subscribed to real-time updates")
-        }
       })
 
-    // Request notification permission
     if (Notification.permission === "default") {
       Notification.requestPermission()
     }
@@ -219,7 +175,7 @@ const EnhancedOrdersTable = ({
       console.log("[v0] Unsubscribing from real-time updates")
       subscription.unsubscribe()
     }
-  }, [supabase])
+  }, [supabase, onRefresh])
 
   const playNotificationSound = () => {
     try {
@@ -227,7 +183,6 @@ const EnhancedOrdersTable = ({
       audio.volume = 0.7
       audio.play().catch((e) => {
         console.log("[v0] Could not play notification sound:", e)
-        // Fallback: try to play a system beep
         try {
           const context = new (window.AudioContext || (window as any).webkitAudioContext)()
           const oscillator = context.createOscillator()
