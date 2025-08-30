@@ -97,45 +97,18 @@ export default function OrdersPage() {
   }
 
   useEffect(() => {
-    console.log("[v0] Setting up website realtime subscription...")
+    console.log("[v0] Setting up website real-time subscriptions...")
 
-    const subscription = supabase
-      .channel("website-orders-sync")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "orders",
-        },
-        (payload) => {
-          console.log("[v0] Website received realtime update:", payload)
-
-          if (payload.eventType === "UPDATE" || payload.eventType === "INSERT") {
-            console.log("[v0] Refreshing website order history...")
-            setTimeout(() => refetch(), 50) // Fast refresh for better UX
-          }
-        },
-      )
-      .subscribe((status) => {
-        console.log("[v0] Website realtime subscription status:", status)
-      })
-
-    return () => {
-      console.log("[v0] Unsubscribing website realtime updates")
-      subscription.unsubscribe()
-    }
-  }, [supabase, refetch])
-
-  useEffect(() => {
+    // Custom event listener for dashboard updates
     const handleOrderStatusChange = (event: CustomEvent) => {
       console.log("[v0] Order status change event received:", event.detail)
       if (event.detail?.orderId) {
         console.log("[v0] Refreshing order history due to status change")
-        setTimeout(() => refetch(), 50) // Faster refresh
+        setTimeout(() => refetch(), 50)
       }
     }
 
+    // Storage change listener for cross-window communication
     const handleStorageChange = (event: StorageEvent) => {
       if ((event.key === "orderUpdate" || event.key === "orderStatusUpdate") && event.newValue) {
         console.log("[v0] Storage change detected, refreshing order history")
@@ -145,17 +118,38 @@ export default function OrdersPage() {
         } catch (e) {
           console.log("[v0] Could not parse storage data:", e)
         }
-        setTimeout(() => refetch(), 50) // Faster refresh
+        setTimeout(() => refetch(), 100)
       }
     }
 
+    // Message event listener for cross-window communication
     const handleMessage = (event: MessageEvent) => {
       if (event.data?.type === "orderStatusChanged" && event.data?.orderId) {
         console.log("[v0] Message event received for order status change:", event.data)
-        setTimeout(() => refetch(), 50) // Faster refresh
+        setTimeout(() => refetch(), 50)
       }
     }
 
+    const subscription = supabase
+      .channel("website-orders-updates")
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "orders",
+        },
+        (payload) => {
+          console.log("[v0] Website received real-time database update:", payload)
+          // Refresh order history when any order is updated
+          setTimeout(() => refetch(), 100)
+        },
+      )
+      .subscribe((status) => {
+        console.log("[v0] Website real-time subscription status:", status)
+      })
+
+    // Add all event listeners
     window.addEventListener("orderStatusChanged", handleOrderStatusChange as EventListener)
     window.addEventListener("storage", handleStorageChange)
     window.addEventListener("message", handleMessage)
@@ -164,8 +158,9 @@ export default function OrdersPage() {
       window.removeEventListener("orderStatusChanged", handleOrderStatusChange as EventListener)
       window.removeEventListener("storage", handleStorageChange)
       window.removeEventListener("message", handleMessage)
+      subscription.unsubscribe()
     }
-  }, [refetch])
+  }, [refetch, supabase])
 
   if (loading) {
     return (

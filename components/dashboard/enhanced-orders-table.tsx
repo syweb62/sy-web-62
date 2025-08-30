@@ -116,11 +116,10 @@ const EnhancedOrdersTable = ({
     }
 
     console.log("[v0] Order found in display orders:", orderExists)
-
     setConfirmationModal((prev) => ({ ...prev, isProcessing: true }))
 
     try {
-      console.log("[v0] Making direct Supabase update...")
+      console.log("[v0] Making direct Supabase update query...")
 
       const { data, error } = await supabase
         .from("orders")
@@ -131,15 +130,16 @@ const EnhancedOrdersTable = ({
         .eq("short_order_id", orderId)
         .select()
 
-      console.log("[v0] Supabase update result:", { data, error })
-
       if (error) {
-        throw new Error(error.message)
+        console.error("[v0] Supabase update error:", error)
+        alert(`Error: ${error.message}\n\nPlease refresh the page and try again.`)
+        if (onRefresh) {
+          setTimeout(onRefresh, 1000)
+        }
+        return
       }
 
-      if (!data || data.length === 0) {
-        throw new Error(`Order ${orderId} not found in database`)
-      }
+      console.log("[v0] Supabase update successful:", data)
 
       setDisplayOrders((prev) =>
         prev.map((order) =>
@@ -149,13 +149,12 @@ const EnhancedOrdersTable = ({
         ),
       )
 
-      console.log("[v0] Local state updated successfully")
-
       const successMessage = `Order ${newStatus} successfully!`
       alert(successMessage)
 
       const eventData = {
-        orderId: orderId,
+        orderId: orderExists.short_order_id,
+        realOrderId: orderId,
         newStatus,
         timestamp: new Date().toISOString(),
       }
@@ -188,18 +187,14 @@ const EnhancedOrdersTable = ({
       console.log("[v0] Order status update completed successfully")
     } catch (error) {
       console.error("[v0] Failed to update order status:", error)
-      alert(`Error: ${error}\n\nPlease refresh the page and try again.`)
-
-      if (onRefresh) {
-        setTimeout(onRefresh, 1000)
-      }
+      alert(`Network Error: ${error}\n\nPlease check your connection and try again.`)
     } finally {
       setConfirmationModal((prev) => ({ ...prev, isProcessing: false }))
     }
   }
 
   useEffect(() => {
-    console.log("[v0] Setting up comprehensive realtime subscription...")
+    console.log("[v0] Setting up comprehensive real-time subscription...")
 
     const subscription = supabase
       .channel("orders-realtime")
@@ -213,46 +208,41 @@ const EnhancedOrdersTable = ({
         (payload) => {
           console.log("[v0] Real-time database change received:", payload)
 
-          if (payload.eventType === "INSERT" && payload.new) {
+          if (payload.eventType === "INSERT") {
             console.log("[v0] New order detected:", payload.new)
+            playNotificationSound()
 
-            const newOrder = payload.new as Order
-            if (newOrder.short_order_id) {
-              // Add to display orders
-              setDisplayOrders((prev) => [newOrder, ...prev])
-
-              // Play notification sound
-              playNotificationSound()
-
-              // Show popup notification
-              if (Notification.permission === "granted") {
-                new Notification(`🆕 New Order Received!`, {
-                  body: `Order ID: ${newOrder.short_order_id} from ${newOrder.customer_name}`,
-                  icon: "/favicon.ico",
-                })
-              }
-
-              // Alert popup as fallback
-              alert(`🆕 New order received!\nID: ${newOrder.short_order_id}\nCustomer: ${newOrder.customer_name}`)
+            // Show browser notification if permission granted
+            if (Notification.permission === "granted") {
+              new Notification(`🆕 New Order Received!`, {
+                body: `Order ID: ${payload.new.short_order_id}\nCustomer: ${payload.new.customer_name}`,
+                icon: "/favicon.ico",
+              })
             }
+
+            // Add to local state
+            setDisplayOrders((prev) => [payload.new as Order, ...prev])
+
+            // Alert popup
+            alert(`🆕 New order received!\nID: ${payload.new.short_order_id}\nCustomer: ${payload.new.customer_name}`)
           }
 
-          if (payload.eventType === "UPDATE" && payload.new) {
-            const updatedOrder = payload.new as Order
-            if (updatedOrder.short_order_id) {
-              console.log("[v0] Updating local order display for:", updatedOrder.short_order_id)
+          if (payload.eventType === "UPDATE") {
+            const shortOrderId = payload.new.short_order_id
+            if (shortOrderId) {
+              console.log("[v0] Updating local order display for:", shortOrderId)
               setDisplayOrders((prev) =>
                 prev.map((order) =>
-                  order.short_order_id === updatedOrder.short_order_id
-                    ? { ...order, status: updatedOrder.status, updated_at: updatedOrder.updated_at }
+                  order.short_order_id === shortOrderId
+                    ? { ...order, status: payload.new.status, updated_at: payload.new.updated_at }
                     : order,
                 ),
               )
 
-              // Cross-window communication for website sync
+              // Cross-window communication for website updates
               const eventData = {
-                orderId: updatedOrder.short_order_id,
-                newStatus: updatedOrder.status,
+                orderId: payload.new.short_order_id,
+                newStatus: payload.new.status,
                 timestamp: new Date().toISOString(),
               }
               window.dispatchEvent(new CustomEvent("orderStatusChanged", { detail: eventData }))
@@ -262,8 +252,12 @@ const EnhancedOrdersTable = ({
       )
       .subscribe((status) => {
         console.log("[v0] Real-time subscription status:", status)
+        if (status === "SUBSCRIBED") {
+          console.log("[v0] Successfully subscribed to real-time updates")
+        }
       })
 
+    // Request notification permission
     if (Notification.permission === "default") {
       Notification.requestPermission()
     }
@@ -280,15 +274,23 @@ const EnhancedOrdersTable = ({
       audio.volume = 0.7
       audio.play().catch((e) => {
         console.log("[v0] Could not play notification sound:", e)
-        // Fallback: try different sound file
+        // Fallback: try to play a system beep
         try {
-          const fallbackAudio = new Audio("/notification.mp3")
-          fallbackAudio.volume = 0.7
-          fallbackAudio.play().catch(() => {
-            console.log("[v0] Fallback notification sound also failed")
-          })
-        } catch (fallbackError) {
-          console.log("[v0] Fallback notification sound error:", fallbackError)
+          const context = new (window.AudioContext || (window as any).webkitAudioContext)()
+          const oscillator = context.createOscillator()
+          const gainNode = context.createGain()
+
+          oscillator.connect(gainNode)
+          gainNode.connect(context.destination)
+
+          oscillator.frequency.value = 800
+          gainNode.gain.setValueAtTime(0.3, context.currentTime)
+          gainNode.gain.exponentialRampToValueAtTime(0.01, context.currentTime + 0.5)
+
+          oscillator.start(context.currentTime)
+          oscillator.stop(context.currentTime + 0.5)
+        } catch (beepError) {
+          console.log("[v0] Could not play fallback beep:", beepError)
         }
       })
     } catch (error) {
