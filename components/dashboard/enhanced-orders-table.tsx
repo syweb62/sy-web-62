@@ -99,9 +99,13 @@ const EnhancedOrdersTable = ({
   }, [])
 
   const updateOrderStatus = async (orderId: string, newStatus: string) => {
+    console.log("[v0] =================================")
     console.log("[v0] BUTTON CLICKED! Order ID:", orderId, "New Status:", newStatus)
+    console.log("[v0] Current timestamp:", new Date().toISOString())
+    console.log("[v0] =================================")
 
     if (!orderId) {
+      console.error("[v0] ERROR: No order ID found")
       alert("Error: No order ID found")
       return
     }
@@ -109,6 +113,9 @@ const EnhancedOrdersTable = ({
     setConfirmationModal((prev) => ({ ...prev, isProcessing: true }))
 
     try {
+      console.log("[v0] Making API call to /api/orders...")
+      console.log("[v0] Request body:", JSON.stringify({ orderId: orderId, status: newStatus }))
+
       const response = await fetch("/api/orders", {
         method: "PATCH",
         headers: {
@@ -120,28 +127,46 @@ const EnhancedOrdersTable = ({
         }),
       })
 
+      console.log("[v0] API response status:", response.status)
+      console.log("[v0] API response ok:", response.ok)
+
       const result = await response.json()
-      console.log("[v0] API response:", result)
+      console.log("[v0] API response data:", result)
 
       if (!response.ok) {
-        console.error("[v0] API error:", result.error)
+        console.error("[v0] API error - Status:", response.status)
+        console.error("[v0] API error - Data:", result)
         alert(`❌ ${result.error || "Failed to update order status"}`)
         return
       }
 
       if (result.success) {
+        console.log("[v0] ✅ Order updated successfully!")
         alert("✅ Order updated successfully!")
 
+        setDisplayOrders((prevOrders) =>
+          prevOrders.map((order) =>
+            order.short_order_id === orderId
+              ? { ...order, status: newStatus as any, updated_at: new Date().toISOString() }
+              : order,
+          ),
+        )
+
         if (onRefresh) {
+          console.log("[v0] Calling onRefresh...")
           onRefresh()
         }
       } else {
+        console.error("[v0] API returned success: false")
+        console.error("[v0] Error details:", result.error)
         alert(`❌ Error: ${result.error || "Unknown error occurred"}`)
       }
     } catch (error) {
-      console.error("[v0] Network error:", error)
+      console.error("[v0] Network/JavaScript error:", error)
+      console.error("[v0] Error stack:", (error as Error).stack)
       alert(`❌ Network Error: ${error}`)
     } finally {
+      console.log("[v0] Setting isProcessing to false")
       setConfirmationModal((prev) => ({ ...prev, isProcessing: false }))
     }
   }
@@ -354,17 +379,24 @@ const EnhancedOrdersTable = ({
   )
 
   const showConfirmation = (orderId: string, action: string, actionLabel: string) => {
+    console.log("[v0] showConfirmation called with:", { orderId, action, actionLabel })
+
     setConfirmationModal({
       isOpen: true,
       orderId,
       action,
       actionLabel,
-      isProcessing: false, // Reset processing state when opening modal
+      isProcessing: false,
     })
   }
 
   const handleConfirmation = async () => {
+    console.log("[v0] handleConfirmation called")
+    console.log("[v0] Modal state:", confirmationModal)
+
     await updateOrderStatus(confirmationModal.orderId, confirmationModal.action)
+
+    console.log("[v0] Closing confirmation modal")
     setConfirmationModal({ isOpen: false, orderId: "", action: "", actionLabel: "", isProcessing: false })
   }
 
