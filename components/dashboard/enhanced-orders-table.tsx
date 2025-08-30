@@ -108,19 +108,32 @@ const EnhancedOrdersTable = ({
   }, [])
 
   const updateOrderStatus = async (orderId: string, newStatus: string) => {
-    console.log("[v0] Updating order status:", orderId, "to", newStatus)
+    console.log("[v0] ========== ORDER STATUS UPDATE START ==========")
+    console.log("[v0] Order ID:", orderId)
+    console.log("[v0] New Status:", newStatus)
+    console.log("[v0] Current time:", new Date().toISOString())
 
     if (!orderId) {
+      console.log("[v0] ERROR: No order ID found")
       alert("Error: No order ID found")
       return
     }
 
-    setConfirmationModal((prev) => ({ ...prev, isProcessing: true }))
-
     try {
-      setDisplayOrders((prevOrders) =>
-        prevOrders.map((order) => (order.short_order_id === orderId ? { ...order, status: newStatus as any } : order)),
-      )
+      console.log("[v0] Applying optimistic update...")
+      setDisplayOrders((prevOrders) => {
+        const updatedOrders = prevOrders.map((order) =>
+          order.short_order_id === orderId ? { ...order, status: newStatus as any } : order,
+        )
+        console.log(
+          "[v0] Optimistic update applied, new orders:",
+          updatedOrders.find((o) => o.short_order_id === orderId),
+        )
+        return updatedOrders
+      })
+
+      console.log("[v0] Making API call to /api/orders...")
+      console.log("[v0] Request body:", JSON.stringify({ orderId, status: newStatus }))
 
       const response = await fetch("/api/orders", {
         method: "PATCH",
@@ -133,10 +146,14 @@ const EnhancedOrdersTable = ({
         }),
       })
 
+      console.log("[v0] API response status:", response.status)
+      console.log("[v0] API response ok:", response.ok)
+
       const result = await response.json()
-      console.log("[v0] API response:", result)
+      console.log("[v0] API response body:", result)
 
       if (!response.ok) {
+        console.log("[v0] API call failed, reverting optimistic update...")
         setDisplayOrders((prevOrders) =>
           prevOrders.map((order) => (order.short_order_id === orderId ? { ...order, status: order.status } : order)),
         )
@@ -145,24 +162,34 @@ const EnhancedOrdersTable = ({
       }
 
       if (result.success) {
+        console.log("[v0] API call successful!")
         alert("✅ Order updated successfully!")
+
         if (onRefresh) {
-          setTimeout(() => onRefresh(), 100)
+          console.log("[v0] Calling onRefresh() after 100ms delay...")
+          setTimeout(() => {
+            console.log("[v0] Executing onRefresh() now...")
+            onRefresh()
+          }, 100)
+        } else {
+          console.log("[v0] No onRefresh function provided")
         }
       } else {
+        console.log("[v0] API returned success=false, reverting optimistic update...")
         setDisplayOrders((prevOrders) =>
           prevOrders.map((order) => (order.short_order_id === orderId ? { ...order, status: order.status } : order)),
         )
         alert(`❌ Error: ${result.error || "Unknown error occurred"}`)
       }
     } catch (error) {
+      console.log("[v0] Network error occurred, reverting optimistic update...")
       setDisplayOrders((prevOrders) =>
         prevOrders.map((order) => (order.short_order_id === orderId ? { ...order, status: order.status } : order)),
       )
       console.error("[v0] Network error:", error)
       alert(`❌ Network Error: ${error}`)
     } finally {
-      setConfirmationModal((prev) => ({ ...prev, isProcessing: false }))
+      console.log("[v0] ========== ORDER STATUS UPDATE END ==========")
     }
   }
 
@@ -179,10 +206,17 @@ const EnhancedOrdersTable = ({
           table: "orders",
         },
         (payload) => {
-          console.log("[v0] Real-time database change received:", payload)
+          console.log("[v0] ========== REAL-TIME EVENT ==========")
+          console.log("[v0] Event type:", payload.eventType)
+          console.log("[v0] Event time:", new Date().toISOString())
+          console.log("[v0] Payload:", payload)
+          console.log("[v0] =====================================")
 
           if (onRefresh) {
+            console.log("[v0] Real-time event triggered onRefresh()")
             onRefresh()
+          } else {
+            console.log("[v0] No onRefresh function for real-time event")
           }
         },
       )
@@ -385,9 +419,24 @@ const EnhancedOrdersTable = ({
   }
 
   const handleConfirmation = async () => {
+    console.log("[v0] ========== HANDLE CONFIRMATION CALLED ==========")
     console.log("[v0] Confirming action:", confirmationModal.action, "for order:", confirmationModal.orderId)
-    await updateOrderStatus(confirmationModal.orderId, confirmationModal.action)
-    setConfirmationModal({ isOpen: false, orderId: "", action: "", actionLabel: "", isProcessing: false })
+    console.log("[v0] Current time:", new Date().toISOString())
+
+    setConfirmationModal((prev) => ({ ...prev, isProcessing: true }))
+
+    try {
+      await updateOrderStatus(confirmationModal.orderId, confirmationModal.action)
+      console.log("[v0] updateOrderStatus completed successfully")
+
+      setConfirmationModal({ isOpen: false, orderId: "", action: "", actionLabel: "", isProcessing: false })
+    } catch (error) {
+      console.log("[v0] updateOrderStatus failed:", error)
+
+      setConfirmationModal({ isOpen: false, orderId: "", action: "", actionLabel: "", isProcessing: false })
+    }
+
+    console.log("[v0] ========== HANDLE CONFIRMATION END ==========")
   }
 
   const cancelConfirmation = () => {
@@ -705,7 +754,12 @@ const EnhancedOrdersTable = ({
                   Cancel
                 </Button>
                 <Button
-                  onClick={handleConfirmation}
+                  onClick={() => {
+                    console.log("[v0] ========== OK BUTTON CLICKED ==========")
+                    console.log("[v0] Modal state:", confirmationModal)
+                    console.log("[v0] Current time:", new Date().toISOString())
+                    handleConfirmation()
+                  }}
                   disabled={confirmationModal.isProcessing}
                   className={`flex-1 ${getModalColors()} hover:opacity-90 text-white disabled:opacity-50 transition-all duration-200 font-semibold`}
                 >
