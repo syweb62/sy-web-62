@@ -59,6 +59,15 @@ const EnhancedOrdersTable = ({
   })
   const supabase = createClient()
 
+  useEffect(() => {
+    console.log("[v0] =================================")
+    console.log("[v0] EnhancedOrdersTable MOUNTED")
+    console.log("[v0] Orders received:", orders.length)
+    console.log("[v0] Sample order:", orders[0])
+    console.log("[v0] onRefresh function:", typeof onRefresh)
+    console.log("[v0] =================================")
+  }, [])
+
   const getOrderId = (order: Order): string => {
     return order.short_order_id || ""
   }
@@ -435,7 +444,10 @@ const EnhancedOrdersTable = ({
   const getActionButtons = (order: Order) => {
     const validOrderId = getOrderId(order)
 
+    console.log("[v0] Rendering action buttons for order:", validOrderId, "status:", order.status)
+
     if (!validOrderId) {
+      console.log("[v0] No valid order ID found for order:", order)
       return (
         <div className="space-y-3">
           <div className="flex gap-2">
@@ -452,6 +464,7 @@ const EnhancedOrdersTable = ({
     }
 
     if (order.status === "pending") {
+      console.log("[v0] Rendering PENDING buttons for order:", validOrderId)
       return (
         <div className="space-y-3">
           <div className="flex gap-2">
@@ -475,9 +488,15 @@ const EnhancedOrdersTable = ({
           <div className="flex gap-2">
             <Button
               onClick={(e) => {
+                console.log("[v0] =================================")
                 console.log("[v0] CONFIRM BUTTON CLICKED!")
                 console.log("[v0] Event:", e)
+                console.log("[v0] Event type:", e.type)
+                console.log("[v0] Event target:", e.target)
+                console.log("[v0] Event currentTarget:", e.currentTarget)
                 console.log("[v0] Order ID:", validOrderId)
+                console.log("[v0] Timestamp:", new Date().toISOString())
+                console.log("[v0] =================================")
                 e.preventDefault()
                 e.stopPropagation()
                 showConfirmation(validOrderId, "confirmed", "confirm")
@@ -485,15 +504,23 @@ const EnhancedOrdersTable = ({
               size="sm"
               className="bg-green-600 hover:bg-green-700 text-white flex-1 cursor-pointer"
               type="button"
+              data-testid="confirm-button"
+              data-order-id={validOrderId}
             >
               <Check className="w-4 h-4" />
               Confirm
             </Button>
             <Button
               onClick={(e) => {
+                console.log("[v0] =================================")
                 console.log("[v0] CANCEL BUTTON CLICKED!")
                 console.log("[v0] Event:", e)
+                console.log("[v0] Event type:", e.type)
+                console.log("[v0] Event target:", e.target)
+                console.log("[v0] Event currentTarget:", e.currentTarget)
                 console.log("[v0] Order ID:", validOrderId)
+                console.log("[v0] Timestamp:", new Date().toISOString())
+                console.log("[v0] =================================")
                 e.preventDefault()
                 e.stopPropagation()
                 showConfirmation(validOrderId, "cancelled", "cancel")
@@ -502,6 +529,8 @@ const EnhancedOrdersTable = ({
               variant="destructive"
               className="flex-1 cursor-pointer"
               type="button"
+              data-testid="cancel-button"
+              data-order-id={validOrderId}
             >
               <X className="w-4 h-4" />
               Cancel
@@ -512,6 +541,7 @@ const EnhancedOrdersTable = ({
     }
 
     if (order.status === "confirmed") {
+      console.log("[v0] Rendering CONFIRMED buttons for order:", validOrderId)
       return (
         <div className="space-y-3">
           <div className="flex gap-2">
@@ -534,9 +564,15 @@ const EnhancedOrdersTable = ({
           </div>
           <Button
             onClick={(e) => {
+              console.log("[v0] =================================")
               console.log("[v0] COMPLETE BUTTON CLICKED!")
               console.log("[v0] Event:", e)
+              console.log("[v0] Event type:", e.type)
+              console.log("[v0] Event target:", e.target)
+              console.log("[v0] Event currentTarget:", e.currentTarget)
               console.log("[v0] Order ID:", validOrderId)
+              console.log("[v0] Timestamp:", new Date().toISOString())
+              console.log("[v0] =================================")
               e.preventDefault()
               e.stopPropagation()
               showConfirmation(validOrderId, "completed", "complete")
@@ -544,6 +580,8 @@ const EnhancedOrdersTable = ({
             size="sm"
             className="bg-blue-600 hover:bg-blue-700 text-white w-full cursor-pointer"
             type="button"
+            data-testid="complete-button"
+            data-order-id={validOrderId}
           >
             <CheckCircle className="w-4 h-4" />
             Complete
@@ -552,6 +590,7 @@ const EnhancedOrdersTable = ({
       )
     }
 
+    console.log("[v0] Rendering FINAL STATUS buttons for order:", validOrderId, "status:", order.status)
     return (
       <div className="space-y-3">
         <div className="flex gap-2">
@@ -580,6 +619,18 @@ const EnhancedOrdersTable = ({
       </div>
     )
   }
+
+  useEffect(() => {
+    const handleGlobalClick = (e: MouseEvent) => {
+      console.log("[v0] Global click detected:", e.target)
+      if ((e.target as HTMLElement).closest('[data-testid*="button"]')) {
+        console.log("[v0] Click on button detected!")
+      }
+    }
+
+    document.addEventListener("click", handleGlobalClick)
+    return () => document.removeEventListener("click", handleGlobalClick)
+  }, [])
 
   return (
     <div className="space-y-6">
