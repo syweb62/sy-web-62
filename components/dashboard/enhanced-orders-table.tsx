@@ -108,53 +108,20 @@ const EnhancedOrdersTable = ({
       return
     }
 
-    const orderExists = displayOrders.find((order) => order.short_order_id === orderId)
-    if (!orderExists) {
-      console.log("[v0] Error: Order not found in current display orders:", orderId)
-      alert(`Error: Order ${orderId} not found in current orders. Please refresh the page.`)
-      return
-    }
-
-    console.log("[v0] Order found in display orders:", orderExists)
-    console.log("[v0] Using order_id for database update:", orderExists.order_id)
     setConfirmationModal((prev) => ({ ...prev, isProcessing: true }))
 
     try {
-      console.log("[v0] Verifying order exists in database...")
-      const { data: existingOrder, error: checkError } = await supabase
-        .from("orders")
-        .select("order_id, short_order_id, status")
-        .eq("order_id", orderExists.order_id)
-        .single()
-
-      if (checkError) {
-        console.error("[v0] Error checking order existence:", checkError)
-        alert(`Error: Could not verify order exists. ${checkError.message}`)
-        return
-      }
-
-      if (!existingOrder) {
-        console.error("[v0] Order not found in database with order_id:", orderExists.order_id)
-        alert(`Error: Order ${orderId} not found in database. Please refresh the page.`)
-        if (onRefresh) {
-          setTimeout(onRefresh, 500)
-        }
-        return
-      }
-
-      console.log("[v0] Order verified in database:", existingOrder)
-
-      console.log("[v0] Making direct Supabase update query...")
-      const { data, error, count } = await supabase
+      console.log("[v0] Making Supabase update with .or() condition...")
+      const { data, error } = await supabase
         .from("orders")
         .update({
           status: newStatus,
           updated_at: new Date().toISOString(),
         })
-        .eq("order_id", orderExists.order_id)
+        .or(`order_id.eq.${orderId},short_order_id.eq.${orderId}`)
         .select()
 
-      console.log("[v0] Update result - data:", data, "error:", error, "count:", count)
+      console.log("[v0] Update result - data:", data, "error:", error)
 
       if (error) {
         console.error("[v0] Supabase update error:", error)
@@ -165,55 +132,44 @@ const EnhancedOrdersTable = ({
         return
       }
 
-      console.log("[v0] Supabase update successful:", data)
-
       if (!data || data.length === 0) {
-        console.error("[v0] No rows were updated - this should not happen after verification")
-        alert(`Error: Order ${orderId} could not be updated. Please refresh the page and try again.`)
+        console.error("[v0] No rows were updated - order not found")
+        alert(`Error: Order ${orderId} not found in database`)
         if (onRefresh) {
           setTimeout(onRefresh, 500)
         }
         return
       }
 
-      console.log("[v0] Updating local state with:", data[0])
+      console.log("[v0] Supabase update successful:", data)
+
+      const updatedOrder = data[0]
       setDisplayOrders((prev) =>
         prev.map((order) =>
-          order.order_id === orderExists.order_id
-            ? { ...order, status: data[0].status, updated_at: data[0].updated_at }
+          order.order_id === updatedOrder.order_id || order.short_order_id === updatedOrder.short_order_id
+            ? { ...order, status: updatedOrder.status, updated_at: updatedOrder.updated_at }
             : order,
         ),
       )
 
-      const successMessage = `Order ${newStatus} successfully!`
+      const successMessage = `✅ Order ${newStatus} successfully!`
       alert(successMessage)
 
       const eventData = {
-        orderId: orderExists.short_order_id,
-        realOrderId: orderId,
-        newStatus,
+        orderId: updatedOrder.short_order_id,
+        newStatus: updatedOrder.status,
         timestamp: new Date().toISOString(),
       }
 
-      // Multiple communication methods for reliability
       window.dispatchEvent(new CustomEvent("orderStatusChanged", { detail: eventData }))
 
       try {
         localStorage.setItem("orderStatusUpdate", JSON.stringify(eventData))
-        localStorage.setItem("orderUpdate", JSON.stringify(eventData))
         setTimeout(() => {
           localStorage.removeItem("orderStatusUpdate")
-          localStorage.removeItem("orderUpdate")
-        }, 500)
+        }, 1000)
       } catch (e) {
         console.log("[v0] localStorage error (ignored):", e)
-      }
-
-      // PostMessage for cross-window communication
-      try {
-        window.postMessage({ type: "orderStatusChanged", ...eventData }, "*")
-      } catch (e) {
-        console.log("[v0] postMessage error (ignored):", e)
       }
 
       if (onStatusUpdate) {
