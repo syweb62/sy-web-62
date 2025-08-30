@@ -74,6 +74,12 @@ const EnhancedOrdersTable = ({
       }
 
       console.log("[v0] Fresh orders fetched:", data?.length)
+      if (data && data.length > 0) {
+        console.log(
+          "[v0] Sample order statuses:",
+          data.slice(0, 3).map((order) => ({ id: order.short_order_id, status: order.status })),
+        )
+      }
       setDisplayOrders(data || [])
     } catch (error) {
       console.error("[v0] Failed to fetch orders:", error)
@@ -95,13 +101,28 @@ const EnhancedOrdersTable = ({
     setConfirmationModal((prev) => ({ ...prev, isProcessing: true }))
 
     try {
-      const { error } = await supabase
+      const { data: existingOrder, error: checkError } = await supabase
+        .from("orders")
+        .select("order_id, short_order_id, status")
+        .eq("short_order_id", orderId)
+        .single()
+
+      if (checkError || !existingOrder) {
+        console.error("[v0] Order not found for update:", orderId, checkError)
+        alert(`Error: Order ${orderId} not found in database`)
+        return
+      }
+
+      console.log("[v0] Found order for update:", existingOrder)
+
+      const { data, error, count } = await supabase
         .from("orders")
         .update({
           status: newStatus,
           updated_at: new Date().toISOString(),
         })
         .eq("short_order_id", orderId)
+        .select()
 
       if (error) {
         console.error("[v0] Update Error:", error)
@@ -109,7 +130,23 @@ const EnhancedOrdersTable = ({
         return
       }
 
-      console.log("[v0] Order status updated successfully")
+      console.log("[v0] Update result:", { data, count, affectedRows: data?.length })
+
+      if (!data || data.length === 0) {
+        console.error("[v0] Update didn't affect any rows for order:", orderId)
+        alert(`Error: Failed to update order ${orderId}`)
+        return
+      }
+
+      console.log("[v0] Order status updated successfully:", data[0])
+
+      setDisplayOrders((prevOrders) =>
+        prevOrders.map((order) =>
+          order.short_order_id === orderId
+            ? { ...order, ...data[0] } // Use the actual updated data from database
+            : order,
+        ),
+      )
 
       await fetchOrders()
 
@@ -251,6 +288,8 @@ const EnhancedOrdersTable = ({
   }, [confirmationModal.isOpen, confirmationModal.isProcessing])
 
   const getStatusBadge = (status: string) => {
+    console.log("[v0] Rendering status badge for:", status)
+
     const statusConfig = {
       confirmed: { color: "bg-green-600 text-white", label: "Order Confirmed" },
       cancelled: { color: "bg-red-600 text-white", label: "Order Canceled" },
@@ -420,6 +459,8 @@ const EnhancedOrdersTable = ({
 
   const getActionButtons = (order: Order) => {
     const validOrderId = getOrderId(order)
+
+    console.log("[v0] Rendering action buttons for order:", validOrderId, "status:", order.status)
 
     if (!validOrderId) {
       return (
