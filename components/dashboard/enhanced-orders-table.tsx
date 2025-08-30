@@ -376,7 +376,11 @@ const EnhancedOrdersTable = ({
   )
 
   const showConfirmation = (orderId: string, action: string, actionLabel: string) => {
+    console.log("[v0] =================================")
+    console.log("[v0] BUTTON CLICK DETECTED!")
     console.log("[v0] showConfirmation called with:", { orderId, action, actionLabel })
+    console.log("[v0] Current timestamp:", new Date().toISOString())
+    console.log("[v0] =================================")
 
     setConfirmationModal({
       isOpen: true,
@@ -471,6 +475,9 @@ const EnhancedOrdersTable = ({
           <div className="flex gap-2">
             <Button
               onClick={(e) => {
+                console.log("[v0] CONFIRM BUTTON CLICKED!")
+                console.log("[v0] Event:", e)
+                console.log("[v0] Order ID:", validOrderId)
                 e.preventDefault()
                 e.stopPropagation()
                 showConfirmation(validOrderId, "confirmed", "confirm")
@@ -484,6 +491,9 @@ const EnhancedOrdersTable = ({
             </Button>
             <Button
               onClick={(e) => {
+                console.log("[v0] CANCEL BUTTON CLICKED!")
+                console.log("[v0] Event:", e)
+                console.log("[v0] Order ID:", validOrderId)
                 e.preventDefault()
                 e.stopPropagation()
                 showConfirmation(validOrderId, "cancelled", "cancel")
@@ -524,6 +534,9 @@ const EnhancedOrdersTable = ({
           </div>
           <Button
             onClick={(e) => {
+              console.log("[v0] COMPLETE BUTTON CLICKED!")
+              console.log("[v0] Event:", e)
+              console.log("[v0] Order ID:", validOrderId)
               e.preventDefault()
               e.stopPropagation()
               showConfirmation(validOrderId, "completed", "complete")
