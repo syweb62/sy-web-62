@@ -109,10 +109,13 @@ const EnhancedOrdersTable = ({
     setConfirmationModal((prev) => ({ ...prev, isProcessing: true }))
 
     try {
+      const formattedOrderId = orderId.toString().toLowerCase()
+      console.log("[v0] Formatted Order ID for query:", formattedOrderId)
+
       const { data, error } = await supabase
         .from("orders")
         .update({ status: newStatus })
-        .eq("short_order_id", orderId.toLowerCase()) // Case-insensitive matching
+        .eq("short_order_id", formattedOrderId)
         .select()
 
       console.log("[v0] Update result - data:", data, "error:", error)
@@ -125,12 +128,13 @@ const EnhancedOrdersTable = ({
 
       if (!data || data.length === 0) {
         alert(`Error: Order ${orderId} not found in database`)
+        console.log("[v0] No rows updated - order may not exist or ID mismatch")
         return
       }
 
       alert("✅ Order updated successfully!")
+      console.log("[v0] Successfully updated order:", data[0])
 
-      // Added refresh orders after update like the working solution
       if (onRefresh) {
         onRefresh()
       }
