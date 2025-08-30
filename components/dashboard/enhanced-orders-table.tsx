@@ -102,48 +102,41 @@ const EnhancedOrdersTable = ({
     console.log("[v0] BUTTON CLICKED! Order ID:", orderId, "New Status:", newStatus)
 
     if (!orderId) {
-      alert("❌ Error: No order ID provided")
+      alert("Error: No order ID found")
       return
     }
 
     setConfirmationModal((prev) => ({ ...prev, isProcessing: true }))
 
     try {
-      // Format order ID with case-insensitive matching like the working JavaScript solution
-      const formattedOrderId = orderId.toString().toLowerCase()
-      console.log("[v0] Formatted Order ID:", formattedOrderId)
-
-      // Simple update query matching the working JavaScript solution
-      const { data, error } = await supabase
-        .from("orders")
-        .update({
+      const response = await fetch("/api/orders", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          orderId: orderId,
           status: newStatus,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("short_order_id", formattedOrderId)
-        .select()
+        }),
+      })
 
-      console.log("[v0] Update result:", { data, error })
+      const result = await response.json()
+      console.log("[v0] API response:", result)
 
-      if (error) {
-        console.error("[v0] Database error:", error.message)
-        alert(`❌ Database Error: ${error.message}`)
+      if (!response.ok) {
+        console.error("[v0] API error:", result.error)
+        alert(`❌ ${result.error || "Failed to update order status"}`)
         return
       }
 
-      if (!data || data.length === 0) {
-        console.error("[v0] No rows updated - order not found")
-        alert(`❌ Error: Order ${orderId} not found in database`)
-        return
-      }
+      if (result.success) {
+        alert("✅ Order updated successfully!")
 
-      // Success feedback matching the working JavaScript solution
-      console.log("[v0] Order updated successfully:", data[0])
-      alert(`✅ Order ${orderId} ${newStatus} successfully!`)
-
-      // Refresh orders after update like the working JavaScript solution
-      if (onRefresh) {
-        onRefresh()
+        if (onRefresh) {
+          onRefresh()
+        }
+      } else {
+        alert(`❌ Error: ${result.error || "Unknown error occurred"}`)
       }
     } catch (error) {
       console.error("[v0] Network error:", error)
@@ -167,7 +160,7 @@ const EnhancedOrdersTable = ({
         },
         (payload) => {
           console.log("[v0] Real-time database change received:", payload)
-          // Simple refresh like the working JavaScript solution
+
           if (onRefresh) {
             onRefresh()
           }
@@ -176,6 +169,10 @@ const EnhancedOrdersTable = ({
       .subscribe((status) => {
         console.log("[v0] Real-time subscription status:", status)
       })
+
+    if (Notification.permission === "default") {
+      Notification.requestPermission()
+    }
 
     return () => {
       console.log("[v0] Unsubscribing from real-time updates")
@@ -597,16 +594,13 @@ const EnhancedOrdersTable = ({
                     <div className="space-y-2">
                       <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">ITEMS</p>
                       <div className="space-y-1">
-                        {(order.order_items || []).slice(0, 3).map((item, idx) => (
+                        {order.order_items.slice(0, 3).map((item, idx) => (
                           <div key={idx} className="text-sm text-gray-300">
                             {item.item_name} <span className="text-gray-500">×{item.quantity}</span>
                           </div>
                         ))}
-                        {(order.order_items || []).length > 3 && (
+                        {order.order_items.length > 3 && (
                           <p className="text-xs text-gray-500">+{order.order_items.length - 3} more items</p>
-                        )}
-                        {(!order.order_items || order.order_items.length === 0) && (
-                          <p className="text-xs text-gray-500 italic">No items</p>
                         )}
                       </div>
                     </div>
