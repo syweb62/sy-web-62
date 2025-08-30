@@ -100,10 +100,8 @@ const EnhancedOrdersTable = ({
 
   const updateOrderStatus = async (orderId: string, newStatus: string) => {
     console.log("[v0] BUTTON CLICKED! Order ID:", orderId, "New Status:", newStatus)
-    console.log("[v0] Event fired at:", new Date().toISOString())
 
     if (!orderId) {
-      console.log("[v0] Error: No order ID provided")
       alert("Error: No order ID found")
       return
     }
@@ -111,75 +109,35 @@ const EnhancedOrdersTable = ({
     setConfirmationModal((prev) => ({ ...prev, isProcessing: true }))
 
     try {
-      console.log("[v0] Making Supabase update with .or() condition...")
       const { data, error } = await supabase
         .from("orders")
-        .update({
-          status: newStatus,
-          updated_at: new Date().toISOString(),
-        })
-        .or(`order_id.eq.${orderId},short_order_id.eq.${orderId}`)
+        .update({ status: newStatus })
+        .eq("short_order_id", orderId) // Use simple .eq() like the working solution
         .select()
 
       console.log("[v0] Update result - data:", data, "error:", error)
 
       if (error) {
         console.error("[v0] Supabase update error:", error)
-        alert(`Error: ${error.message}\n\nPlease refresh the page and try again.`)
-        if (onRefresh) {
-          setTimeout(onRefresh, 500)
-        }
+        alert(`Error: ${error.message}`)
         return
       }
 
       if (!data || data.length === 0) {
-        console.error("[v0] No rows were updated - order not found")
         alert(`Error: Order ${orderId} not found in database`)
-        if (onRefresh) {
-          setTimeout(onRefresh, 500)
-        }
         return
       }
 
-      console.log("[v0] Supabase update successful:", data)
+      alert("✅ Order updated successfully!")
 
-      const updatedOrder = data[0]
-      setDisplayOrders((prev) =>
-        prev.map((order) =>
-          order.order_id === updatedOrder.order_id || order.short_order_id === updatedOrder.short_order_id
-            ? { ...order, status: updatedOrder.status, updated_at: updatedOrder.updated_at }
-            : order,
-        ),
-      )
-
-      const successMessage = `✅ Order ${newStatus} successfully!`
-      alert(successMessage)
-
-      const eventData = {
-        orderId: updatedOrder.short_order_id,
-        newStatus: updatedOrder.status,
-        timestamp: new Date().toISOString(),
-      }
-
-      window.dispatchEvent(new CustomEvent("orderStatusChanged", { detail: eventData }))
-
-      try {
-        localStorage.setItem("orderStatusUpdate", JSON.stringify(eventData))
-        setTimeout(() => {
-          localStorage.removeItem("orderStatusUpdate")
-        }, 1000)
-      } catch (e) {
-        console.log("[v0] localStorage error (ignored):", e)
-      }
-
-      if (onStatusUpdate) {
-        onStatusUpdate(orderId, newStatus)
+      if (onRefresh) {
+        onRefresh()
       }
 
       console.log("[v0] Order status update completed successfully")
     } catch (error) {
       console.error("[v0] Failed to update order status:", error)
-      alert(`Network Error: ${error}\n\nPlease check your connection and try again.`)
+      alert(`Network Error: ${error}`)
     } finally {
       setConfirmationModal((prev) => ({ ...prev, isProcessing: false }))
     }
