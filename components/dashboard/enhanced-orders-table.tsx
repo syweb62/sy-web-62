@@ -108,13 +108,9 @@ const EnhancedOrdersTable = ({
   }, [])
 
   const updateOrderStatus = async (orderId: string, newStatus: string) => {
-    console.log("[v0] =================================")
-    console.log("[v0] BUTTON CLICKED! Order ID:", orderId, "New Status:", newStatus)
-    console.log("[v0] Current timestamp:", new Date().toISOString())
-    console.log("[v0] =================================")
+    console.log("[v0] Updating order status:", orderId, "to", newStatus)
 
     if (!orderId) {
-      console.error("[v0] ERROR: No order ID found")
       alert("Error: No order ID found")
       return
     }
@@ -122,8 +118,9 @@ const EnhancedOrdersTable = ({
     setConfirmationModal((prev) => ({ ...prev, isProcessing: true }))
 
     try {
-      console.log("[v0] Making API call to /api/orders...")
-      console.log("[v0] Request body:", JSON.stringify({ orderId: orderId, status: newStatus }))
+      setDisplayOrders((prevOrders) =>
+        prevOrders.map((order) => (order.short_order_id === orderId ? { ...order, status: newStatus as any } : order)),
+      )
 
       const response = await fetch("/api/orders", {
         method: "PATCH",
@@ -136,43 +133,35 @@ const EnhancedOrdersTable = ({
         }),
       })
 
-      console.log("[v0] API response status:", response.status)
-      console.log("[v0] API response ok:", response.ok)
-
       const result = await response.json()
-      console.log("[v0] API response data:", result)
+      console.log("[v0] API response:", result)
 
       if (!response.ok) {
-        console.error("[v0] API error - Status:", response.status)
-        console.error("[v0] API error - Data:", result)
+        setDisplayOrders((prevOrders) =>
+          prevOrders.map((order) => (order.short_order_id === orderId ? { ...order, status: order.status } : order)),
+        )
         alert(`❌ ${result.error || "Failed to update order status"}`)
         return
       }
 
       if (result.success) {
-        console.log("[v0] ✅ Order updated successfully!")
         alert("✅ Order updated successfully!")
-
-        // Instead, wait for the refresh to get the updated data from database
-        console.log("[v0] Waiting 500ms before refresh to ensure database consistency...")
-
-        setTimeout(() => {
-          if (onRefresh) {
-            console.log("[v0] Calling onRefresh after delay...")
-            onRefresh()
-          }
-        }, 500)
+        if (onRefresh) {
+          setTimeout(() => onRefresh(), 100)
+        }
       } else {
-        console.error("[v0] API returned success: false")
-        console.error("[v0] Error details:", result.error)
+        setDisplayOrders((prevOrders) =>
+          prevOrders.map((order) => (order.short_order_id === orderId ? { ...order, status: order.status } : order)),
+        )
         alert(`❌ Error: ${result.error || "Unknown error occurred"}`)
       }
     } catch (error) {
-      console.error("[v0] Network/JavaScript error:", error)
-      console.error("[v0] Error stack:", (error as Error).stack)
+      setDisplayOrders((prevOrders) =>
+        prevOrders.map((order) => (order.short_order_id === orderId ? { ...order, status: order.status } : order)),
+      )
+      console.error("[v0] Network error:", error)
       alert(`❌ Network Error: ${error}`)
     } finally {
-      console.log("[v0] Setting isProcessing to false")
       setConfirmationModal((prev) => ({ ...prev, isProcessing: false }))
     }
   }
@@ -385,12 +374,7 @@ const EnhancedOrdersTable = ({
   )
 
   const showConfirmation = (orderId: string, action: string, actionLabel: string) => {
-    console.log("[v0] =================================")
-    console.log("[v0] BUTTON CLICK DETECTED!")
-    console.log("[v0] showConfirmation called with:", { orderId, action, actionLabel })
-    console.log("[v0] Current timestamp:", new Date().toISOString())
-    console.log("[v0] =================================")
-
+    console.log("[v0] Showing confirmation for:", orderId, action)
     setConfirmationModal({
       isOpen: true,
       orderId,
@@ -401,12 +385,8 @@ const EnhancedOrdersTable = ({
   }
 
   const handleConfirmation = async () => {
-    console.log("[v0] handleConfirmation called")
-    console.log("[v0] Modal state:", confirmationModal)
-
+    console.log("[v0] Confirming action:", confirmationModal.action, "for order:", confirmationModal.orderId)
     await updateOrderStatus(confirmationModal.orderId, confirmationModal.action)
-
-    console.log("[v0] Closing confirmation modal")
     setConfirmationModal({ isOpen: false, orderId: "", action: "", actionLabel: "", isProcessing: false })
   }
 
@@ -444,10 +424,7 @@ const EnhancedOrdersTable = ({
   const getActionButtons = (order: Order) => {
     const validOrderId = getOrderId(order)
 
-    console.log("[v0] Rendering action buttons for order:", validOrderId, "status:", order.status)
-
     if (!validOrderId) {
-      console.log("[v0] No valid order ID found for order:", order)
       return (
         <div className="space-y-3">
           <div className="flex gap-2">
@@ -464,7 +441,6 @@ const EnhancedOrdersTable = ({
     }
 
     if (order.status === "pending") {
-      console.log("[v0] Rendering PENDING buttons for order:", validOrderId)
       return (
         <div className="space-y-3">
           <div className="flex gap-2">
@@ -487,50 +463,24 @@ const EnhancedOrdersTable = ({
           </div>
           <div className="flex gap-2">
             <Button
-              onClick={(e) => {
-                console.log("[v0] =================================")
-                console.log("[v0] CONFIRM BUTTON CLICKED!")
-                console.log("[v0] Event:", e)
-                console.log("[v0] Event type:", e.type)
-                console.log("[v0] Event target:", e.target)
-                console.log("[v0] Event currentTarget:", e.currentTarget)
-                console.log("[v0] Order ID:", validOrderId)
-                console.log("[v0] Timestamp:", new Date().toISOString())
-                console.log("[v0] =================================")
-                e.preventDefault()
-                e.stopPropagation()
+              onClick={() => {
+                console.log("[v0] Confirm button clicked for order:", validOrderId)
                 showConfirmation(validOrderId, "confirmed", "confirm")
               }}
               size="sm"
-              className="bg-green-600 hover:bg-green-700 text-white flex-1 cursor-pointer"
-              type="button"
-              data-testid="confirm-button"
-              data-order-id={validOrderId}
+              className="bg-green-600 hover:bg-green-700 text-white flex-1"
             >
               <Check className="w-4 h-4" />
               Confirm
             </Button>
             <Button
-              onClick={(e) => {
-                console.log("[v0] =================================")
-                console.log("[v0] CANCEL BUTTON CLICKED!")
-                console.log("[v0] Event:", e)
-                console.log("[v0] Event type:", e.type)
-                console.log("[v0] Event target:", e.target)
-                console.log("[v0] Event currentTarget:", e.currentTarget)
-                console.log("[v0] Order ID:", validOrderId)
-                console.log("[v0] Timestamp:", new Date().toISOString())
-                console.log("[v0] =================================")
-                e.preventDefault()
-                e.stopPropagation()
+              onClick={() => {
+                console.log("[v0] Cancel button clicked for order:", validOrderId)
                 showConfirmation(validOrderId, "cancelled", "cancel")
               }}
               size="sm"
               variant="destructive"
-              className="flex-1 cursor-pointer"
-              type="button"
-              data-testid="cancel-button"
-              data-order-id={validOrderId}
+              className="flex-1"
             >
               <X className="w-4 h-4" />
               Cancel
@@ -541,7 +491,6 @@ const EnhancedOrdersTable = ({
     }
 
     if (order.status === "confirmed") {
-      console.log("[v0] Rendering CONFIRMED buttons for order:", validOrderId)
       return (
         <div className="space-y-3">
           <div className="flex gap-2">
@@ -563,25 +512,12 @@ const EnhancedOrdersTable = ({
             </Button>
           </div>
           <Button
-            onClick={(e) => {
-              console.log("[v0] =================================")
-              console.log("[v0] COMPLETE BUTTON CLICKED!")
-              console.log("[v0] Event:", e)
-              console.log("[v0] Event type:", e.type)
-              console.log("[v0] Event target:", e.target)
-              console.log("[v0] Event currentTarget:", e.currentTarget)
-              console.log("[v0] Order ID:", validOrderId)
-              console.log("[v0] Timestamp:", new Date().toISOString())
-              console.log("[v0] =================================")
-              e.preventDefault()
-              e.stopPropagation()
+            onClick={() => {
+              console.log("[v0] Complete button clicked for order:", validOrderId)
               showConfirmation(validOrderId, "completed", "complete")
             }}
             size="sm"
-            className="bg-blue-600 hover:bg-blue-700 text-white w-full cursor-pointer"
-            type="button"
-            data-testid="complete-button"
-            data-order-id={validOrderId}
+            className="bg-blue-600 hover:bg-blue-700 text-white w-full"
           >
             <CheckCircle className="w-4 h-4" />
             Complete
@@ -590,7 +526,6 @@ const EnhancedOrdersTable = ({
       )
     }
 
-    console.log("[v0] Rendering FINAL STATUS buttons for order:", validOrderId, "status:", order.status)
     return (
       <div className="space-y-3">
         <div className="flex gap-2">
