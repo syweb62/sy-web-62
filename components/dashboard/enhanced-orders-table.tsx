@@ -109,69 +109,44 @@ const EnhancedOrdersTable = ({
     setConfirmationModal((prev) => ({ ...prev, isProcessing: true }))
 
     try {
-      console.log("[v0] Checking if order exists:", orderId)
+      // Format order ID with case-insensitive matching like the working JavaScript solution
+      const formattedOrderId = orderId.toString().toLowerCase()
+      console.log("[v0] Formatted Order ID:", formattedOrderId)
 
-      const { data: existingOrder, error: checkError } = await supabase
-        .from("orders")
-        .select("order_id, short_order_id, status, customer_name")
-        .eq("short_order_id", orderId)
-        .single()
-
-      console.log("[v0] Order check result:", { existingOrder, checkError })
-
-      if (checkError || !existingOrder) {
-        console.error("[v0] Order not found:", checkError?.message)
-        alert(`❌ Error: Order ${orderId} not found in database`)
-        return
-      }
-
-      if (existingOrder.status === newStatus) {
-        console.log("[v0] Order already has this status:", newStatus)
-        alert(`ℹ️ Order ${orderId} is already ${newStatus}`)
-        return
-      }
-
-      console.log("[v0] Updating order status from", existingOrder.status, "to", newStatus)
-
-      const { data: updateData, error: updateError } = await supabase
+      // Simple update query matching the working JavaScript solution
+      const { data, error } = await supabase
         .from("orders")
         .update({
           status: newStatus,
           updated_at: new Date().toISOString(),
         })
-        .eq("order_id", existingOrder.order_id) // Use UUID for reliable matching
-        .select("order_id, short_order_id, status, customer_name")
+        .eq("short_order_id", formattedOrderId)
+        .select()
 
-      console.log("[v0] Update result:", { updateData, updateError })
+      console.log("[v0] Update result:", { data, error })
 
-      if (updateError) {
-        console.error("[v0] Error updating order:", updateError.message)
-        alert(`❌ Database Error: ${updateError.message}`)
+      if (error) {
+        console.error("[v0] Database error:", error.message)
+        alert(`❌ Database Error: ${error.message}`)
         return
       }
 
-      if (!updateData || updateData.length === 0) {
-        console.error("[v0] No rows were updated")
-        alert(`❌ Error: Failed to update order ${orderId}`)
+      if (!data || data.length === 0) {
+        console.error("[v0] No rows updated - order not found")
+        alert(`❌ Error: Order ${orderId} not found in database`)
         return
       }
 
-      console.log("[v0] Order updated successfully:", updateData[0])
+      // Success feedback matching the working JavaScript solution
+      console.log("[v0] Order updated successfully:", data[0])
       alert(`✅ Order ${orderId} ${newStatus} successfully!`)
 
-      setDisplayOrders((prevOrders) =>
-        prevOrders.map((order) =>
-          order.short_order_id === orderId
-            ? { ...order, status: newStatus as any, updated_at: new Date().toISOString() }
-            : order,
-        ),
-      )
-
+      // Refresh orders after update like the working JavaScript solution
       if (onRefresh) {
-        setTimeout(onRefresh, 100) // Small delay to ensure database consistency
+        onRefresh()
       }
     } catch (error) {
-      console.error("[v0] Failed to update order status:", error)
+      console.error("[v0] Network error:", error)
       alert(`❌ Network Error: ${error}`)
     } finally {
       setConfirmationModal((prev) => ({ ...prev, isProcessing: false }))
@@ -192,35 +167,15 @@ const EnhancedOrdersTable = ({
         },
         (payload) => {
           console.log("[v0] Real-time database change received:", payload)
-
-          if (payload.eventType === "UPDATE" && payload.new) {
-            const updatedOrder = payload.new as any
-            console.log("[v0] Order updated via real-time:", updatedOrder.short_order_id, "->", updatedOrder.status)
-
-            setDisplayOrders((prevOrders) =>
-              prevOrders.map((order) =>
-                order.order_id === updatedOrder.order_id ? { ...order, ...updatedOrder } : order,
-              ),
-            )
-          }
-
+          // Simple refresh like the working JavaScript solution
           if (onRefresh) {
-            setTimeout(onRefresh, 200) // Small delay for database consistency
+            onRefresh()
           }
         },
       )
       .subscribe((status) => {
         console.log("[v0] Real-time subscription status:", status)
-        if (status === "SUBSCRIBED") {
-          console.log("[v0] ✅ Real-time subscription active")
-        } else if (status === "CHANNEL_ERROR") {
-          console.error("[v0] ❌ Real-time subscription error")
-        }
       })
-
-    if (typeof window !== "undefined" && Notification.permission === "default") {
-      Notification.requestPermission()
-    }
 
     return () => {
       console.log("[v0] Unsubscribing from real-time updates")
