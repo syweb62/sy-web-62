@@ -134,7 +134,7 @@ const EnhancedOrdersTable = ({
         console.error("[v0] Supabase update error:", error)
         alert(`Error: ${error.message}\n\nPlease refresh the page and try again.`)
         if (onRefresh) {
-          setTimeout(onRefresh, 1000)
+          setTimeout(onRefresh, 500)
         }
         return
       }
@@ -168,7 +168,7 @@ const EnhancedOrdersTable = ({
         setTimeout(() => {
           localStorage.removeItem("orderStatusUpdate")
           localStorage.removeItem("orderUpdate")
-        }, 1000)
+        }, 500)
       } catch (e) {
         console.log("[v0] localStorage error (ignored):", e)
       }
@@ -220,7 +220,6 @@ const EnhancedOrdersTable = ({
               })
             }
 
-            // Add to local state
             setDisplayOrders((prev) => [payload.new as Order, ...prev])
 
             // Alert popup
@@ -239,7 +238,6 @@ const EnhancedOrdersTable = ({
                 ),
               )
 
-              // Cross-window communication for website updates
               const eventData = {
                 orderId: payload.new.short_order_id,
                 newStatus: payload.new.status,
@@ -302,7 +300,7 @@ const EnhancedOrdersTable = ({
     const handleStorageChange = (e: StorageEvent) => {
       if ((e.key === "orderStatusUpdate" || e.key === "orderUpdate") && e.newValue && onRefresh) {
         console.log("[v0] Storage change detected, refreshing orders")
-        setTimeout(onRefresh, 200)
+        onRefresh()
       }
     }
     window.addEventListener("storage", handleStorageChange)

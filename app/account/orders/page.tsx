@@ -99,12 +99,17 @@ export default function OrdersPage() {
   useEffect(() => {
     console.log("[v0] Setting up website real-time subscriptions...")
 
+    const immediateRefresh = () => {
+      console.log("[v0] Triggering immediate order history refresh")
+      refetch()
+    }
+
     // Custom event listener for dashboard updates
     const handleOrderStatusChange = (event: CustomEvent) => {
       console.log("[v0] Order status change event received:", event.detail)
       if (event.detail?.orderId) {
         console.log("[v0] Refreshing order history due to status change")
-        setTimeout(() => refetch(), 50)
+        immediateRefresh()
       }
     }
 
@@ -118,7 +123,7 @@ export default function OrdersPage() {
         } catch (e) {
           console.log("[v0] Could not parse storage data:", e)
         }
-        setTimeout(() => refetch(), 100)
+        immediateRefresh()
       }
     }
 
@@ -126,7 +131,7 @@ export default function OrdersPage() {
     const handleMessage = (event: MessageEvent) => {
       if (event.data?.type === "orderStatusChanged" && event.data?.orderId) {
         console.log("[v0] Message event received for order status change:", event.data)
-        setTimeout(() => refetch(), 50)
+        immediateRefresh()
       }
     }
 
@@ -135,18 +140,20 @@ export default function OrdersPage() {
       .on(
         "postgres_changes",
         {
-          event: "UPDATE",
+          event: "*",
           schema: "public",
           table: "orders",
         },
         (payload) => {
           console.log("[v0] Website received real-time database update:", payload)
-          // Refresh order history when any order is updated
-          setTimeout(() => refetch(), 100)
+          immediateRefresh()
         },
       )
       .subscribe((status) => {
         console.log("[v0] Website real-time subscription status:", status)
+        if (status === "SUBSCRIBED") {
+          console.log("[v0] Website successfully subscribed to real-time order updates")
+        }
       })
 
     // Add all event listeners
