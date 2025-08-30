@@ -330,16 +330,20 @@ const EnhancedOrdersTable = ({
           </div>
           <div class="items">
             <h3>Items:</h3>
-            ${order.order_items
-              .map(
-                (item) => `
-              <div class="item">
-                <span>${item.item_name} x${item.quantity}</span>
-                <span>৳${(item.price_at_purchase * item.quantity).toFixed(2)}</span>
-              </div>
-            `,
-              )
-              .join("")}
+            ${
+              order.order_items && order.order_items.length > 0
+                ? order.order_items
+                    .map(
+                      (item) => `
+                  <div class="item">
+                    <span>${item.item_name} x${item.quantity}</span>
+                    <span>৳${(item.price_at_purchase * item.quantity).toFixed(2)}</span>
+                  </div>
+                `,
+                    )
+                    .join("")
+                : "<p>No items</p>"
+            }
           </div>
           <div class="total">
             <p>Total: ৳${order.total_price.toFixed(2)}</p>
@@ -609,13 +613,19 @@ const EnhancedOrdersTable = ({
                     <div className="space-y-2">
                       <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">ITEMS</p>
                       <div className="space-y-1">
-                        {order.order_items.slice(0, 3).map((item, idx) => (
-                          <div key={idx} className="text-sm text-gray-300">
-                            {item.item_name} <span className="text-gray-500">×{item.quantity}</span>
-                          </div>
-                        ))}
-                        {order.order_items.length > 3 && (
-                          <p className="text-xs text-gray-500">+{order.order_items.length - 3} more items</p>
+                        {order.order_items && order.order_items.length > 0 ? (
+                          <>
+                            {order.order_items.slice(0, 3).map((item, idx) => (
+                              <div key={idx} className="text-sm text-gray-300">
+                                {item.item_name} <span className="text-gray-500">×{item.quantity}</span>
+                              </div>
+                            ))}
+                            {order.order_items.length > 3 && (
+                              <p className="text-xs text-gray-500">+{order.order_items.length - 3} more items</p>
+                            )}
+                          </>
+                        ) : (
+                          <p className="text-gray-500 text-sm italic">No items</p>
                         )}
                       </div>
                     </div>
