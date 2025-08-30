@@ -39,7 +39,7 @@ interface ConfirmationModal {
   orderId: string
   action: string
   actionLabel: string
-  isProcessing: boolean
+  isProcessing: boolean // Added processing state for better UX
 }
 
 const EnhancedOrdersTable = ({
@@ -55,7 +55,7 @@ const EnhancedOrdersTable = ({
     orderId: "",
     action: "",
     actionLabel: "",
-    isProcessing: false,
+    isProcessing: false, // Added processing state
   })
   const supabase = createClient()
 
@@ -63,142 +63,9 @@ const EnhancedOrdersTable = ({
     return order.short_order_id || ""
   }
 
-  const fetchOrders = async () => {
-    console.log("[v0] Fetching fresh orders from database...")
-    try {
-      const { data, error } = await supabase.from("orders").select("*").order("created_at", { ascending: false })
-
-      if (error) {
-        console.error("[v0] Fetch Error:", error)
-        return
-      }
-
-      console.log("[v0] Fresh orders fetched:", data?.length)
-      if (data && data.length > 0) {
-        console.log(
-          "[v0] Sample order statuses:",
-          data.slice(0, 3).map((order) => ({ id: order.short_order_id, status: order.status })),
-        )
-      }
-      setDisplayOrders(data || [])
-    } catch (error) {
-      console.error("[v0] Failed to fetch orders:", error)
-    }
-  }
-
   useEffect(() => {
-    fetchOrders()
-  }, [])
-
-  const updateOrderStatus = async (orderId: string, newStatus: string) => {
-    console.log("[v0] Updating order status:", orderId, "to", newStatus)
-
-    if (!orderId) {
-      alert("Error: No order ID provided")
-      return
-    }
-
-    setConfirmationModal((prev) => ({ ...prev, isProcessing: true }))
-
-    try {
-      const { data: existingOrder, error: checkError } = await supabase
-        .from("orders")
-        .select("order_id, short_order_id, status")
-        .eq("short_order_id", orderId)
-        .single()
-
-      if (checkError || !existingOrder) {
-        console.error("[v0] Order not found for update:", orderId, checkError)
-        alert(`Error: Order ${orderId} not found in database`)
-        return
-      }
-
-      console.log("[v0] Found order for update:", existingOrder)
-
-      const { data, error, count } = await supabase
-        .from("orders")
-        .update({
-          status: newStatus,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("short_order_id", orderId)
-        .select()
-
-      if (error) {
-        console.error("[v0] Update Error:", error)
-        alert(`Error: ${error.message}`)
-        return
-      }
-
-      console.log("[v0] Update result:", { data, count, affectedRows: data?.length })
-
-      if (!data || data.length === 0) {
-        console.error("[v0] Update didn't affect any rows for order:", orderId)
-        alert(`Error: Failed to update order ${orderId}`)
-        return
-      }
-
-      console.log("[v0] Order status updated successfully:", data[0])
-
-      setDisplayOrders((prevOrders) =>
-        prevOrders.map((order) =>
-          order.short_order_id === orderId
-            ? { ...order, ...data[0] } // Use the actual updated data from database
-            : order,
-        ),
-      )
-
-      await fetchOrders()
-
-      alert(`Order ${newStatus} successfully!`)
-
-      if (onStatusUpdate) {
-        onStatusUpdate(orderId, newStatus)
-      }
-    } catch (error) {
-      console.error("[v0] Failed to update order status:", error)
-      alert(`Network Error: ${error}`)
-    } finally {
-      setConfirmationModal((prev) => ({ ...prev, isProcessing: false }))
-    }
-  }
-
-  useEffect(() => {
-    console.log("[v0] Setting up real-time subscription...")
-
-    const subscription = supabase
-      .channel("orders-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, (payload) => {
-        console.log("[v0] Real-time change received:", payload.eventType)
-
-        fetchOrders()
-
-        if (payload.eventType === "INSERT") {
-          playNotificationSound()
-
-          if (Notification.permission === "granted") {
-            new Notification(`🆕 New Order Received!`, {
-              body: `Order ID: ${payload.new.short_order_id}\nCustomer: ${payload.new.customer_name}`,
-              icon: "/favicon.ico",
-            })
-          }
-
-          alert(`🆕 New order received!\nID: ${payload.new.short_order_id}\nCustomer: ${payload.new.customer_name}`)
-        }
-      })
-      .subscribe((status) => {
-        console.log("[v0] Subscription status:", status)
-      })
-
-    // Request notification permission
-    if (Notification.permission === "default") {
-      Notification.requestPermission()
-    }
-
-    return () => {
-      subscription.unsubscribe()
-    }
-  }, [])
+    setDisplayOrders(orders)
+  }, [orders])
 
   const formatDateTime = useCallback((dateString: string) => {
     const date = new Date(dateString)
@@ -230,6 +97,210 @@ const EnhancedOrdersTable = ({
     const diffInDays = Math.floor(diffInHours / 24)
     return `${diffInDays}d ago`
   }, [])
+
+  const updateOrderStatus = async (orderId: string, newStatus: string) => {
+    console.log("[v0] BUTTON CLICKED! Order ID:", orderId, "New Status:", newStatus)
+    console.log("[v0] Event fired at:", new Date().toISOString())
+
+    if (!orderId) {
+      console.log("[v0] Error: No order ID provided")
+      alert("Error: No order ID found")
+      return
+    }
+
+    const orderExists = displayOrders.find((order) => order.short_order_id === orderId)
+    if (!orderExists) {
+      console.log("[v0] Error: Order not found in current display orders:", orderId)
+      alert(`Error: Order ${orderId} not found in current orders. Please refresh the page.`)
+      return
+    }
+
+    console.log("[v0] Order found in display orders:", orderExists)
+    console.log("[v0] Using order_id for database update:", orderExists.order_id)
+    setConfirmationModal((prev) => ({ ...prev, isProcessing: true }))
+
+    try {
+      console.log("[v0] Verifying order exists in database...")
+      const { data: existingOrder, error: checkError } = await supabase
+        .from("orders")
+        .select("order_id, short_order_id, status")
+        .eq("order_id", orderExists.order_id)
+        .single()
+
+      if (checkError) {
+        console.error("[v0] Error checking order existence:", checkError)
+        alert(`Error: Could not verify order exists. ${checkError.message}`)
+        return
+      }
+
+      if (!existingOrder) {
+        console.error("[v0] Order not found in database with order_id:", orderExists.order_id)
+        alert(`Error: Order ${orderId} not found in database. Please refresh the page.`)
+        if (onRefresh) {
+          setTimeout(onRefresh, 500)
+        }
+        return
+      }
+
+      console.log("[v0] Order verified in database:", existingOrder)
+
+      console.log("[v0] Making direct Supabase update query...")
+      const { data, error, count } = await supabase
+        .from("orders")
+        .update({
+          status: newStatus,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("order_id", orderExists.order_id)
+        .select()
+
+      console.log("[v0] Update result - data:", data, "error:", error, "count:", count)
+
+      if (error) {
+        console.error("[v0] Supabase update error:", error)
+        alert(`Error: ${error.message}\n\nPlease refresh the page and try again.`)
+        if (onRefresh) {
+          setTimeout(onRefresh, 500)
+        }
+        return
+      }
+
+      console.log("[v0] Supabase update successful:", data)
+
+      if (!data || data.length === 0) {
+        console.error("[v0] No rows were updated - this should not happen after verification")
+        alert(`Error: Order ${orderId} could not be updated. Please refresh the page and try again.`)
+        if (onRefresh) {
+          setTimeout(onRefresh, 500)
+        }
+        return
+      }
+
+      console.log("[v0] Updating local state with:", data[0])
+      setDisplayOrders((prev) =>
+        prev.map((order) =>
+          order.order_id === orderExists.order_id
+            ? { ...order, status: data[0].status, updated_at: data[0].updated_at }
+            : order,
+        ),
+      )
+
+      const successMessage = `Order ${newStatus} successfully!`
+      alert(successMessage)
+
+      const eventData = {
+        orderId: orderExists.short_order_id,
+        realOrderId: orderId,
+        newStatus,
+        timestamp: new Date().toISOString(),
+      }
+
+      // Multiple communication methods for reliability
+      window.dispatchEvent(new CustomEvent("orderStatusChanged", { detail: eventData }))
+
+      try {
+        localStorage.setItem("orderStatusUpdate", JSON.stringify(eventData))
+        localStorage.setItem("orderUpdate", JSON.stringify(eventData))
+        setTimeout(() => {
+          localStorage.removeItem("orderStatusUpdate")
+          localStorage.removeItem("orderUpdate")
+        }, 500)
+      } catch (e) {
+        console.log("[v0] localStorage error (ignored):", e)
+      }
+
+      // PostMessage for cross-window communication
+      try {
+        window.postMessage({ type: "orderStatusChanged", ...eventData }, "*")
+      } catch (e) {
+        console.log("[v0] postMessage error (ignored):", e)
+      }
+
+      if (onStatusUpdate) {
+        onStatusUpdate(orderId, newStatus)
+      }
+
+      console.log("[v0] Order status update completed successfully")
+    } catch (error) {
+      console.error("[v0] Failed to update order status:", error)
+      alert(`Network Error: ${error}\n\nPlease check your connection and try again.`)
+    } finally {
+      setConfirmationModal((prev) => ({ ...prev, isProcessing: false }))
+    }
+  }
+
+  useEffect(() => {
+    console.log("[v0] Setting up comprehensive real-time subscription...")
+
+    const subscription = supabase
+      .channel("orders-realtime")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "orders",
+        },
+        (payload) => {
+          console.log("[v0] Real-time database change received:", payload)
+
+          if (payload.eventType === "INSERT") {
+            console.log("[v0] New order detected:", payload.new)
+            playNotificationSound()
+
+            // Show browser notification if permission granted
+            if (Notification.permission === "granted") {
+              new Notification(`🆕 New Order Received!`, {
+                body: `Order ID: ${payload.new.short_order_id}\nCustomer: ${payload.new.customer_name}`,
+                icon: "/favicon.ico",
+              })
+            }
+
+            setDisplayOrders((prev) => [payload.new as Order, ...prev])
+
+            // Alert popup
+            alert(`🆕 New order received!\nID: ${payload.new.short_order_id}\nCustomer: ${payload.new.customer_name}`)
+          }
+
+          if (payload.eventType === "UPDATE") {
+            const shortOrderId = payload.new.short_order_id
+            if (shortOrderId) {
+              console.log("[v0] Updating local order display for:", shortOrderId)
+              setDisplayOrders((prev) =>
+                prev.map((order) =>
+                  order.short_order_id === shortOrderId
+                    ? { ...order, status: payload.new.status, updated_at: payload.new.updated_at }
+                    : order,
+                ),
+              )
+
+              const eventData = {
+                orderId: payload.new.short_order_id,
+                newStatus: payload.new.status,
+                timestamp: new Date().toISOString(),
+              }
+              window.dispatchEvent(new CustomEvent("orderStatusChanged", { detail: eventData }))
+            }
+          }
+        },
+      )
+      .subscribe((status) => {
+        console.log("[v0] Real-time subscription status:", status)
+        if (status === "SUBSCRIBED") {
+          console.log("[v0] Successfully subscribed to real-time updates")
+        }
+      })
+
+    // Request notification permission
+    if (Notification.permission === "default") {
+      Notification.requestPermission()
+    }
+
+    return () => {
+      console.log("[v0] Unsubscribing from real-time updates")
+      subscription.unsubscribe()
+    }
+  }, [supabase])
 
   const playNotificationSound = () => {
     try {
@@ -288,8 +359,6 @@ const EnhancedOrdersTable = ({
   }, [confirmationModal.isOpen, confirmationModal.isProcessing])
 
   const getStatusBadge = (status: string) => {
-    console.log("[v0] Rendering status badge for:", status)
-
     const statusConfig = {
       confirmed: { color: "bg-green-600 text-white", label: "Order Confirmed" },
       cancelled: { color: "bg-red-600 text-white", label: "Order Canceled" },
@@ -369,20 +438,16 @@ const EnhancedOrdersTable = ({
           </div>
           <div class="items">
             <h3>Items:</h3>
-            ${
-              order.order_items && order.order_items.length > 0
-                ? order.order_items
-                    .map(
-                      (item) => `
-                  <div class="item">
-                    <span>${item.item_name} x${item.quantity}</span>
-                    <span>৳${(item.price_at_purchase * item.quantity).toFixed(2)}</span>
-                  </div>
-                `,
-                    )
-                    .join("")
-                : "<p>No items</p>"
-            }
+            ${order.order_items
+              .map(
+                (item) => `
+              <div class="item">
+                <span>${item.item_name} x${item.quantity}</span>
+                <span>৳${(item.price_at_purchase * item.quantity).toFixed(2)}</span>
+              </div>
+            `,
+              )
+              .join("")}
           </div>
           <div class="total">
             <p>Total: ৳${order.total_price.toFixed(2)}</p>
@@ -417,7 +482,7 @@ const EnhancedOrdersTable = ({
       orderId,
       action,
       actionLabel,
-      isProcessing: false,
+      isProcessing: false, // Reset processing state when opening modal
     })
   }
 
@@ -459,8 +524,6 @@ const EnhancedOrdersTable = ({
 
   const getActionButtons = (order: Order) => {
     const validOrderId = getOrderId(order)
-
-    console.log("[v0] Rendering action buttons for order:", validOrderId, "status:", order.status)
 
     if (!validOrderId) {
       return (
@@ -654,19 +717,13 @@ const EnhancedOrdersTable = ({
                     <div className="space-y-2">
                       <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">ITEMS</p>
                       <div className="space-y-1">
-                        {order.order_items && order.order_items.length > 0 ? (
-                          <>
-                            {order.order_items.slice(0, 3).map((item, idx) => (
-                              <div key={idx} className="text-sm text-gray-300">
-                                {item.item_name} <span className="text-gray-500">×{item.quantity}</span>
-                              </div>
-                            ))}
-                            {order.order_items.length > 3 && (
-                              <p className="text-xs text-gray-500">+{order.order_items.length - 3} more items</p>
-                            )}
-                          </>
-                        ) : (
-                          <p className="text-gray-500 text-sm italic">No items</p>
+                        {order.order_items.slice(0, 3).map((item, idx) => (
+                          <div key={idx} className="text-sm text-gray-300">
+                            {item.item_name} <span className="text-gray-500">×{item.quantity}</span>
+                          </div>
+                        ))}
+                        {order.order_items.length > 3 && (
+                          <p className="text-xs text-gray-500">+{order.order_items.length - 3} more items</p>
                         )}
                       </div>
                     </div>
