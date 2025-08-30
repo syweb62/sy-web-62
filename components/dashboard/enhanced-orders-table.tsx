@@ -102,42 +102,77 @@ const EnhancedOrdersTable = ({
     console.log("[v0] BUTTON CLICKED! Order ID:", orderId, "New Status:", newStatus)
 
     if (!orderId) {
-      alert("Error: No order ID found")
+      alert("❌ Error: No order ID provided")
       return
     }
 
     setConfirmationModal((prev) => ({ ...prev, isProcessing: true }))
 
     try {
-      const formattedOrderId = orderId.toString().toLowerCase()
-      console.log("[v0] Formatted Order ID for query:", formattedOrderId)
+      console.log("[v0] Checking if order exists:", orderId)
 
-      const { data, error } = await supabase
+      const { data: existingOrder, error: checkError } = await supabase
         .from("orders")
-        .update({ status: newStatus })
-        .eq("short_order_id", formattedOrderId)
-        .select()
+        .select("order_id, short_order_id, status, customer_name")
+        .eq("short_order_id", orderId)
+        .single()
 
-      console.log("[v0] Update result - data:", data, "error:", error)
+      console.log("[v0] Order check result:", { existingOrder, checkError })
 
-      if (error) {
-        console.error("[v0] Error updating order:", error.message)
-        alert("Error: " + error.message)
+      if (checkError || !existingOrder) {
+        console.error("[v0] Order not found:", checkError?.message)
+        alert(`❌ Error: Order ${orderId} not found in database`)
         return
       }
 
-      if (!data || data.length === 0) {
-        alert(`❌ Error: Order ${orderId} not found in database`)
-      } else {
-        alert("✅ Order updated successfully!")
+      if (existingOrder.status === newStatus) {
+        console.log("[v0] Order already has this status:", newStatus)
+        alert(`ℹ️ Order ${orderId} is already ${newStatus}`)
+        return
       }
 
+      console.log("[v0] Updating order status from", existingOrder.status, "to", newStatus)
+
+      const { data: updateData, error: updateError } = await supabase
+        .from("orders")
+        .update({
+          status: newStatus,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("order_id", existingOrder.order_id) // Use UUID for reliable matching
+        .select("order_id, short_order_id, status, customer_name")
+
+      console.log("[v0] Update result:", { updateData, updateError })
+
+      if (updateError) {
+        console.error("[v0] Error updating order:", updateError.message)
+        alert(`❌ Database Error: ${updateError.message}`)
+        return
+      }
+
+      if (!updateData || updateData.length === 0) {
+        console.error("[v0] No rows were updated")
+        alert(`❌ Error: Failed to update order ${orderId}`)
+        return
+      }
+
+      console.log("[v0] Order updated successfully:", updateData[0])
+      alert(`✅ Order ${orderId} ${newStatus} successfully!`)
+
+      setDisplayOrders((prevOrders) =>
+        prevOrders.map((order) =>
+          order.short_order_id === orderId
+            ? { ...order, status: newStatus as any, updated_at: new Date().toISOString() }
+            : order,
+        ),
+      )
+
       if (onRefresh) {
-        onRefresh()
+        setTimeout(onRefresh, 100) // Small delay to ensure database consistency
       }
     } catch (error) {
       console.error("[v0] Failed to update order status:", error)
-      alert(`Network Error: ${error}`)
+      alert(`❌ Network Error: ${error}`)
     } finally {
       setConfirmationModal((prev) => ({ ...prev, isProcessing: false }))
     }
@@ -158,16 +193,32 @@ const EnhancedOrdersTable = ({
         (payload) => {
           console.log("[v0] Real-time database change received:", payload)
 
+          if (payload.eventType === "UPDATE" && payload.new) {
+            const updatedOrder = payload.new as any
+            console.log("[v0] Order updated via real-time:", updatedOrder.short_order_id, "->", updatedOrder.status)
+
+            setDisplayOrders((prevOrders) =>
+              prevOrders.map((order) =>
+                order.order_id === updatedOrder.order_id ? { ...order, ...updatedOrder } : order,
+              ),
+            )
+          }
+
           if (onRefresh) {
-            onRefresh()
+            setTimeout(onRefresh, 200) // Small delay for database consistency
           }
         },
       )
       .subscribe((status) => {
         console.log("[v0] Real-time subscription status:", status)
+        if (status === "SUBSCRIBED") {
+          console.log("[v0] ✅ Real-time subscription active")
+        } else if (status === "CHANNEL_ERROR") {
+          console.error("[v0] ❌ Real-time subscription error")
+        }
       })
 
-    if (Notification.permission === "default") {
+    if (typeof window !== "undefined" && Notification.permission === "default") {
       Notification.requestPermission()
     }
 
@@ -591,13 +642,16 @@ const EnhancedOrdersTable = ({
                     <div className="space-y-2">
                       <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">ITEMS</p>
                       <div className="space-y-1">
-                        {order.order_items.slice(0, 3).map((item, idx) => (
+                        {(order.order_items || []).slice(0, 3).map((item, idx) => (
                           <div key={idx} className="text-sm text-gray-300">
                             {item.item_name} <span className="text-gray-500">×{item.quantity}</span>
                           </div>
                         ))}
-                        {order.order_items.length > 3 && (
+                        {(order.order_items || []).length > 3 && (
                           <p className="text-xs text-gray-500">+{order.order_items.length - 3} more items</p>
+                        )}
+                        {(!order.order_items || order.order_items.length === 0) && (
+                          <p className="text-xs text-gray-500 italic">No items</p>
                         )}
                       </div>
                     </div>
