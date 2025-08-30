@@ -144,18 +144,15 @@ const EnhancedOrdersTable = ({
         console.log("[v0] ✅ Order updated successfully!")
         alert("✅ Order updated successfully!")
 
-        setDisplayOrders((prevOrders) =>
-          prevOrders.map((order) =>
-            order.short_order_id === orderId
-              ? { ...order, status: newStatus as any, updated_at: new Date().toISOString() }
-              : order,
-          ),
-        )
+        // Instead, wait for the refresh to get the updated data from database
+        console.log("[v0] Waiting 500ms before refresh to ensure database consistency...")
 
-        if (onRefresh) {
-          console.log("[v0] Calling onRefresh...")
-          onRefresh()
-        }
+        setTimeout(() => {
+          if (onRefresh) {
+            console.log("[v0] Calling onRefresh after delay...")
+            onRefresh()
+          }
+        }, 500)
       } else {
         console.error("[v0] API returned success: false")
         console.error("[v0] Error details:", result.error)
