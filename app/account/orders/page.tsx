@@ -15,6 +15,10 @@ import { useCart } from "@/hooks/use-cart"
 import { TimeBD } from "@/components/TimeBD"
 import { createClient } from "@/lib/supabase/client"
 
+console.log("[v0] ========== WEBSITE ORDER HISTORY PAGE LOADING ==========")
+console.log("[v0] Page load time:", new Date().toISOString())
+console.log("[v0] Window location:", typeof window !== "undefined" ? window.location.href : "SSR")
+
 function money(n?: number) {
   const v = typeof n === "number" && isFinite(n) ? n : 0
   return v.toFixed(2)
@@ -27,6 +31,9 @@ function parseDate(value?: string) {
 }
 
 export default function OrdersPage() {
+  console.log("[v0] ========== WEBSITE ORDER HISTORY COMPONENT FUNCTION ==========")
+  console.log("[v0] Component render time:", new Date().toISOString())
+
   const router = useRouter()
   const cart = useCart()
   const { orders, loading, error, refetch } = useOrderHistory()
@@ -37,6 +44,18 @@ export default function OrdersPage() {
   const [status, setStatus] = useState<string>("all")
   const [from, setFrom] = useState<string>("")
   const [to, setTo] = useState<string>("")
+
+  useEffect(() => {
+    console.log("[v0] ========== WEBSITE COMPONENT MOUNTED ==========")
+    console.log("[v0] Mount time:", new Date().toISOString())
+    console.log("[v0] Orders count:", orders.length)
+    console.log("[v0] Loading:", loading)
+    console.log("[v0] Error:", error)
+    console.log("[v0] Supabase client created:", !!supabase)
+    if (orders.length > 0) {
+      console.log("[v0] Sample order:", orders[0])
+    }
+  }, [orders, loading, error, supabase])
 
   const filtered: OrderHistoryItem[] = useMemo(() => {
     const list = Array.isArray(orders) ? orders : []
@@ -74,6 +93,10 @@ export default function OrdersPage() {
 
   // Reorder (kept same behavior)
   const handleReorder = (order: OrderHistoryItem) => {
+    console.log("[v0] ========== REORDER BUTTON CLICKED ==========")
+    console.log("[v0] Order ID:", order.order_id)
+    console.log("[v0] Items count:", order.items?.length || 0)
+
     const items = Array.isArray(order.items) ? order.items : []
     if (!items.length) return
     if (cart && typeof cart.addItem === "function") {
@@ -97,29 +120,36 @@ export default function OrdersPage() {
   }
 
   useEffect(() => {
-    console.log("[v0] Setting up website real-time subscriptions...")
+    console.log("[v0] ========== SETTING UP WEBSITE REAL-TIME SUBSCRIPTIONS ==========")
+    console.log("[v0] Setup time:", new Date().toISOString())
 
     const immediateRefresh = () => {
-      console.log("[v0] Triggering immediate order history refresh")
+      console.log("[v0] ========== TRIGGERING IMMEDIATE ORDER HISTORY REFRESH ==========")
+      console.log("[v0] Refresh time:", new Date().toISOString())
       refetch()
     }
 
-    // Custom event listener for dashboard updates
     const handleOrderStatusChange = (event: CustomEvent) => {
-      console.log("[v0] Order status change event received:", event.detail)
+      console.log("[v0] ========== ORDER STATUS CHANGE EVENT RECEIVED ==========")
+      console.log("[v0] Event detail:", event.detail)
+      console.log("[v0] Event time:", new Date().toISOString())
       if (event.detail?.orderId) {
-        console.log("[v0] Refreshing order history due to status change")
+        console.log("[v0] Refreshing order history due to status change for order:", event.detail.orderId)
         immediateRefresh()
       }
     }
 
-    // Storage change listener for cross-window communication
     const handleStorageChange = (event: StorageEvent) => {
+      console.log("[v0] ========== STORAGE CHANGE DETECTED ==========")
+      console.log("[v0] Storage key:", event.key)
+      console.log("[v0] New value:", event.newValue)
+      console.log("[v0] Event time:", new Date().toISOString())
+
       if ((event.key === "orderUpdate" || event.key === "orderStatusUpdate") && event.newValue) {
-        console.log("[v0] Storage change detected, refreshing order history")
+        console.log("[v0] Order-related storage change detected, refreshing order history")
         try {
           const data = JSON.parse(event.newValue)
-          console.log("[v0] Order update data:", data)
+          console.log("[v0] Parsed order update data:", data)
         } catch (e) {
           console.log("[v0] Could not parse storage data:", e)
         }
@@ -127,14 +157,19 @@ export default function OrdersPage() {
       }
     }
 
-    // Message event listener for cross-window communication
     const handleMessage = (event: MessageEvent) => {
+      console.log("[v0] ========== MESSAGE EVENT RECEIVED ==========")
+      console.log("[v0] Message data:", event.data)
+      console.log("[v0] Message origin:", event.origin)
+      console.log("[v0] Event time:", new Date().toISOString())
+
       if (event.data?.type === "orderStatusChanged" && event.data?.orderId) {
-        console.log("[v0] Message event received for order status change:", event.data)
+        console.log("[v0] Order status change message received for order:", event.data.orderId)
         immediateRefresh()
       }
     }
 
+    console.log("[v0] Creating Supabase real-time subscription...")
     const subscription = supabase
       .channel("website-orders-updates")
       .on(
@@ -145,29 +180,70 @@ export default function OrdersPage() {
           table: "orders",
         },
         (payload) => {
-          console.log("[v0] Website received real-time database update:", payload)
+          console.log("[v0] ========== WEBSITE RECEIVED REAL-TIME DATABASE UPDATE ==========")
+          console.log("[v0] Update time:", new Date().toISOString())
+          console.log("[v0] Update type:", payload.eventType)
+          console.log("[v0] Updated record:", payload.new || payload.old)
+          console.log("[v0] Full payload:", payload)
+
+          if (payload.eventType === "UPDATE" && payload.new) {
+            console.log("[v0] Order status updated:", {
+              order_id: payload.new.order_id,
+              short_order_id: payload.new.short_order_id,
+              old_status: payload.old?.status,
+              new_status: payload.new.status,
+            })
+          }
+
           immediateRefresh()
         },
       )
       .subscribe((status) => {
-        console.log("[v0] Website real-time subscription status:", status)
+        console.log("[v0] ========== WEBSITE REAL-TIME SUBSCRIPTION STATUS ==========")
+        console.log("[v0] Status:", status)
+        console.log("[v0] Time:", new Date().toISOString())
+
         if (status === "SUBSCRIBED") {
-          console.log("[v0] Website successfully subscribed to real-time order updates")
+          console.log("[v0] ✅ Website successfully subscribed to real-time order updates")
+        } else if (status === "CHANNEL_ERROR") {
+          console.log("[v0] ❌ Website real-time subscription error")
+        } else if (status === "CLOSED") {
+          console.log("[v0] ⚠️ Website real-time subscription closed")
         }
       })
 
-    // Add all event listeners
+    console.log("[v0] Adding event listeners...")
     window.addEventListener("orderStatusChanged", handleOrderStatusChange as EventListener)
     window.addEventListener("storage", handleStorageChange)
     window.addEventListener("message", handleMessage)
+    console.log("[v0] All event listeners added successfully")
+
+    const testTimer = setTimeout(() => {
+      console.log("[v0] Website real-time system is active after 2 seconds")
+      console.log("[v0] Current orders count:", orders.length)
+    }, 2000)
 
     return () => {
+      console.log("[v0] ========== CLEANING UP WEBSITE REAL-TIME SUBSCRIPTIONS ==========")
+      console.log("[v0] Cleanup time:", new Date().toISOString())
+
       window.removeEventListener("orderStatusChanged", handleOrderStatusChange as EventListener)
       window.removeEventListener("storage", handleStorageChange)
       window.removeEventListener("message", handleMessage)
       subscription.unsubscribe()
+      clearTimeout(testTimer)
+
+      console.log("[v0] Website real-time cleanup completed")
     }
-  }, [refetch, supabase])
+  }, [refetch, supabase, orders.length])
+
+  const testWebsiteRefresh = () => {
+    console.log("[v0] ========== WEBSITE TEST REFRESH CLICKED ==========")
+    console.log("[v0] Current orders:", orders.length)
+    console.log("[v0] Time:", new Date().toISOString())
+    refetch()
+    alert("✅ Website refresh triggered! Orders: " + orders.length)
+  }
 
   if (loading) {
     return (
@@ -200,6 +276,30 @@ export default function OrdersPage() {
           <p className="text-xs md:text-sm text-gray-400 mt-1">
             Search, filter, download receipt, and reorder • Real-time updates enabled
           </p>
+        </div>
+
+        <div className="flex gap-2 mb-4">
+          <Button onClick={testWebsiteRefresh} className="bg-green-600 hover:bg-green-700">
+            TEST WEBSITE REFRESH ({orders.length})
+          </Button>
+
+          <Button
+            onClick={async () => {
+              console.log("[v0] ========== WEBSITE API TEST ==========")
+              try {
+                const response = await fetch("/api/orders")
+                const data = await response.json()
+                console.log("[v0] Website API response:", data)
+                alert("✅ Website API working! Orders: " + (data.orders?.length || 0))
+              } catch (error) {
+                console.log("[v0] Website API error:", error)
+                alert("❌ Website API error: " + error)
+              }
+            }}
+            className="bg-blue-600 hover:bg-blue-700"
+          >
+            TEST WEBSITE API
+          </Button>
         </div>
 
         {/* Filters - simplified minimal UI */}

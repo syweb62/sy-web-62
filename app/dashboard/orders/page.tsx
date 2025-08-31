@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -10,11 +10,29 @@ import { Search, RefreshCw, Filter, TrendingUp } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { useRealtimeOrders } from "@/hooks/use-realtime-orders"
 
+console.log("[v0] ========== DASHBOARD ORDERS PAGE LOADING ==========")
+console.log("[v0] Page load time:", new Date().toISOString())
+console.log("[v0] Window location:", typeof window !== "undefined" ? window.location.href : "SSR")
+
 export default function OrdersPage() {
+  console.log("[v0] ========== DASHBOARD ORDERS PAGE COMPONENT FUNCTION ==========")
+  console.log("[v0] Component render time:", new Date().toISOString())
+
   const { orders, loading, connectionStatus, refetch: fetchOrders } = useRealtimeOrders()
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const { user } = useAuth()
+
+  useEffect(() => {
+    console.log("[v0] ========== DASHBOARD PAGE MOUNTED ==========")
+    console.log("[v0] Orders count:", orders.length)
+    console.log("[v0] Loading:", loading)
+    console.log("[v0] Connection status:", connectionStatus)
+    console.log("[v0] User:", user?.email || "No user")
+    if (orders.length > 0) {
+      console.log("[v0] Sample order:", orders[0])
+    }
+  }, [orders, loading, connectionStatus, user])
 
   const filteredOrders = orders.filter((order) => {
     const matchesStatus = statusFilter === "all" || order.status === statusFilter
@@ -28,7 +46,7 @@ export default function OrdersPage() {
   })
 
   const handleStatusUpdate = (orderId: string, newStatus: string) => {
-    console.log(`[v0] Status update requested: ${orderId} -> ${newStatus}`)
+    console.log(`[v0] Dashboard: Status update requested: ${orderId} -> ${newStatus}`)
     // Real-time updates will handle the state changes automatically
   }
 
@@ -48,9 +66,46 @@ export default function OrdersPage() {
 
   const stats = getOrderStats()
 
+  console.log("[v0] About to render EnhancedOrdersTable with:")
+  console.log("[v0] - filteredOrders:", filteredOrders.length)
+  console.log("[v0] - loading:", loading)
+  console.log("[v0] - fetchOrders function:", typeof fetchOrders)
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900">
       <div className="space-y-8 p-6">
+        <div className="flex items-center gap-4 mb-4">
+          <Button
+            onClick={() => {
+              console.log("[v0] ========== DASHBOARD TEST BUTTON CLICKED ==========")
+              console.log("[v0] Current time:", new Date().toISOString())
+              console.log("[v0] Orders available:", orders.length)
+              alert("✅ Dashboard page is working! Orders: " + orders.length)
+            }}
+            className="bg-purple-600 hover:bg-purple-700"
+          >
+            TEST DASHBOARD ({orders.length} orders)
+          </Button>
+
+          <Button
+            onClick={async () => {
+              console.log("[v0] ========== API TEST BUTTON CLICKED ==========")
+              try {
+                const response = await fetch("/api/orders")
+                const data = await response.json()
+                console.log("[v0] API test response:", data)
+                alert("✅ API working! Orders: " + (data.orders?.length || 0))
+              } catch (error) {
+                console.log("[v0] API test error:", error)
+                alert("❌ API error: " + error)
+              }
+            }}
+            className="bg-blue-600 hover:bg-blue-700"
+          >
+            TEST API
+          </Button>
+        </div>
+
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           <div className="space-y-2">
             <h1 className="text-4xl font-bold text-white">Orders Management</h1>
@@ -60,7 +115,10 @@ export default function OrdersPage() {
           <div className="flex items-center gap-4">
             <Button
               variant="outline"
-              onClick={fetchOrders}
+              onClick={() => {
+                console.log("[v0] ========== REFRESH BUTTON CLICKED ==========")
+                fetchOrders()
+              }}
               disabled={loading}
               className="bg-gray-800/50 border-gray-700/50 text-white hover:bg-gray-700/50"
             >
@@ -159,6 +217,7 @@ export default function OrdersPage() {
         </Card>
 
         {/* Enhanced Orders Table */}
+        {console.log("[v0] ========== RENDERING ENHANCED ORDERS TABLE ==========")}
         <EnhancedOrdersTable
           orders={filteredOrders}
           loading={loading}
@@ -166,6 +225,7 @@ export default function OrdersPage() {
           onStatusUpdate={handleStatusUpdate}
           userRole={getUserRole()}
         />
+        {console.log("[v0] ========== ENHANCED ORDERS TABLE RENDERED ==========")}
       </div>
     </div>
   )

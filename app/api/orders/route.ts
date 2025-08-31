@@ -2,6 +2,10 @@ import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase-server"
 
 export async function GET(request: NextRequest) {
+  console.log("[v0] ========== API GET: Request received ==========")
+  console.log("[v0] API GET: Time:", new Date().toISOString())
+  console.log("[v0] API GET: URL:", request.url)
+
   try {
     const supabase = createClient()
     const { searchParams } = new URL(request.url)
@@ -10,16 +14,22 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get("search")
     const orderId = searchParams.get("orderId") // Added orderId parameter for validation
 
+    console.log("[v0] API GET: Query params:", { status, search, orderId })
+
     if (orderId) {
+      console.log("[v0] API GET: Single order lookup for:", orderId)
       const { data: order, error } = await supabase.rpc("get_order_by_identifier", { identifier: orderId }).single()
 
       if (error || !order) {
+        console.log("[v0] API GET: Order not found:", orderId, error)
         return NextResponse.json({ error: "Order not found", orderId }, { status: 404 })
       }
 
+      console.log("[v0] API GET: Single order found:", order.short_order_id)
       return NextResponse.json({ order, exists: true })
     }
 
+    console.log("[v0] API GET: Fetching all orders from database...")
     let query = supabase
       .from("orders")
       .select(`
@@ -47,10 +57,12 @@ export async function GET(request: NextRequest) {
       .order("created_at", { ascending: false })
 
     if (status && status !== "all") {
+      console.log("[v0] API GET: Filtering by status:", status)
       query = query.eq("status", status)
     }
 
     if (search) {
+      console.log("[v0] API GET: Filtering by search term:", search)
       query = query.or(`customer_name.ilike.%${search}%,phone.ilike.%${search}%,short_order_id.ilike.%${search}%`)
     }
 
@@ -62,6 +74,13 @@ export async function GET(request: NextRequest) {
     }
 
     console.log("[v0] API GET: Successfully fetched", orders?.length || 0, "orders")
+    if (orders && orders.length > 0) {
+      console.log("[v0] API GET: Sample order:", {
+        short_order_id: orders[0].short_order_id,
+        status: orders[0].status,
+        customer_name: orders[0].customer_name,
+      })
+    }
 
     const formattedOrders =
       orders?.map((order) => ({
@@ -100,6 +119,7 @@ export async function GET(request: NextRequest) {
           })) || [],
       })) || []
 
+    console.log("[v0] API GET: Returning formatted orders:", formattedOrders.length)
     return NextResponse.json({ orders: formattedOrders })
   } catch (error) {
     console.error("[v0] API GET: Error:", error)
@@ -111,6 +131,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
+  console.log("[v0] ========== API PATCH: Request received ==========")
+  console.log("[v0] API PATCH: Time:", new Date().toISOString())
+
   try {
     const supabase = createClient()
     const { orderId, status } = await request.json()
@@ -125,10 +148,13 @@ export async function PATCH(request: NextRequest) {
     console.log("[v0] API PATCH: Attempting to find order with identifier:", orderId)
 
     // First try the universal function
+    console.log("[v0] API PATCH: Trying universal function...")
     let { data, error } = await supabase.rpc("update_order_status_by_identifier", {
       identifier: orderId,
       new_status: status,
     })
+
+    console.log("[v0] API PATCH: Universal function result:", { data, error })
 
     if (error || !data || data.length === 0) {
       console.log("[v0] API PATCH: Universal function failed, trying direct lookup")
@@ -137,18 +163,20 @@ export async function PATCH(request: NextRequest) {
       let order = null
 
       // Try UUID first
+      console.log("[v0] API PATCH: Trying UUID lookup...")
       const { data: uuidOrder } = await supabase.from("orders").select("*").eq("order_id", orderId).single()
 
       if (uuidOrder) {
         order = uuidOrder
-        console.log("[v0] API PATCH: Found order by UUID")
+        console.log("[v0] API PATCH: Found order by UUID:", uuidOrder.short_order_id)
       } else {
         // Try short_order_id
+        console.log("[v0] API PATCH: Trying short_order_id lookup...")
         const { data: shortOrder } = await supabase.from("orders").select("*").eq("short_order_id", orderId).single()
 
         if (shortOrder) {
           order = shortOrder
-          console.log("[v0] API PATCH: Found order by short_order_id")
+          console.log("[v0] API PATCH: Found order by short_order_id:", shortOrder.short_order_id)
         }
       }
 
@@ -158,6 +186,7 @@ export async function PATCH(request: NextRequest) {
       }
 
       // Update using the real UUID
+      console.log("[v0] API PATCH: Updating order with UUID:", order.order_id)
       const { data: updateData, error: updateError } = await supabase
         .from("orders")
         .update({ status, updated_at: new Date().toISOString() })
@@ -169,10 +198,11 @@ export async function PATCH(request: NextRequest) {
         return NextResponse.json({ error: "Failed to update order status" }, { status: 500 })
       }
 
+      console.log("[v0] API PATCH: Direct update successful:", updateData)
       data = updateData
     }
 
-    console.log("[v0] API PATCH: Update successful")
+    console.log("[v0] API PATCH: Update successful, returning response")
 
     return NextResponse.json({
       success: true,

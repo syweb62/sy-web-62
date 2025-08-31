@@ -1,11 +1,15 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
-import { Eye, Printer, Check, X, CheckCircle, AlertTriangle, Loader2 } from "lucide-react"
+import { Check, X, CheckCircle, Loader2 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
+
+console.log("[v0] ========== ENHANCED ORDERS TABLE FILE LOADED ==========")
+console.log("[v0] File load time:", new Date().toISOString())
+console.log("[v0] Environment check - window exists:", typeof window !== "undefined")
 
 interface Order {
   order_id: string
@@ -39,7 +43,7 @@ interface ConfirmationModal {
   orderId: string
   action: string
   actionLabel: string
-  isProcessing: boolean // Added processing state for better UX
+  isProcessing: boolean
 }
 
 const EnhancedOrdersTable = ({
@@ -49,92 +53,63 @@ const EnhancedOrdersTable = ({
   userRole = "manager",
   loading = false,
 }: EnhancedOrdersTableProps) => {
+  console.log("[v0] ========== ENHANCED ORDERS TABLE COMPONENT FUNCTION ==========")
+  console.log("[v0] Component render time:", new Date().toISOString())
+  console.log("[v0] Props received:")
+  console.log("[v0] - orders.length:", orders.length)
+  console.log("[v0] - loading:", loading)
+  console.log("[v0] - onRefresh type:", typeof onRefresh)
+
   const [displayOrders, setDisplayOrders] = useState<Order[]>(orders)
   const [confirmationModal, setConfirmationModal] = useState<ConfirmationModal>({
     isOpen: false,
     orderId: "",
     action: "",
     actionLabel: "",
-    isProcessing: false, // Added processing state
+    isProcessing: false,
   })
   const supabase = createClient()
 
   useEffect(() => {
-    console.log("[v0] =================================")
-    console.log("[v0] EnhancedOrdersTable MOUNTED")
+    console.log("[v0] ========== COMPONENT MOUNTED ==========")
+    console.log("[v0] Mount time:", new Date().toISOString())
     console.log("[v0] Orders received:", orders.length)
-    console.log("[v0] Sample order:", orders[0])
-    console.log("[v0] onRefresh function:", typeof onRefresh)
-    console.log("[v0] =================================")
+    console.log("[v0] Supabase client created:", !!supabase)
+    if (orders.length > 0) {
+      console.log("[v0] Sample order:", orders[0])
+    }
+
+    // Test if component is interactive
+    const testTimer = setTimeout(() => {
+      console.log("[v0] Component is interactive after 1 second")
+    }, 1000)
+
+    return () => clearTimeout(testTimer)
   }, [])
+
+  useEffect(() => {
+    console.log("[v0] Orders prop changed, updating displayOrders")
+    setDisplayOrders(orders)
+  }, [orders])
 
   const getOrderId = (order: Order): string => {
     return order.short_order_id || ""
   }
 
-  useEffect(() => {
-    setDisplayOrders(orders)
-  }, [orders])
-
-  const formatDateTime = useCallback((dateString: string) => {
-    const date = new Date(dateString)
-    return {
-      date: date.toLocaleDateString("en-US", {
-        timeZone: "Asia/Dhaka",
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      }),
-      time: date.toLocaleTimeString("en-US", {
-        timeZone: "Asia/Dhaka",
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: true,
-      }),
-    }
-  }, [])
-
-  const getRelativeTime = useCallback((dateString: string) => {
-    const date = new Date(dateString)
-    const now = new Date()
-    const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60))
-
-    if (diffInMinutes < 1) return "Just now"
-    if (diffInMinutes < 60) return `${diffInMinutes}m ago`
-    const diffInHours = Math.floor(diffInMinutes / 60)
-    if (diffInHours < 24) return `${diffInHours}h ago`
-    const diffInDays = Math.floor(diffInHours / 24)
-    return `${diffInDays}d ago`
-  }, [])
-
   const updateOrderStatus = async (orderId: string, newStatus: string) => {
-    console.log("[v0] ========== ORDER STATUS UPDATE START ==========")
+    console.log("[v0] ========== UPDATE ORDER STATUS START ==========")
     console.log("[v0] Order ID:", orderId)
     console.log("[v0] New Status:", newStatus)
-    console.log("[v0] Current time:", new Date().toISOString())
+    console.log("[v0] Time:", new Date().toISOString())
 
-    if (!orderId) {
-      console.log("[v0] ERROR: No order ID found")
-      alert("Error: No order ID found")
-      return
+    if (!orderId || !newStatus) {
+      console.log("[v0] ERROR: Missing orderId or newStatus")
+      alert("❌ Error: Missing order information")
+      return false
     }
 
     try {
-      console.log("[v0] Applying optimistic update...")
-      setDisplayOrders((prevOrders) => {
-        const updatedOrders = prevOrders.map((order) =>
-          order.short_order_id === orderId ? { ...order, status: newStatus as any } : order,
-        )
-        console.log(
-          "[v0] Optimistic update applied, new orders:",
-          updatedOrders.find((o) => o.short_order_id === orderId),
-        )
-        return updatedOrders
-      })
-
       console.log("[v0] Making API call to /api/orders...")
-      console.log("[v0] Request body:", JSON.stringify({ orderId, status: newStatus }))
-
       const response = await fetch("/api/orders", {
         method: "PATCH",
         headers: {
@@ -147,18 +122,13 @@ const EnhancedOrdersTable = ({
       })
 
       console.log("[v0] API response status:", response.status)
-      console.log("[v0] API response ok:", response.ok)
-
       const result = await response.json()
       console.log("[v0] API response body:", result)
 
       if (!response.ok) {
-        console.log("[v0] API call failed, reverting optimistic update...")
-        setDisplayOrders((prevOrders) =>
-          prevOrders.map((order) => (order.short_order_id === orderId ? { ...order, status: order.status } : order)),
-        )
+        console.log("[v0] API call failed with status:", response.status)
         alert(`❌ ${result.error || "Failed to update order status"}`)
-        return
+        return false
       }
 
       if (result.success) {
@@ -166,249 +136,30 @@ const EnhancedOrdersTable = ({
         alert("✅ Order updated successfully!")
 
         if (onRefresh) {
-          console.log("[v0] Calling onRefresh() after 100ms delay...")
-          setTimeout(() => {
-            console.log("[v0] Executing onRefresh() now...")
-            onRefresh()
-          }, 100)
-        } else {
-          console.log("[v0] No onRefresh function provided")
+          console.log("[v0] Calling onRefresh() immediately...")
+          onRefresh()
         }
+        return true
       } else {
-        console.log("[v0] API returned success=false, reverting optimistic update...")
-        setDisplayOrders((prevOrders) =>
-          prevOrders.map((order) => (order.short_order_id === orderId ? { ...order, status: order.status } : order)),
-        )
+        console.log("[v0] API returned success=false")
         alert(`❌ Error: ${result.error || "Unknown error occurred"}`)
+        return false
       }
     } catch (error) {
-      console.log("[v0] Network error occurred, reverting optimistic update...")
-      setDisplayOrders((prevOrders) =>
-        prevOrders.map((order) => (order.short_order_id === orderId ? { ...order, status: order.status } : order)),
-      )
-      console.error("[v0] Network error:", error)
+      console.log("[v0] Network error occurred:", error)
       alert(`❌ Network Error: ${error}`)
+      return false
     } finally {
-      console.log("[v0] ========== ORDER STATUS UPDATE END ==========")
+      console.log("[v0] ========== UPDATE ORDER STATUS END ==========")
     }
   }
-
-  useEffect(() => {
-    console.log("[v0] Setting up real-time subscription...")
-
-    const subscription = supabase
-      .channel("orders-realtime")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "orders",
-        },
-        (payload) => {
-          console.log("[v0] ========== REAL-TIME EVENT ==========")
-          console.log("[v0] Event type:", payload.eventType)
-          console.log("[v0] Event time:", new Date().toISOString())
-          console.log("[v0] Payload:", payload)
-          console.log("[v0] =====================================")
-
-          if (onRefresh) {
-            console.log("[v0] Real-time event triggered onRefresh()")
-            onRefresh()
-          } else {
-            console.log("[v0] No onRefresh function for real-time event")
-          }
-        },
-      )
-      .subscribe((status) => {
-        console.log("[v0] Real-time subscription status:", status)
-      })
-
-    if (Notification.permission === "default") {
-      Notification.requestPermission()
-    }
-
-    return () => {
-      console.log("[v0] Unsubscribing from real-time updates")
-      subscription.unsubscribe()
-    }
-  }, [supabase, onRefresh])
-
-  const playNotificationSound = () => {
-    try {
-      const audio = new Audio("/sounds/notification.mp3")
-      audio.volume = 0.7
-      audio.play().catch((e) => {
-        console.log("[v0] Could not play notification sound:", e)
-        try {
-          const context = new (window.AudioContext || (window as any).webkitAudioContext)()
-          const oscillator = context.createOscillator()
-          const gainNode = context.createGain()
-
-          oscillator.connect(gainNode)
-          gainNode.connect(context.destination)
-
-          oscillator.frequency.value = 800
-          gainNode.gain.setValueAtTime(0.3, context.currentTime)
-          gainNode.gain.exponentialRampToValueAtTime(0.01, context.currentTime + 0.5)
-
-          oscillator.start(context.currentTime)
-          oscillator.stop(context.currentTime + 0.5)
-        } catch (beepError) {
-          console.log("[v0] Could not play fallback beep:", beepError)
-        }
-      })
-    } catch (error) {
-      console.log("[v0] Notification sound error:", error)
-    }
-  }
-
-  useEffect(() => {
-    const handleStorageChange = (e: StorageEvent) => {
-      if ((e.key === "orderStatusUpdate" || e.key === "orderUpdate") && e.newValue && onRefresh) {
-        console.log("[v0] Storage change detected, refreshing orders")
-        onRefresh()
-      }
-    }
-    window.addEventListener("storage", handleStorageChange)
-    return () => window.removeEventListener("storage", handleStorageChange)
-  }, [onRefresh])
-
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (!confirmationModal.isOpen) return
-
-      if (event.key === "Escape" && !confirmationModal.isProcessing) {
-        cancelConfirmation()
-      } else if (event.key === "Enter" && !confirmationModal.isProcessing) {
-        handleConfirmation()
-      }
-    }
-
-    document.addEventListener("keydown", handleKeyDown)
-    return () => document.removeEventListener("keydown", handleKeyDown)
-  }, [confirmationModal.isOpen, confirmationModal.isProcessing])
-
-  const getStatusBadge = (status: string) => {
-    const statusConfig = {
-      confirmed: { color: "bg-green-600 text-white", label: "Order Confirmed" },
-      cancelled: { color: "bg-red-600 text-white", label: "Order Canceled" },
-      pending: { color: "bg-yellow-600 text-white", label: "Order Pending" },
-      completed: { color: "bg-blue-600 text-white", label: "Order Completed" },
-    }
-
-    const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.confirmed
-    return <Badge className={`${config.color} px-3 py-1 font-medium rounded-full`}>{config.label}</Badge>
-  }
-
-  const getPaymentMethodStyle = (paymentMethod: string) => {
-    const method = paymentMethod.toLowerCase()
-    if (method.includes("cash")) {
-      return "bg-green-600/30 text-green-200 px-2 py-1 rounded-full text-xs font-medium border border-green-600/50"
-    } else if (method.includes("bkash")) {
-      return "bg-pink-600/30 text-pink-200 px-2 py-1 rounded-full text-xs font-medium border border-pink-600/50"
-    } else if (method.includes("pickup")) {
-      return "bg-blue-600/30 text-blue-200 px-2 py-1 rounded-full text-xs font-medium border border-blue-600/50"
-    } else {
-      return "bg-gray-600/30 text-gray-200 px-2 py-1 rounded-full text-xs font-medium border border-gray-600/50"
-    }
-  }
-
-  const generatePrintContent = useCallback(
-    (order: Order) => {
-      const dateTime = formatDateTime(order.created_at)
-      return `
-      <html>
-        <head>
-          <title>Order ${order.short_order_id}</title>
-          <style>
-            body { 
-              font-family: 'Courier New', monospace; 
-              padding: 20px; 
-              max-width: 300px; 
-              margin: 0 auto;
-              line-height: 1.4;
-            }
-            .header { 
-              text-align: center; 
-              border-bottom: 2px solid #000; 
-              padding-bottom: 10px; 
-              margin-bottom: 15px;
-            }
-            .order-info { margin: 15px 0; }
-            .items { margin: 15px 0; }
-            .item { 
-              display: flex; 
-              justify-content: space-between; 
-              margin: 5px 0; 
-            }
-            .total { 
-              border-top: 2px solid #000; 
-              padding-top: 10px; 
-              font-weight: bold; 
-              text-align: right;
-            }
-            .footer {
-              text-align: center;
-              margin-top: 20px;
-              font-size: 12px;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <h2>SUSHI YAKI RESTAURANT</h2>
-            <p>Order #${order.short_order_id}</p>
-            <p>${dateTime.date} ${dateTime.time}</p>
-          </div>
-          <div class="order-info">
-            <p><strong>Customer:</strong> ${order.customer_name}</p>
-            <p><strong>Phone:</strong> ${order.phone}</p>
-            <p><strong>Payment:</strong> ${order.payment_method}</p>
-            <p><strong>Status:</strong> ${order.status.toUpperCase()}</p>
-          </div>
-          <div class="items">
-            <h3>Items:</h3>
-            ${order.order_items
-              .map(
-                (item) => `
-              <div class="item">
-                <span>${item.item_name} x${item.quantity}</span>
-                <span>৳${(item.price_at_purchase * item.quantity).toFixed(2)}</span>
-              </div>
-            `,
-              )
-              .join("")}
-          </div>
-          <div class="total">
-            <p>Total: ৳${order.total_price.toFixed(2)}</p>
-          </div>
-          <div class="footer">
-            <p>Thank you for your order!</p>
-            <p>Visit us again soon</p>
-          </div>
-        </body>
-      </html>
-    `
-    },
-    [formatDateTime],
-  )
-
-  const handlePrint = useCallback(
-    (order: Order) => {
-      const printWindow = window.open("", "_blank")
-      if (!printWindow) return
-
-      const printContent = generatePrintContent(order)
-      printWindow.document.write(printContent)
-      printWindow.document.close()
-      printWindow.print()
-    },
-    [generatePrintContent],
-  )
 
   const showConfirmation = (orderId: string, action: string, actionLabel: string) => {
-    console.log("[v0] Showing confirmation for:", orderId, action)
+    console.log("[v0] ========== SHOW CONFIRMATION ==========")
+    console.log("[v0] Order ID:", orderId)
+    console.log("[v0] Action:", action)
+    console.log("[v0] Action Label:", actionLabel)
+
     setConfirmationModal({
       isOpen: true,
       orderId,
@@ -419,21 +170,31 @@ const EnhancedOrdersTable = ({
   }
 
   const handleConfirmation = async () => {
-    console.log("[v0] ========== HANDLE CONFIRMATION CALLED ==========")
-    console.log("[v0] Confirming action:", confirmationModal.action, "for order:", confirmationModal.orderId)
-    console.log("[v0] Current time:", new Date().toISOString())
+    console.log("[v0] ========== HANDLE CONFIRMATION START ==========")
+    console.log("[v0] Modal state:", confirmationModal)
+
+    if (!confirmationModal.orderId || !confirmationModal.action) {
+      console.log("[v0] ERROR: Missing confirmation data")
+      alert("❌ Error: Missing confirmation data")
+      return
+    }
 
     setConfirmationModal((prev) => ({ ...prev, isProcessing: true }))
 
     try {
-      await updateOrderStatus(confirmationModal.orderId, confirmationModal.action)
-      console.log("[v0] updateOrderStatus completed successfully")
+      const success = await updateOrderStatus(confirmationModal.orderId, confirmationModal.action)
+      console.log("[v0] Update result:", success)
 
-      setConfirmationModal({ isOpen: false, orderId: "", action: "", actionLabel: "", isProcessing: false })
+      if (success) {
+        console.log("[v0] Closing modal after successful update")
+        setConfirmationModal({ isOpen: false, orderId: "", action: "", actionLabel: "", isProcessing: false })
+      } else {
+        console.log("[v0] Keeping modal open after failed update")
+        setConfirmationModal((prev) => ({ ...prev, isProcessing: false }))
+      }
     } catch (error) {
-      console.log("[v0] updateOrderStatus failed:", error)
-
-      setConfirmationModal({ isOpen: false, orderId: "", action: "", actionLabel: "", isProcessing: false })
+      console.log("[v0] handleConfirmation error:", error)
+      setConfirmationModal((prev) => ({ ...prev, isProcessing: false }))
     }
 
     console.log("[v0] ========== HANDLE CONFIRMATION END ==========")
@@ -444,46 +205,13 @@ const EnhancedOrdersTable = ({
     setConfirmationModal({ isOpen: false, orderId: "", action: "", actionLabel: "", isProcessing: false })
   }
 
-  const getModalIcon = () => {
-    if (confirmationModal.isProcessing) {
-      return <Loader2 className="w-6 h-6 text-white animate-spin" />
-    }
-
-    switch (confirmationModal.actionLabel) {
-      case "cancel":
-        return <AlertTriangle className="w-6 h-6 text-white" />
-      case "complete":
-        return <CheckCircle className="w-6 h-6 text-white" />
-      default:
-        return <Check className="w-6 h-6 text-white" />
-    }
-  }
-
-  const getModalColors = () => {
-    switch (confirmationModal.actionLabel) {
-      case "cancel":
-        return "bg-red-600"
-      case "complete":
-        return "bg-blue-600"
-      default:
-        return "bg-green-600"
-    }
-  }
-
   const getActionButtons = (order: Order) => {
     const validOrderId = getOrderId(order)
+    console.log("[v0] Rendering action buttons for order:", validOrderId, "status:", order.status)
 
     if (!validOrderId) {
       return (
         <div className="space-y-3">
-          <div className="flex gap-2">
-            <Button size="sm" variant="outline" disabled className="border-gray-600 text-gray-500 p-2 bg-transparent">
-              <Eye className="w-4 h-4" />
-            </Button>
-            <Button size="sm" variant="outline" disabled className="border-gray-600 text-gray-500 p-2 bg-transparent">
-              <Printer className="w-4 h-4" />
-            </Button>
-          </div>
           <p className="text-red-400 text-xs">Invalid Order ID</p>
         </div>
       )
@@ -494,26 +222,10 @@ const EnhancedOrdersTable = ({
         <div className="space-y-3">
           <div className="flex gap-2">
             <Button
-              onClick={() => window.open(`/dashboard/orders/${validOrderId}`, "_blank")}
-              size="sm"
-              variant="outline"
-              className="border-gray-600 text-gray-300 hover:bg-gray-800 bg-transparent p-2"
-            >
-              <Eye className="w-4 h-4" />
-            </Button>
-            <Button
-              onClick={() => handlePrint(order)}
-              size="sm"
-              variant="outline"
-              className="border-gray-600 text-gray-300 hover:bg-gray-800 bg-transparent p-2"
-            >
-              <Printer className="w-4 h-4" />
-            </Button>
-          </div>
-          <div className="flex gap-2">
-            <Button
               onClick={() => {
-                console.log("[v0] Confirm button clicked for order:", validOrderId)
+                console.log("[v0] ========== CONFIRM BUTTON CLICKED ==========")
+                console.log("[v0] Order ID:", validOrderId)
+                console.log("[v0] Time:", new Date().toISOString())
                 showConfirmation(validOrderId, "confirmed", "confirm")
               }}
               size="sm"
@@ -524,7 +236,9 @@ const EnhancedOrdersTable = ({
             </Button>
             <Button
               onClick={() => {
-                console.log("[v0] Cancel button clicked for order:", validOrderId)
+                console.log("[v0] ========== CANCEL BUTTON CLICKED ==========")
+                console.log("[v0] Order ID:", validOrderId)
+                console.log("[v0] Time:", new Date().toISOString())
                 showConfirmation(validOrderId, "cancelled", "cancel")
               }}
               size="sm"
@@ -542,27 +256,11 @@ const EnhancedOrdersTable = ({
     if (order.status === "confirmed") {
       return (
         <div className="space-y-3">
-          <div className="flex gap-2">
-            <Button
-              onClick={() => window.open(`/dashboard/orders/${validOrderId}`, "_blank")}
-              size="sm"
-              variant="outline"
-              className="border-gray-600 text-gray-300 hover:bg-gray-800 bg-transparent p-2"
-            >
-              <Eye className="w-4 h-4" />
-            </Button>
-            <Button
-              onClick={() => handlePrint(order)}
-              size="sm"
-              variant="outline"
-              className="border-gray-600 text-gray-300 hover:bg-gray-800 bg-transparent p-2"
-            >
-              <Printer className="w-4 h-4" />
-            </Button>
-          </div>
           <Button
             onClick={() => {
-              console.log("[v0] Complete button clicked for order:", validOrderId)
+              console.log("[v0] ========== COMPLETE BUTTON CLICKED ==========")
+              console.log("[v0] Order ID:", validOrderId)
+              console.log("[v0] Time:", new Date().toISOString())
               showConfirmation(validOrderId, "completed", "complete")
             }}
             size="sm"
@@ -577,24 +275,6 @@ const EnhancedOrdersTable = ({
 
     return (
       <div className="space-y-3">
-        <div className="flex gap-2">
-          <Button
-            onClick={() => window.open(`/dashboard/orders/${validOrderId}`, "_blank")}
-            size="sm"
-            variant="outline"
-            className="border-gray-600 text-gray-300 hover:bg-gray-800 bg-transparent p-2"
-          >
-            <Eye className="w-4 h-4" />
-          </Button>
-          <Button
-            onClick={() => handlePrint(order)}
-            size="sm"
-            variant="outline"
-            className="border-gray-600 text-gray-300 hover:bg-gray-800 bg-transparent p-2"
-          >
-            <Printer className="w-4 h-4" />
-          </Button>
-        </div>
         <div className="text-center">
           <Badge className={order.status === "completed" ? "bg-blue-600 text-white" : "bg-red-600 text-white"}>
             {order.status === "completed" ? "Completed" : "Cancelled"}
@@ -604,17 +284,39 @@ const EnhancedOrdersTable = ({
     )
   }
 
+  const getStatusBadge = (status: string) => {
+    console.log("[v0] Rendering status badge for:", status)
+    const statusConfig = {
+      confirmed: { color: "bg-green-600 text-white", label: "Order Confirmed" },
+      cancelled: { color: "bg-red-600 text-white", label: "Order Canceled" },
+      pending: { color: "bg-yellow-600 text-white", label: "Order Pending" },
+      completed: { color: "bg-blue-600 text-white", label: "Order Completed" },
+    }
+
+    const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.confirmed
+    return <Badge className={`${config.color} px-3 py-1 font-medium rounded-full`}>{config.label}</Badge>
+  }
+
   useEffect(() => {
     const handleGlobalClick = (e: MouseEvent) => {
-      console.log("[v0] Global click detected:", e.target)
-      if ((e.target as HTMLElement).closest('[data-testid*="button"]')) {
-        console.log("[v0] Click on button detected!")
+      console.log("[v0] ========== GLOBAL CLICK DETECTED ==========")
+      console.log("[v0] Target:", (e.target as HTMLElement).tagName)
+      console.log("[v0] Target class:", (e.target as HTMLElement).className)
+      console.log("[v0] Time:", new Date().toISOString())
+
+      // Check if it's a button click
+      const target = e.target as HTMLElement
+      if (target.tagName === "BUTTON" || target.closest("button")) {
+        console.log("[v0] BUTTON CLICK DETECTED!")
+        console.log("[v0] Button text:", target.textContent || target.closest("button")?.textContent)
       }
     }
 
     document.addEventListener("click", handleGlobalClick)
     return () => document.removeEventListener("click", handleGlobalClick)
   }, [])
+
+  console.log("[v0] About to render component with", displayOrders.length, "orders")
 
   return (
     <div className="space-y-6">
@@ -631,35 +333,63 @@ const EnhancedOrdersTable = ({
         </div>
       </div>
 
+      <div className="flex gap-2 mb-4">
+        <Button
+          onClick={() => {
+            console.log("[v0] ========== COMPONENT TEST BUTTON CLICKED ==========")
+            console.log("[v0] Component state:", { displayOrders: displayOrders.length, loading })
+            alert("✅ EnhancedOrdersTable component is working! Orders: " + displayOrders.length)
+          }}
+          className="bg-purple-600 hover:bg-purple-700"
+        >
+          TEST COMPONENT ({displayOrders.length})
+        </Button>
+
+        <Button
+          onClick={async () => {
+            console.log("[v0] ========== DIRECT API TEST ==========")
+            try {
+              const response = await fetch("/api/orders")
+              const data = await response.json()
+              console.log("[v0] Direct API response:", data)
+              alert("✅ Direct API call successful! Orders: " + (data.orders?.length || 0))
+            } catch (error) {
+              console.log("[v0] Direct API error:", error)
+              alert("❌ Direct API error: " + error)
+            }
+          }}
+          className="bg-blue-600 hover:bg-blue-700"
+        >
+          TEST API DIRECT
+        </Button>
+      </div>
+
       <div className="space-y-4">
         {displayOrders.map((order) => {
-          const dateTime = formatDateTime(order.created_at)
           const validOrderId = getOrderId(order)
+          console.log("[v0] Rendering order:", validOrderId)
 
           return (
             <Card
               key={validOrderId || `order-${order.customer_name}-${order.created_at}`}
-              className="bg-gray-900/50 border-gray-700/30 hover:bg-gray-900/70 transition-all duration-200 relative"
+              className="bg-gray-900/50 border-gray-700/30 hover:bg-gray-900/70 transition-all duration-200"
             >
               <CardContent className="p-6">
                 <div className="grid grid-cols-12 gap-6 items-center">
-                  <div className="col-span-2">
+                  <div className="col-span-3">
                     <div className="space-y-2">
-                      <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">ORDER ID</p>
+                      <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">ORDER</p>
                       <p className="font-mono text-lg font-bold text-white">{order.short_order_id}</p>
                       {getStatusBadge(order.status)}
                     </div>
                   </div>
 
-                  <div className="col-span-3">
+                  <div className="col-span-4">
                     <div className="space-y-2">
                       <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">CUSTOMER</p>
                       <div className="space-y-1">
                         <p className="text-white font-semibold">{order.customer_name}</p>
                         <p className="text-gray-300 text-sm">• {order.phone}</p>
-                        <div className="flex items-center gap-2">
-                          <span className={getPaymentMethodStyle(order.payment_method)}>{order.payment_method}</span>
-                        </div>
                         <p className="text-gray-400 text-sm truncate" title={order.address}>
                           📍 {order.address}
                         </p>
@@ -669,49 +399,12 @@ const EnhancedOrdersTable = ({
 
                   <div className="col-span-2">
                     <div className="space-y-2">
-                      <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">ITEMS</p>
-                      <div className="space-y-1">
-                        {order.order_items.slice(0, 3).map((item, idx) => (
-                          <div key={idx} className="text-sm text-gray-300">
-                            {item.item_name} <span className="text-gray-500">×{item.quantity}</span>
-                          </div>
-                        ))}
-                        {order.order_items.length > 3 && (
-                          <p className="text-xs text-gray-500">+{order.order_items.length - 3} more items</p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="col-span-2">
-                    <div className="space-y-2">
-                      <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">SPECIAL INSTRUCTIONS</p>
-                      <div className="space-y-1">
-                        {order.special_instructions ? (
-                          <p className="text-white text-sm leading-relaxed">{order.special_instructions}</p>
-                        ) : (
-                          <p className="text-gray-500 text-sm italic">No special instructions</p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="col-span-1">
-                    <div className="space-y-2">
                       <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">TOTAL</p>
                       <p className="text-xl font-bold text-white">৳{order.total_price.toFixed(2)}</p>
                     </div>
                   </div>
 
-                  <div className="col-span-2">{getActionButtons(order)}</div>
-                </div>
-
-                <div className="absolute top-4 right-4">
-                  <div className="text-right">
-                    <p className="text-xs text-gray-500">{dateTime.date}</p>
-                    <p className="text-xs text-gray-400">{dateTime.time}</p>
-                    <p className="text-xs text-gray-500">{getRelativeTime(order.created_at)}</p>
-                  </div>
+                  <div className="col-span-3">{getActionButtons(order)}</div>
                 </div>
               </CardContent>
             </Card>
@@ -721,14 +414,8 @@ const EnhancedOrdersTable = ({
 
       {confirmationModal.isOpen && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm">
-          <div className="bg-slate-800 rounded-xl p-6 max-w-md w-full mx-4 border border-slate-600 shadow-2xl transform transition-all duration-200 scale-100">
+          <div className="bg-slate-800 rounded-xl p-6 max-w-md w-full mx-4 border border-slate-600 shadow-2xl">
             <div className="text-center">
-              <div
-                className={`w-16 h-16 ${getModalColors()} rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg`}
-              >
-                {getModalIcon()}
-              </div>
-
               <h3 className="text-xl font-bold text-white mb-3">
                 {confirmationModal.actionLabel === "confirm" && "Confirm Order"}
                 {confirmationModal.actionLabel === "cancel" && "Cancel Order"}
@@ -737,31 +424,29 @@ const EnhancedOrdersTable = ({
 
               <p className="text-gray-300 mb-2">Are you sure you want to {confirmationModal.actionLabel} this order?</p>
               <p className="text-gray-400 text-sm mb-8">
-                Order ID:{" "}
-                <span className="font-mono font-semibold text-white">
-                  {displayOrders.find((order) => order.short_order_id === confirmationModal.orderId)?.short_order_id ||
-                    confirmationModal.orderId}
-                </span>
+                Order ID: <span className="font-mono font-semibold text-white">{confirmationModal.orderId}</span>
               </p>
 
               <div className="flex gap-3">
                 <Button
-                  onClick={cancelConfirmation}
+                  onClick={() => {
+                    console.log("[v0] ========== MODAL CANCEL CLICKED ==========")
+                    cancelConfirmation()
+                  }}
                   variant="outline"
                   disabled={confirmationModal.isProcessing}
-                  className="flex-1 border-gray-600 text-gray-300 hover:bg-gray-700 bg-transparent disabled:opacity-50 transition-all duration-200"
+                  className="flex-1 border-gray-600 text-gray-300 hover:bg-gray-700 bg-transparent"
                 >
                   Cancel
                 </Button>
                 <Button
                   onClick={() => {
-                    console.log("[v0] ========== OK BUTTON CLICKED ==========")
-                    console.log("[v0] Modal state:", confirmationModal)
-                    console.log("[v0] Current time:", new Date().toISOString())
+                    console.log("[v0] ========== MODAL OK CLICKED ==========")
+                    console.log("[v0] Time:", new Date().toISOString())
                     handleConfirmation()
                   }}
                   disabled={confirmationModal.isProcessing}
-                  className={`flex-1 ${getModalColors()} hover:opacity-90 text-white disabled:opacity-50 transition-all duration-200 font-semibold`}
+                  className="flex-1 bg-green-600 hover:bg-green-700 text-white"
                 >
                   {confirmationModal.isProcessing ? (
                     <>
@@ -773,13 +458,6 @@ const EnhancedOrdersTable = ({
                   )}
                 </Button>
               </div>
-
-              {!confirmationModal.isProcessing && (
-                <p className="text-gray-500 text-xs mt-4">
-                  Press <kbd className="px-1 py-0.5 bg-gray-700 rounded text-xs">Enter</kbd> to confirm or{" "}
-                  <kbd className="px-1 py-0.5 bg-gray-700 rounded text-xs">Esc</kbd> to cancel
-                </p>
-              )}
             </div>
           </div>
         </div>
