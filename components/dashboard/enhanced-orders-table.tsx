@@ -92,65 +92,57 @@ const EnhancedOrdersTable = ({
     setDisplayOrders(orders)
   }, [orders])
 
+  useEffect(() => {
+    console.log("✅ Enhanced Orders Table Component Loaded")
+    console.log("🔄 Realtime listener active")
+
+    const channel = supabase
+      .channel("orders-changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, (payload) => {
+        console.log("📡 Order changed:", payload)
+        // Refresh orders when database changes
+        if (onRefresh) {
+          onRefresh()
+        }
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [onRefresh])
+
   const getOrderId = (order: Order): string => {
     return order.short_order_id || ""
   }
 
   const updateOrderStatus = async (orderId: string, newStatus: string) => {
-    console.log("[v0] ========== UPDATE ORDER STATUS START ==========")
-    console.log("[v0] Order ID:", orderId)
-    console.log("[v0] New Status:", newStatus)
-    console.log("[v0] Time:", new Date().toISOString())
-
-    if (!orderId || !newStatus) {
-      console.log("[v0] ERROR: Missing orderId or newStatus")
-      alert("❌ Error: Missing order information")
-      return false
-    }
+    console.log(`[v0] Updating order ${orderId} to ${newStatus}`)
 
     try {
-      console.log("[v0] Making API call to /api/orders...")
-      const response = await fetch("/api/orders", {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          orderId: orderId,
-          status: newStatus,
-        }),
+      const res = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId, status: newStatus }),
       })
 
-      console.log("[v0] API response status:", response.status)
-      const result = await response.json()
-      console.log("[v0] API response body:", result)
-
-      if (!response.ok) {
-        console.log("[v0] API call failed with status:", response.status)
-        alert(`❌ ${result.error || "Failed to update order status"}`)
-        return false
-      }
-
-      if (result.success) {
-        console.log("[v0] API call successful!")
-        alert("✅ Order updated successfully!")
-
+      const data = await res.json()
+      if (data.success) {
+        console.log(`✅ Order ${newStatus}:`, orderId)
+        alert(`✅ Order ${newStatus} successfully!`)
         if (onRefresh) {
-          console.log("[v0] Calling onRefresh() immediately...")
           onRefresh()
         }
         return true
       } else {
-        console.log("[v0] API returned success=false")
-        alert(`❌ Error: ${result.error || "Unknown error occurred"}`)
+        console.error("❌ Failed to update:", data.error)
+        alert(`❌ Failed to update: ${data.error}`)
         return false
       }
     } catch (error) {
-      console.log("[v0] Network error occurred:", error)
-      alert(`❌ Network Error: ${error}`)
+      console.error("❌ Network error:", error)
+      alert(`❌ Network error: ${error}`)
       return false
-    } finally {
-      console.log("[v0] ========== UPDATE ORDER STATUS END ==========")
     }
   }
 
@@ -380,6 +372,7 @@ const EnhancedOrdersTable = ({
                     <div className="space-y-2">
                       <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">ORDER</p>
                       <p className="font-mono text-lg font-bold text-white">{order.short_order_id}</p>
+                      <p className="font-mono text-sm text-gray-600">#{order.order_id.slice(0, 6)}</p>
                       {getStatusBadge(order.status)}
                     </div>
                   </div>

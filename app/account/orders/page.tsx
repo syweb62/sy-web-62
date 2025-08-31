@@ -55,6 +55,7 @@ export default function OrdersPage() {
     if (orders.length > 0) {
       console.log("[v0] Sample order:", orders[0])
     }
+    console.log("✅ Account Orders Page Loaded")
   }, [orders, loading, error, supabase])
 
   const filtered: OrderHistoryItem[] = useMemo(() => {
@@ -122,6 +123,7 @@ export default function OrdersPage() {
   useEffect(() => {
     console.log("[v0] ========== SETTING UP WEBSITE REAL-TIME SUBSCRIPTIONS ==========")
     console.log("[v0] Setup time:", new Date().toISOString())
+    console.log("🔄 Realtime listener active")
 
     const immediateRefresh = () => {
       console.log("[v0] ========== TRIGGERING IMMEDIATE ORDER HISTORY REFRESH ==========")
@@ -170,34 +172,12 @@ export default function OrdersPage() {
     }
 
     console.log("[v0] Creating Supabase real-time subscription...")
-    const subscription = supabase
-      .channel("website-orders-updates")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "orders",
-        },
-        (payload) => {
-          console.log("[v0] ========== WEBSITE RECEIVED REAL-TIME DATABASE UPDATE ==========")
-          console.log("[v0] Update time:", new Date().toISOString())
-          console.log("[v0] Update type:", payload.eventType)
-          console.log("[v0] Updated record:", payload.new || payload.old)
-          console.log("[v0] Full payload:", payload)
-
-          if (payload.eventType === "UPDATE" && payload.new) {
-            console.log("[v0] Order status updated:", {
-              order_id: payload.new.order_id,
-              short_order_id: payload.new.short_order_id,
-              old_status: payload.old?.status,
-              new_status: payload.new.status,
-            })
-          }
-
-          immediateRefresh()
-        },
-      )
+    const channel = supabase
+      .channel("website-orders-changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, (payload) => {
+        console.log("📡 Order changed:", payload)
+        immediateRefresh()
+      })
       .subscribe((status) => {
         console.log("[v0] ========== WEBSITE REAL-TIME SUBSCRIPTION STATUS ==========")
         console.log("[v0] Status:", status)
@@ -230,7 +210,7 @@ export default function OrdersPage() {
       window.removeEventListener("orderStatusChanged", handleOrderStatusChange as EventListener)
       window.removeEventListener("storage", handleStorageChange)
       window.removeEventListener("message", handleMessage)
-      subscription.unsubscribe()
+      supabase.removeChannel(channel)
       clearTimeout(testTimer)
 
       console.log("[v0] Website real-time cleanup completed")
@@ -412,6 +392,7 @@ export default function OrdersPage() {
                           <span className="text-gray-400">ID:</span>{" "}
                           <span className="font-mono text-gold">{o.short_order_id || o.order_id}</span>
                         </p>
+                        <p className="font-mono text-sm text-gray-600">#{o.order_id.slice(0, 6)}</p>
                         <TimeBD iso={o.created_at} className="text-xs text-gray-400" />
                       </div>
                     </div>

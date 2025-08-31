@@ -32,6 +32,7 @@ export default function OrdersPage() {
     if (orders.length > 0) {
       console.log("[v0] Sample order:", orders[0])
     }
+    console.log("✅ Dashboard Orders Page Loaded")
   }, [orders, loading, connectionStatus, user])
 
   const filteredOrders = orders.filter((order) => {

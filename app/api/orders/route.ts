@@ -226,56 +226,77 @@ export async function PATCH(request: NextRequest) {
   }
 }
 
+// Combined POST method for creating and updating orders
 export async function POST(request: NextRequest) {
   try {
     const supabase = createClient()
-    const orderData = await request.json()
+    const requestData = await request.json()
 
-    const shortOrderId = Math.floor(10000 + Math.random() * 90000).toString()
+    if (requestData.orderId && requestData.status) {
+      // Update order status
+      console.log("[v0] API POST: Updating order:", { orderId: requestData.orderId, status: requestData.status })
 
-    const { data: order, error: orderError } = await supabase
-      .from("orders")
-      .insert([
-        {
-          short_order_id: shortOrderId,
-          customer_name: orderData.customer_name,
-          phone: orderData.phone,
-          address: orderData.address,
-          total_price: orderData.total_price,
-          subtotal: orderData.subtotal || orderData.total_price,
-          vat: orderData.vat || 0,
-          delivery_charge: orderData.delivery_charge || 0,
-          discount: orderData.discount || 0,
-          status: orderData.status || "pending",
-          payment_method: orderData.payment_method || "cash",
-          message: orderData.message || "",
-        },
-      ])
-      .select()
-      .single()
+      const { error } = await supabase
+        .from("orders")
+        .update({ status: requestData.status, updated_at: new Date().toISOString() })
+        .eq("short_order_id", requestData.orderId)
 
-    if (orderError) throw orderError
+      if (error) {
+        console.error("❌ Order update failed:", error)
+        return NextResponse.json({ success: false, error: error.message }, { status: 400 })
+      }
 
-    if (orderData.items && orderData.items.length > 0) {
-      const orderItems = orderData.items.map((item: any) => ({
-        order_id: order.order_id,
-        menu_item_id: item.menu_item_id,
-        item_name: item.name,
-        item_description: item.description,
-        item_image: item.image,
-        item_price: item.price,
-        quantity: item.quantity,
-        price_at_purchase: item.price,
-      }))
+      console.log("✅ Order updated:", requestData.orderId, requestData.status)
+      return NextResponse.json({ success: true })
+    } else {
+      // Create new order
+      const orderData = requestData
+      const shortOrderId = Math.floor(10000 + Math.random() * 90000).toString()
 
-      const { error: itemsError } = await supabase.from("order_items").insert(orderItems)
+      const { data: order, error: orderError } = await supabase
+        .from("orders")
+        .insert([
+          {
+            short_order_id: shortOrderId,
+            customer_name: orderData.customer_name,
+            phone: orderData.phone,
+            address: orderData.address,
+            total_price: orderData.total_price,
+            subtotal: orderData.subtotal || orderData.total_price,
+            vat: orderData.vat || 0,
+            delivery_charge: orderData.delivery_charge || 0,
+            discount: orderData.discount || 0,
+            status: orderData.status || "pending",
+            payment_method: orderData.payment_method || "cash",
+            message: orderData.message || "",
+          },
+        ])
+        .select()
+        .single()
 
-      if (itemsError) throw itemsError
+      if (orderError) throw orderError
+
+      if (orderData.items && orderData.items.length > 0) {
+        const orderItems = orderData.items.map((item: any) => ({
+          order_id: order.order_id,
+          menu_item_id: item.menu_item_id,
+          item_name: item.name,
+          item_description: item.description,
+          item_image: item.image,
+          item_price: item.price,
+          quantity: item.quantity,
+          price_at_purchase: item.price,
+        }))
+
+        const { error: itemsError } = await supabase.from("order_items").insert(orderItems)
+
+        if (itemsError) throw itemsError
+      }
+
+      return NextResponse.json({ success: true, order })
     }
-
-    return NextResponse.json({ success: true, order })
   } catch (error) {
-    console.error("Order creation API error:", error)
+    console.error("Order creation/update API error:", error)
     return NextResponse.json(
       { error: "Internal server error", details: error instanceof Error ? error.message : "Unknown error" },
       { status: 500 },
