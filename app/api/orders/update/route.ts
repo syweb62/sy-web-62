@@ -8,22 +8,27 @@ export async function POST(request: NextRequest) {
   console.log("[v0] Request time:", new Date().toISOString())
 
   try {
-    const { orderId, status } = await request.json()
-    console.log("[v0] API Update requested:", { orderId, status })
+    const { id, status } = await request.json()
+    console.log("[v0] API Update requested:", { id, status })
+
+    if (!id || !status) {
+      console.error("[v0] ❌ Invalid payload:", { id, status })
+      return NextResponse.json({ error: "Missing id or status" }, { status: 400 })
+    }
 
     const supabase = createClient()
 
-    const { data, error } = await supabase.from("orders").update({ status }).eq("id", orderId).select().single()
+    const { data, error } = await supabase.from("orders").update({ status }).eq("id", id).select()
 
     if (error) {
-      console.error("[v0] API Update failed:", error)
-      return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+      console.error("[v0] ❌ Supabase update error:", error)
+      return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    console.log("[v0] API Update successful:", data)
-    return NextResponse.json({ success: true, data })
-  } catch (error) {
-    console.error("[v0] API Update error:", error)
-    return NextResponse.json({ success: false, error: "Internal server error" }, { status: 500 })
+    console.log("[v0] ✅ Order updated:", data[0])
+    return NextResponse.json({ success: true, order: data[0] })
+  } catch (err) {
+    console.error("[v0] ❌ Handler exception:", err)
+    return NextResponse.json({ error: "Server error" }, { status: 500 })
   }
 }

@@ -10,10 +10,108 @@ import SimpleOrdersTable from "@/components/simple-orders-table"
 import { Search, RefreshCw, Filter, TrendingUp } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { useRealtimeOrders } from "@/hooks/use-realtime-orders"
+import { createClient } from "@supabase/supabase-js"
+import { toast } from "sonner"
+
+const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
 
 console.log("[v0] ========== DASHBOARD ORDERS PAGE LOADING ==========")
 console.log("[v0] Page load time:", new Date().toISOString())
 console.log("[v0] Window location:", typeof window !== "undefined" ? window.location.href : "SSR")
+
+function SimplifiedOrdersDashboard() {
+  const [orders, setOrders] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+
+  // Fetch orders
+  const fetchOrders = async () => {
+    console.log("[v0] 📦 Fetching orders...")
+    const { data, error } = await supabase.from("orders").select("*").order("id", { ascending: false })
+    if (!error) {
+      setOrders(data || [])
+      console.log("[v0] ✅ Orders fetched:", data?.length || 0)
+    } else {
+      console.error("[v0] ❌ Error fetching orders:", error)
+    }
+    setLoading(false)
+  }
+
+  // Update order status
+  const updateOrder = async (id: string, status: string) => {
+    try {
+      console.log("[v0] 🔄 Updating order:", { id, status })
+
+      const res = await fetch("/api/orders/update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, status }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Update failed")
+      }
+
+      console.log("[v0] ✅ Order updated successfully")
+      toast.success(`✅ Order ${status} successfully!`)
+      fetchOrders() // refresh immediately
+    } catch (err) {
+      console.error("[v0] ❌ Update order failed:", err)
+      toast.error("Failed to update order")
+    }
+  }
+
+  // Realtime listener
+  useEffect(() => {
+    console.log("[v0] 🚀 Setting up simplified dashboard...")
+    fetchOrders()
+
+    const channel = supabase
+      .channel("orders-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, (payload) => {
+        console.log("[v0] 🔔 Realtime event received:", payload)
+        fetchOrders()
+        toast.info(`Order ${payload.new?.id} status changed to ${payload.new?.status}`)
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [])
+
+  if (loading) {
+    return <div className="p-6 text-white">Loading orders...</div>
+  }
+
+  return (
+    <div className="p-6">
+      <h1 className="text-xl font-bold mb-4 text-white">📦 Orders Dashboard (Simplified)</h1>
+      <div className="space-y-4">
+        {orders.map((order) => (
+          <div
+            key={order.id}
+            className="flex items-center justify-between border border-gray-700 p-4 rounded-xl shadow-sm bg-gray-800"
+          >
+            <div>
+              <p className="font-medium text-white">Order #{order.id}</p>
+              <p className="text-sm text-gray-400">Status: {order.status}</p>
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={() => updateOrder(order.id, "confirmed")} className="bg-green-500 hover:bg-green-600">
+                Confirm
+              </Button>
+              <Button onClick={() => updateOrder(order.id, "canceled")} className="bg-red-500 hover:bg-red-600">
+                Cancel
+              </Button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 export default function OrdersPage() {
   console.log("[v0] ========== DASHBOARD ORDERS PAGE COMPONENT FUNCTION ==========")
@@ -23,6 +121,7 @@ export default function OrdersPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [useSimpleTable, setUseSimpleTable] = useState(false)
+  const [useSimplifiedDashboard, setUseSimplifiedDashboard] = useState(false)
   const { user } = useAuth()
 
   useEffect(() => {
@@ -36,6 +135,10 @@ export default function OrdersPage() {
     }
     console.log("✅ Dashboard Orders Page Loaded")
   }, [orders, loading, connectionStatus, user])
+
+  if (useSimplifiedDashboard) {
+    return <SimplifiedOrdersDashboard />
+  }
 
   const filteredOrders = orders.filter((order) => {
     const matchesStatus = statusFilter === "all" || order.status === statusFilter
@@ -110,6 +213,13 @@ export default function OrdersPage() {
 
           <Button onClick={() => setUseSimpleTable(!useSimpleTable)} className="bg-orange-600 hover:bg-orange-700">
             {useSimpleTable ? "Use Enhanced Table" : "Use Simple Table"}
+          </Button>
+
+          <Button
+            onClick={() => setUseSimplifiedDashboard(!useSimplifiedDashboard)}
+            className="bg-yellow-600 hover:bg-yellow-700"
+          >
+            Use Simplified Dashboard
           </Button>
         </div>
 
