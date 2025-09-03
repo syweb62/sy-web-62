@@ -131,16 +131,9 @@ export default function RootLayout({
                 "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBqb2Vsa3hrY3d0em1ieXN3Zmh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ1NTMwMTksImV4cCI6MjA3MDEyOTAxOX0.xY2bVHrv_gl4iEHY79f_PC1OJxjHbHWYoqiSkrpi5n8",
             )};
             
-            console.log('[v0] Environment variables loaded:', {
-              hasSupabaseUrl: !!window.__PUBLIC_ENV.NEXT_PUBLIC_SUPABASE_URL,
-              hasSupabaseKey: !!window.__PUBLIC_ENV.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-              supabaseUrl: window.__PUBLIC_ENV.NEXT_PUBLIC_SUPABASE_URL
-            });
-            
-            console.log('[v0] Testing Supabase connection...');
-            console.log('[v0] Supabase URL:', window.__PUBLIC_ENV.NEXT_PUBLIC_SUPABASE_URL);
-            console.log('[v0] Has anon key:', !!window.__PUBLIC_ENV.NEXT_PUBLIC_SUPABASE_ANON_KEY);
-            console.log('[v0] Supabase connection test successful');
+            console.log('[v0] Environment variables loaded successfully');
+            console.log('[v0] Supabase URL configured:', !!window.__PUBLIC_ENV.NEXT_PUBLIC_SUPABASE_URL);
+            console.log('[v0] Supabase key configured:', !!window.__PUBLIC_ENV.NEXT_PUBLIC_SUPABASE_ANON_KEY);
             
           } catch (e) { 
             console.error('[v0] Environment setup error:', e);

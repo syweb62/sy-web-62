@@ -7,23 +7,20 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Search, Plus, Edit, Trash2, Eye } from "lucide-react"
-import { supabase } from "@/lib/supabase"
+import { Search, Plus, Edit, Trash2, Eye, RefreshCw } from "lucide-react"
+import { createClient } from "@/lib/supabase"
 import { toast } from "@/hooks/use-toast"
 import { LoadingSpinner } from "@/components/loading-spinner"
 import Link from "next/link"
-import { CategoryModal } from "@/components/ui/category-modal"
 
 interface MenuItem {
-  id: string
+  menu_id: string
   name: string
   description: string
   price: number
   category: string
-  image_url: string
-  is_available: boolean
+  available: boolean
   created_at: string
-  updated_at: string
 }
 
 export default function MenuManagementPage() {
@@ -33,16 +30,26 @@ export default function MenuManagementPage() {
   const [categoryFilter, setCategoryFilter] = useState("all")
   const [statusFilter, setStatusFilter] = useState("all")
   const [categories, setCategories] = useState<string[]>([])
+  const [supabase] = useState(() => createClient())
+
+  console.log("[v0] Dashboard Menu Management - Component loaded")
 
   const fetchMenuItems = useCallback(async () => {
+    console.log("[v0] Fetching menu items from database...")
     try {
       const { data, error } = await supabase.from("menu_items").select("*").order("created_at", { ascending: false })
 
-      if (error) throw error
+      if (error) {
+        console.error("[v0] Error fetching menu items:", error)
+        throw error
+      }
+
+      console.log("[v0] Successfully fetched", data?.length || 0, "menu items")
       setMenuItems(data || [])
 
       const uniqueCategories = [...new Set(data?.map((item) => item.category).filter(Boolean) || [])]
       setCategories(uniqueCategories)
+      console.log("[v0] Categories found:", uniqueCategories)
     } catch (error) {
       console.error("Error fetching menu items:", error)
       toast({
@@ -53,11 +60,12 @@ export default function MenuManagementPage() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [supabase])
 
   useEffect(() => {
     fetchMenuItems()
 
+    console.log("[v0] Setting up real-time menu subscription...")
     const channel = supabase
       .channel("dashboard_menu_items_changes")
       .on(
@@ -90,7 +98,7 @@ export default function MenuManagementPage() {
             })
           } else if (payload.eventType === "UPDATE") {
             const updatedItem = payload.new as MenuItem
-            setMenuItems((prev) => prev.map((item) => (item.id === updatedItem.id ? updatedItem : item)))
+            setMenuItems((prev) => prev.map((item) => (item.menu_id === updatedItem.menu_id ? updatedItem : item)))
 
             toast({
               title: "Item Updated",
@@ -98,7 +106,7 @@ export default function MenuManagementPage() {
             })
           } else if (payload.eventType === "DELETE") {
             const deletedItem = payload.old as MenuItem
-            setMenuItems((prev) => prev.filter((item) => item.id !== deletedItem.id))
+            setMenuItems((prev) => prev.filter((item) => item.menu_id !== deletedItem.menu_id))
 
             toast({
               title: "Item Deleted",
@@ -110,9 +118,10 @@ export default function MenuManagementPage() {
       .subscribe()
 
     return () => {
+      console.log("[v0] Cleaning up menu subscription...")
       supabase.removeChannel(channel)
     }
-  }, [fetchMenuItems])
+  }, [fetchMenuItems, supabase])
 
   const handleCategoryCreated = useCallback((newCategory: string) => {
     setCategories((prev) => {
@@ -124,23 +133,25 @@ export default function MenuManagementPage() {
   }, [])
 
   const deleteMenuItem = useCallback(
-    async (id: string) => {
-      if (!confirm("Are you sure you want to delete this menu item?")) return
+    async (menu_id: string, itemName: string) => {
+      if (!confirm(`Are you sure you want to delete "${itemName}"?`)) return
 
+      console.log("[v0] Deleting menu item:", menu_id)
       try {
-        const { error } = await supabase.from("menu_items").delete().eq("id", id)
+        const { error } = await supabase.from("menu_items").delete().eq("menu_id", menu_id)
 
-        if (error) throw error
+        if (error) {
+          console.error("[v0] Error deleting menu item:", error)
+          throw error
+        }
 
-        // Optimistic update
-        setMenuItems((prev) => prev.filter((item) => item.id !== id))
+        console.log("[v0] Menu item deleted successfully")
         toast({
           title: "Success",
-          description: "Menu item deleted successfully",
+          description: `${itemName} deleted successfully`,
         })
       } catch (error) {
-        // Revert optimistic update on error
-        fetchMenuItems()
+        console.error("Error deleting menu item:", error)
         toast({
           title: "Error",
           description: "Failed to delete menu item",
@@ -148,34 +159,36 @@ export default function MenuManagementPage() {
         })
       }
     },
-    [fetchMenuItems],
+    [supabase],
   )
 
-  const toggleAvailability = useCallback(async (id: string, currentStatus: boolean) => {
-    try {
-      // Optimistic update
-      setMenuItems((prev) => prev.map((item) => (item.id === id ? { ...item, is_available: !currentStatus } : item)))
+  const toggleAvailability = useCallback(
+    async (menu_id: string, currentStatus: boolean, itemName: string) => {
+      console.log("[v0] Toggling availability for:", menu_id, "from", currentStatus, "to", !currentStatus)
+      try {
+        const { error } = await supabase.from("menu_items").update({ available: !currentStatus }).eq("menu_id", menu_id)
 
-      const { error } = await supabase.from("menu_items").update({ is_available: !currentStatus }).eq("id", id)
+        if (error) {
+          console.error("[v0] Error updating availability:", error)
+          throw error
+        }
 
-      if (error) {
-        // Revert optimistic update on error
-        setMenuItems((prev) => prev.map((item) => (item.id === id ? { ...item, is_available: currentStatus } : item)))
-        throw error
+        console.log("[v0] Availability updated successfully")
+        toast({
+          title: "Success",
+          description: `${itemName} ${!currentStatus ? "enabled" : "disabled"} successfully`,
+        })
+      } catch (error) {
+        console.error("Error updating availability:", error)
+        toast({
+          title: "Error",
+          description: "Failed to update menu item",
+          variant: "destructive",
+        })
       }
-
-      toast({
-        title: "Success",
-        description: `Menu item ${!currentStatus ? "enabled" : "disabled"} successfully`,
-      })
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to update menu item",
-        variant: "destructive",
-      })
-    }
-  }, [])
+    },
+    [supabase],
+  )
 
   const getStatusColor = useMemo(() => {
     return (isAvailable: boolean) => {
@@ -187,10 +200,11 @@ export default function MenuManagementPage() {
     return (category: string) => {
       switch (category.toLowerCase()) {
         case "sushi":
+        case "sushi rolls":
           return "bg-purple-900/50 text-purple-300"
         case "main course":
           return "bg-blue-900/50 text-blue-300"
-        case "noodles":
+        case "sashimi":
           return "bg-orange-900/50 text-orange-300"
         case "appetizer":
           return "bg-green-900/50 text-green-300"
@@ -213,8 +227,8 @@ export default function MenuManagementPage() {
       const matchesCategory = categoryFilter === "all" || item.category.toLowerCase() === categoryFilter.toLowerCase()
       const matchesStatus =
         statusFilter === "all" ||
-        (statusFilter === "available" && item.is_available) ||
-        (statusFilter === "unavailable" && !item.is_available)
+        (statusFilter === "available" && item.available) ||
+        (statusFilter === "unavailable" && !item.available)
 
       return matchesSearch && matchesCategory && matchesStatus
     })
@@ -234,12 +248,22 @@ export default function MenuManagementPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-serif font-bold text-white">Menu Management</h1>
-          <p className="text-gray-400 mt-1">Manage your restaurant's menu items and categories</p>
+          <p className="text-gray-400 mt-1">
+            Manage your restaurant's menu items and categories • {menuItems.length} items • Real-time updates enabled
+          </p>
         </div>
         <div className="flex items-center gap-3">
-          <CategoryModal onCategoryCreated={handleCategoryCreated} />
+          <Button
+            onClick={fetchMenuItems}
+            variant="outline"
+            size="sm"
+            className="border-gray-600 text-gray-300 hover:bg-gray-700 bg-transparent"
+          >
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Refresh
+          </Button>
           <Link href="/dashboard/menu/new">
-            <Button className="bg-gold text-black hover:bg-gold/80">
+            <Button className="bg-yellow-600 text-black hover:bg-yellow-700">
               <Plus size={16} className="mr-2" />
               Add New Item
             </Button>
@@ -292,10 +316,10 @@ export default function MenuManagementPage() {
       {/* Menu Items Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredItems.map((item) => (
-          <Card key={item.id} className="bg-black/30 border-gray-800 overflow-hidden">
+          <Card key={item.menu_id} className="bg-black/30 border-gray-800 overflow-hidden">
             <div className="relative h-48">
               <Image
-                src={item.image_url || "/placeholder.svg?height=200&width=300&query=food"}
+                src={`/abstract-geometric-shapes.png?height=200&width=300&query=${encodeURIComponent(item.name + " " + item.category)}`}
                 alt={item.name}
                 fill
                 className="object-cover"
@@ -304,10 +328,10 @@ export default function MenuManagementPage() {
                 <Button
                   size="sm"
                   variant="outline"
-                  className={`${getStatusColor(item.is_available)} border-none text-xs px-2 py-1 h-auto`}
-                  onClick={() => toggleAvailability(item.id, item.is_available)}
+                  className={`${getStatusColor(item.available)} border-none text-xs px-2 py-1 h-auto`}
+                  onClick={() => toggleAvailability(item.menu_id, item.available, item.name)}
                 >
-                  {item.is_available ? "Available" : "Unavailable"}
+                  {item.available ? "Available" : "Unavailable"}
                 </Button>
                 <Badge className={getCategoryColor(item.category)}>{item.category}</Badge>
               </div>
@@ -315,18 +339,18 @@ export default function MenuManagementPage() {
             <CardContent className="p-4">
               <div className="flex justify-between items-start mb-2">
                 <h3 className="font-serif text-lg font-semibold text-white">{item.name}</h3>
-                <span className="text-gold font-bold">৳{item.price}</span>
+                <span className="text-yellow-500 font-bold">৳{item.price}</span>
               </div>
               <p className="text-gray-400 text-sm mb-4 line-clamp-2">{item.description}</p>
 
               <div className="flex items-center gap-2">
-                <Link href={`/dashboard/menu/${item.id}/edit`} className="flex-1">
+                <Link href={`/dashboard/menu/${item.menu_id}/edit`} className="flex-1">
                   <Button variant="outline" size="sm" className="w-full bg-transparent">
                     <Eye size={14} className="mr-1" />
                     View
                   </Button>
                 </Link>
-                <Link href={`/dashboard/menu/${item.id}/edit`} className="flex-1">
+                <Link href={`/dashboard/menu/${item.menu_id}/edit`} className="flex-1">
                   <Button variant="outline" size="sm" className="w-full bg-transparent">
                     <Edit size={14} className="mr-1" />
                     Edit
@@ -336,7 +360,7 @@ export default function MenuManagementPage() {
                   variant="outline"
                   size="sm"
                   className="text-red-400 hover:text-red-300 bg-transparent"
-                  onClick={() => deleteMenuItem(item.id)}
+                  onClick={() => deleteMenuItem(item.menu_id, item.name)}
                 >
                   <Trash2 size={14} />
                 </Button>

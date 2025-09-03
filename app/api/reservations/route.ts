@@ -1,8 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { supabase } from "@/lib/supabase"
+import { createClient } from "@/lib/supabase"
 
 export async function POST(request: NextRequest) {
   try {
+    const supabase = createClient()
     const body = await request.json()
     const { name, email, phone, date, time, guests, specialRequests, user_id } = body
 
@@ -34,12 +35,14 @@ export async function POST(request: NextRequest) {
       time,
       people_count: guestCount,
       user_id: user_id || null,
+      status: "pending",
+      table: "TBD",
+      notes: specialRequests || "",
       created_at: new Date().toISOString(),
     }
 
     console.log("[v0] Attempting to insert reservation:", reservationData)
     if (email) console.log("[v0] Email provided (not stored):", email)
-    if (specialRequests) console.log("[v0] Special requests provided (not stored):", specialRequests)
 
     const { data, error } = await supabase.from("reservations").insert([reservationData]).select().single()
 
@@ -67,6 +70,9 @@ export async function POST(request: NextRequest) {
           date: data.date,
           time: data.time,
           guests: data.people_count,
+          status: data.status,
+          table: data.table,
+          notes: data.notes,
           created_at: data.created_at,
         },
       },
@@ -86,6 +92,7 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
+    const supabase = createClient()
     const { searchParams } = new URL(request.url)
     const userId = searchParams.get("user_id")
 
@@ -118,6 +125,62 @@ export async function GET(request: NextRequest) {
     })
   } catch (error) {
     console.error("[v0] Reservation GET API error:", error)
+    return NextResponse.json(
+      {
+        error: "Internal server error",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 },
+    )
+  }
+}
+
+export async function PATCH(request: NextRequest) {
+  try {
+    const supabase = createClient()
+    const { reservationId, status, table, notes } = await request.json()
+
+    if (!reservationId) {
+      return NextResponse.json({ error: "Reservation ID is required" }, { status: 400 })
+    }
+
+    console.log("[v0] Updating reservation:", { reservationId, status, table, notes })
+
+    const updateData: any = {
+      updated_at: new Date().toISOString(),
+    }
+
+    if (status) updateData.status = status
+    if (table) updateData.table = table
+    if (notes !== undefined) updateData.notes = notes
+
+    const { data, error } = await supabase
+      .from("reservations")
+      .update(updateData)
+      .eq("reservation_id", reservationId)
+      .select()
+      .single()
+
+    if (error) {
+      console.error("[v0] Reservation update error:", error)
+      return NextResponse.json(
+        {
+          error: "Failed to update reservation",
+          details: error.message,
+        },
+        { status: 500 },
+      )
+    }
+
+    console.log("[v0] Reservation updated successfully:", data)
+
+    return NextResponse.json({
+      success: true,
+      message: "Reservation updated successfully",
+      reservation: data,
+    })
+  } catch (error) {
+    console.error("[v0] Reservation PATCH API error:", error)
     return NextResponse.json(
       {
         error: "Internal server error",

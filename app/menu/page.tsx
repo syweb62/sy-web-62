@@ -9,13 +9,13 @@ import { OrderButton } from "@/components/ui/order-button"
 import { createClient } from "@/lib/supabase"
 
 interface MenuItem {
-  id: string
+  menu_id: string // Changed from id to menu_id to match database schema
   name: string
   category: string
   price: number
   description: string | null
   image_url: string | null
-  is_available: boolean
+  available: boolean // Changed from is_available to available to match database schema
   created_at: string
   updated_at: string
 }
@@ -34,7 +34,7 @@ function toTitle(label: string) {
 export default function Menu() {
   const [activeCategory, setActiveCategory] = useState("all")
   const [searchQuery, setSearchQuery] = useState("")
-  const [showUnavailable, setShowUnavailable] = useState(false)
+  const [hideUnavailable, setHideUnavailable] = useState(true)
   const [menuItems, setMenuItems] = useState<MenuItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -110,15 +110,14 @@ export default function Menu() {
       item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (item.description && item.description.toLowerCase().includes(searchQuery.toLowerCase()))
 
-    // Hide unavailable items when the toggle is ON
-    const matchesAvailability = showUnavailable || item.is_available
+    const matchesAvailability = hideUnavailable ? item.available : true
 
     return matchesCategory && matchesSearch && matchesAvailability
   })
 
   const handleAddToCart = (item: MenuItem) => {
     addItem({
-      id: item.id,
+      id: item.menu_id, // Changed from item.id to item.menu_id
       name: item.name,
       price: item.price,
       image: item.image_url || "/placeholder.svg",
@@ -126,9 +125,9 @@ export default function Menu() {
       category: item.category,
     })
 
-    setAddedItems((prev) => ({ ...prev, [item.id]: true }))
+    setAddedItems((prev) => ({ ...prev, [item.menu_id]: true })) // Changed from item.id to item.menu_id
     setTimeout(() => {
-      setAddedItems((prev) => ({ ...prev, [item.id]: false }))
+      setAddedItems((prev) => ({ ...prev, [item.menu_id]: false })) // Changed from item.id to item.menu_id
     }, 1500)
   }
 
@@ -235,8 +234,8 @@ export default function Menu() {
               <label className="flex items-center gap-2 text-white text-sm">
                 <input
                   type="checkbox"
-                  checked={!showUnavailable}
-                  onChange={(e) => setShowUnavailable(!e.target.checked)}
+                  checked={hideUnavailable}
+                  onChange={(e) => setHideUnavailable(e.target.checked)}
                   className="rounded"
                   aria-label="Hide unavailable items"
                 />
@@ -258,9 +257,9 @@ export default function Menu() {
             {filteredItems.length > 0 ? (
               filteredItems.map((item) => (
                 <div
-                  key={item.id}
+                  key={item.menu_id}
                   className={`menu-item bg-darkBg/80 rounded-lg overflow-hidden shadow-lg border border-gray-800 group relative ${
-                    !item.is_available ? "opacity-60" : ""
+                    !item.available ? "opacity-60" : ""
                   }`}
                 >
                   <div className="h-64 relative overflow-hidden group">
@@ -270,7 +269,7 @@ export default function Menu() {
                       width={600}
                       height={400}
                       className={`object-cover transition-transform duration-300 group-hover:scale-105 ${
-                        !item.is_available ? "grayscale" : ""
+                        !item.available ? "grayscale" : ""
                       }`}
                       fill
                     />
@@ -279,8 +278,7 @@ export default function Menu() {
                       {item.category}
                     </div>
 
-                    {/* Unavailable Badge */}
-                    {!item.is_available && (
+                    {!item.available && (
                       <div className="absolute top-3 left-3 bg-red-600/90 backdrop-blur-sm text-white text-sm font-medium px-3 py-1 rounded-full border border-red-600 z-20 shadow-lg">
                         Unavailable
                       </div>
@@ -289,22 +287,22 @@ export default function Menu() {
 
                   <div className="p-6">
                     <div className="flex justify-between items-start mb-3">
-                      <h3 className={`text-xl font-serif ${item.is_available ? "text-white" : "text-gray-400"}`}>
+                      <h3 className={`text-xl font-serif ${item.available ? "text-white" : "text-gray-400"}`}>
                         {item.name}
                       </h3>
-                      <span className={`font-medium text-lg ${item.is_available ? "text-gold" : "text-gray-500"}`}>
+                      <span className={`font-medium text-lg ${item.available ? "text-gold" : "text-gray-500"}`}>
                         BDT {item.price.toFixed(2)}
                       </span>
                     </div>
-                    <p className={`text-sm mb-4 line-clamp-2 ${item.is_available ? "text-gray-300" : "text-gray-500"}`}>
+                    <p className={`text-sm mb-4 line-clamp-2 ${item.available ? "text-gray-300" : "text-gray-500"}`}>
                       {item.description || "Delicious and freshly prepared."}
                     </p>
 
                     {/* Order Button - Disabled if unavailable */}
-                    {item.is_available ? (
+                    {item.available ? (
                       <OrderButton
                         item={{
-                          id: item.id,
+                          id: item.menu_id,
                           name: item.name,
                           price: item.price,
                           image: item.image_url || "/placeholder.svg",
@@ -314,9 +312,9 @@ export default function Menu() {
                         fullWidth
                         className="shadow-lg"
                         onOrderComplete={() => {
-                          setAddedItems((prev) => ({ ...prev, [item.id]: true }))
+                          setAddedItems((prev) => ({ ...prev, [item.menu_id]: true }))
                           setTimeout(() => {
-                            setAddedItems((prev) => ({ ...prev, [item.id]: false }))
+                            setAddedItems((prev) => ({ ...prev, [item.menu_id]: false }))
                           }, 3000)
                         }}
                       />

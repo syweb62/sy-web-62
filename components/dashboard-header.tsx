@@ -20,13 +20,21 @@ interface DashboardHeaderProps {
 }
 
 export function DashboardHeader({ connectionStatus = "connected" }: DashboardHeaderProps) {
-  const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications()
+  const {
+    notifications,
+    unreadCount,
+    markAsRead,
+    markAllAsRead,
+    connectionStatus: notificationStatus,
+  } = useNotifications()
   const { user } = useAuth()
 
   const recentNotifications = notifications.slice(0, 5)
 
+  const actualConnectionStatus = notificationStatus || connectionStatus
+
   const getConnectionStatusIcon = () => {
-    switch (connectionStatus) {
+    switch (actualConnectionStatus) {
       case "connected":
         return <Wifi size={16} className="text-green-400" />
       case "connecting":
@@ -39,7 +47,7 @@ export function DashboardHeader({ connectionStatus = "connected" }: DashboardHea
   }
 
   const getConnectionStatusText = () => {
-    switch (connectionStatus) {
+    switch (actualConnectionStatus) {
       case "connected":
         return "Connected"
       case "connecting":
@@ -70,9 +78,9 @@ export function DashboardHeader({ connectionStatus = "connected" }: DashboardHea
           {getConnectionStatusIcon()}
           <span
             className={`text-xs font-medium ${
-              connectionStatus === "connected"
+              actualConnectionStatus === "connected"
                 ? "text-green-400"
-                : connectionStatus === "connecting"
+                : actualConnectionStatus === "connecting"
                   ? "text-yellow-400"
                   : "text-red-400"
             }`}
@@ -87,7 +95,7 @@ export function DashboardHeader({ connectionStatus = "connected" }: DashboardHea
             <Button variant="ghost" size="sm" className="relative">
               <Bell size={20} />
               {unreadCount > 0 && (
-                <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 bg-red-600">
+                <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 bg-red-600 animate-pulse">
                   {unreadCount > 9 ? "9+" : unreadCount}
                 </Badge>
               )}
@@ -95,7 +103,7 @@ export function DashboardHeader({ connectionStatus = "connected" }: DashboardHea
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-80">
             <DropdownMenuLabel className="flex items-center justify-between">
-              Notifications
+              Notifications ({unreadCount} unread)
               {unreadCount > 0 && (
                 <Button variant="ghost" size="sm" onClick={markAllAsRead}>
                   Mark all read
@@ -111,13 +119,26 @@ export function DashboardHeader({ connectionStatus = "connected" }: DashboardHea
                   onClick={() => markAsRead(notification.id)}
                 >
                   <div className="flex items-center gap-2 w-full">
-                    <div className={`w-2 h-2 rounded-full ${notification.read ? "bg-gray-400" : "bg-gold"}`} />
+                    <div className={`w-2 h-2 rounded-full ${notification.read ? "bg-gray-400" : "bg-yellow-500"}`} />
                     <span className="font-medium text-sm">{notification.title}</span>
-                    <span className="text-xs text-gray-400 ml-auto">
-                      {formatDistanceToNow(notification.timestamp, { addSuffix: true })}
-                    </span>
+                    <Badge
+                      className={`ml-auto text-xs ${
+                        notification.type === "order"
+                          ? "bg-green-600"
+                          : notification.type === "reservation"
+                            ? "bg-blue-600"
+                            : notification.type === "menu"
+                              ? "bg-purple-600"
+                              : "bg-gray-600"
+                      }`}
+                    >
+                      {notification.type}
+                    </Badge>
                   </div>
                   <p className="text-xs text-gray-400 mt-1 ml-4">{notification.message}</p>
+                  <span className="text-xs text-gray-500 ml-4">
+                    {formatDistanceToNow(notification.timestamp, { addSuffix: true })}
+                  </span>
                 </DropdownMenuItem>
               ))
             ) : (

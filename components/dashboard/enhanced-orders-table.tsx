@@ -1,15 +1,11 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
-import { Check, X, CheckCircle, Loader2 } from "lucide-react"
-import { createClient } from "@/lib/supabase/client"
-
-console.log("[v0] ========== ENHANCED ORDERS TABLE FILE LOADED ==========")
-console.log("[v0] File load time:", new Date().toISOString())
-console.log("[v0] Environment check - window exists:", typeof window !== "undefined")
+import { Check, X, CheckCircle, Loader2, RefreshCw, AlertCircle, Wifi, WifiOff } from "lucide-react"
+import { createClient } from "@/lib/supabase"
 
 interface Order {
   order_id: string
@@ -53,13 +49,6 @@ const EnhancedOrdersTable = ({
   userRole = "manager",
   loading = false,
 }: EnhancedOrdersTableProps) => {
-  console.log("[v0] ========== ENHANCED ORDERS TABLE COMPONENT FUNCTION ==========")
-  console.log("[v0] Component render time:", new Date().toISOString())
-  console.log("[v0] Props received:")
-  console.log("[v0] - orders.length:", orders.length)
-  console.log("[v0] - loading:", loading)
-  console.log("[v0] - onRefresh type:", typeof onRefresh)
-
   const [displayOrders, setDisplayOrders] = useState<Order[]>(orders)
   const [confirmationModal, setConfirmationModal] = useState<ConfirmationModal>({
     isOpen: false,
@@ -68,89 +57,178 @@ const EnhancedOrdersTable = ({
     actionLabel: "",
     isProcessing: false,
   })
-  const supabase = createClient()
+  const [connectionStatus, setConnectionStatus] = useState<"connected" | "connecting" | "disconnected">("connecting")
+  const [error, setError] = useState<string | null>(null)
+  const [retryCount, setRetryCount] = useState(0)
+  const maxRetries = 3
+  const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const subscriptionRef = useRef<any>(null)
 
-  useEffect(() => {
-    console.log("[v0] ========== COMPONENT MOUNTED ==========")
-    console.log("[v0] Mount time:", new Date().toISOString())
-    console.log("[v0] Orders received:", orders.length)
-    console.log("[v0] Supabase client created:", !!supabase)
-    if (orders.length > 0) {
-      console.log("[v0] Sample order:", orders[0])
+  const [supabase] = useState(() => {
+    try {
+      const client = createClient()
+      console.log("[v0] Supabase client created successfully")
+      return client
+    } catch (error) {
+      console.error("[v0] Failed to create Supabase client:", error)
+      setError("Failed to initialize database connection")
+      setConnectionStatus("disconnected")
+      return null
+    }
+  })
+
+  const setupRealtimeConnection = useCallback(async () => {
+    if (!supabase) {
+      setConnectionStatus("disconnected")
+      setError("Database client not available")
+      return
     }
 
-    // Test if component is interactive
-    const testTimer = setTimeout(() => {
-      console.log("[v0] Component is interactive after 1 second")
-    }, 1000)
+    try {
+      setConnectionStatus("connecting")
+      setError(null)
+      console.log("[v0] Setting up real-time connection...")
 
-    return () => clearTimeout(testTimer)
-  }, [])
+      // Clean up existing subscription
+      if (subscriptionRef.current) {
+        await supabase.removeChannel(subscriptionRef.current)
+        subscriptionRef.current = null
+      }
+
+      subscriptionRef.current = supabase
+        .channel(`orders-changes-${Date.now()}`)
+        .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, (payload) => {
+          console.log("[v0] Real-time order update received:", payload)
+          setConnectionStatus("connected")
+          setRetryCount(0)
+
+          if (onRefresh) {
+            onRefresh()
+          }
+        })
+        .subscribe((status) => {
+          console.log("[v0] Subscription status:", status)
+
+          if (status === "SUBSCRIBED") {
+            setConnectionStatus("connected")
+            setRetryCount(0)
+            setError(null)
+          } else if (status === "CLOSED" || status === "CHANNEL_ERROR") {
+            setConnectionStatus("disconnected")
+
+            if (retryCount < maxRetries) {
+              const delay = Math.min(1000 * Math.pow(2, retryCount), 10000)
+              console.log(`[v0] Connection lost, retrying in ${delay}ms (attempt ${retryCount + 1}/${maxRetries})`)
+
+              retryTimeoutRef.current = setTimeout(() => {
+                setRetryCount((prev) => prev + 1)
+                setupRealtimeConnection()
+              }, delay)
+            } else {
+              setError("Real-time connection failed. Please refresh manually.")
+            }
+          }
+        })
+    } catch (error) {
+      console.error("[v0] Error setting up real-time connection:", error)
+      setConnectionStatus("disconnected")
+      setError("Failed to establish real-time connection")
+    }
+  }, [supabase, onRefresh, retryCount, maxRetries])
 
   useEffect(() => {
-    console.log("[v0] Orders prop changed, updating displayOrders")
+    setupRealtimeConnection()
+
+    return () => {
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current)
+      }
+      if (subscriptionRef.current && supabase) {
+        supabase.removeChannel(subscriptionRef.current)
+      }
+    }
+  }, [setupRealtimeConnection])
+
+  useEffect(() => {
     setDisplayOrders(orders)
   }, [orders])
 
-  useEffect(() => {
-    console.log("✅ Enhanced Orders Table Component Loaded")
-    console.log("🔄 Realtime listener active")
-
-    const channel = supabase
-      .channel("orders-changes")
-      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, (payload) => {
-        console.log("📡 Order changed:", payload)
-        // Refresh orders when database changes
-        if (onRefresh) {
-          onRefresh()
-        }
-      })
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
-    }
-  }, [onRefresh])
-
   const getOrderId = (order: Order): string => {
-    return order.short_order_id || ""
+    return order.order_id || order.short_order_id || ""
   }
 
-  const updateOrderStatus = async (orderId: string, newStatus: string) => {
-    console.log(`[v0] Updating order ${orderId} to ${newStatus}`)
+  const updateOrderStatus = async (orderId: string, newStatus: string): Promise<boolean> => {
+    if (!orderId || !newStatus) {
+      setError("Missing order information")
+      return false
+    }
 
     try {
-      const res = await fetch("/api/orders", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderId, status: newStatus }),
+      setError(null)
+      console.log("[v0] Updating order status:", { orderId, newStatus })
+
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 second timeout
+
+      const response = await fetch("/api/orders", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          orderId: orderId,
+          status: newStatus,
+        }),
+        signal: controller.signal,
       })
 
-      const data = await res.json()
-      if (data.success) {
-        console.log(`✅ Order ${newStatus}:`, orderId)
-        alert(`✅ Order ${newStatus} successfully!`)
+      clearTimeout(timeoutId)
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: "Unknown error" }))
+        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      const result = await response.json()
+
+      if (!result.success) {
+        throw new Error(result.error || "Update failed")
+      }
+
+      console.log("[v0] Order status updated successfully")
+
+      // Trigger refresh with delay to ensure database consistency
+      setTimeout(() => {
         if (onRefresh) {
           onRefresh()
         }
-        return true
-      } else {
-        console.error("❌ Failed to update:", data.error)
-        alert(`❌ Failed to update: ${data.error}`)
-        return false
-      }
+      }, 500)
+
+      return true
     } catch (error) {
-      console.error("❌ Network error:", error)
-      alert(`❌ Network error: ${error}`)
+      console.error("[v0] Error updating order status:", error)
+
+      if (error instanceof Error) {
+        if (error.name === "AbortError") {
+          setError("Request timed out. Please try again.")
+        } else if (error.message.includes("fetch")) {
+          setError("Network error. Please check your connection.")
+        } else {
+          setError(error.message)
+        }
+      } else {
+        setError("An unexpected error occurred")
+      }
+
       return false
     }
   }
 
   const showConfirmation = (orderId: string, action: string, actionLabel: string) => {
-    console.log("[v0] ========== SHOW CONFIRMATION ==========")
-    console.log("[v0] Order ID:", orderId)
-    console.log("[v0] Action:", action)
-    console.log("[v0] Action Label:", actionLabel)
+    if (!orderId || !action) {
+      setError("Invalid order information")
+      return
+    }
 
     setConfirmationModal({
       isOpen: true,
@@ -162,12 +240,8 @@ const EnhancedOrdersTable = ({
   }
 
   const handleConfirmation = async () => {
-    console.log("[v0] ========== HANDLE CONFIRMATION START ==========")
-    console.log("[v0] Modal state:", confirmationModal)
-
     if (!confirmationModal.orderId || !confirmationModal.action) {
-      console.log("[v0] ERROR: Missing confirmation data")
-      alert("❌ Error: Missing confirmation data")
+      setError("Missing confirmation data")
       return
     }
 
@@ -175,21 +249,16 @@ const EnhancedOrdersTable = ({
 
     try {
       const success = await updateOrderStatus(confirmationModal.orderId, confirmationModal.action)
-      console.log("[v0] Update result:", success)
 
       if (success) {
-        console.log("[v0] Closing modal after successful update")
         setConfirmationModal({ isOpen: false, orderId: "", action: "", actionLabel: "", isProcessing: false })
       } else {
-        console.log("[v0] Keeping modal open after failed update")
         setConfirmationModal((prev) => ({ ...prev, isProcessing: false }))
       }
     } catch (error) {
-      console.log("[v0] handleConfirmation error:", error)
+      console.error("[v0] Confirmation error:", error)
       setConfirmationModal((prev) => ({ ...prev, isProcessing: false }))
     }
-
-    console.log("[v0] ========== HANDLE CONFIRMATION END ==========")
   }
 
   const cancelConfirmation = () => {
@@ -197,9 +266,14 @@ const EnhancedOrdersTable = ({
     setConfirmationModal({ isOpen: false, orderId: "", action: "", actionLabel: "", isProcessing: false })
   }
 
+  const handleManualRetry = () => {
+    setRetryCount(0)
+    setError(null)
+    setupRealtimeConnection()
+  }
+
   const getActionButtons = (order: Order) => {
     const validOrderId = getOrderId(order)
-    console.log("[v0] Rendering action buttons for order:", validOrderId, "status:", order.status)
 
     if (!validOrderId) {
       return (
@@ -214,28 +288,20 @@ const EnhancedOrdersTable = ({
         <div className="space-y-3">
           <div className="flex gap-2">
             <Button
-              onClick={() => {
-                console.log("[v0] ========== CONFIRM BUTTON CLICKED ==========")
-                console.log("[v0] Order ID:", validOrderId)
-                console.log("[v0] Time:", new Date().toISOString())
-                showConfirmation(validOrderId, "confirmed", "confirm")
-              }}
+              onClick={() => showConfirmation(validOrderId, "confirmed", "confirm")}
               size="sm"
               className="bg-green-600 hover:bg-green-700 text-white flex-1"
+              disabled={connectionStatus === "disconnected"}
             >
               <Check className="w-4 h-4" />
               Confirm
             </Button>
             <Button
-              onClick={() => {
-                console.log("[v0] ========== CANCEL BUTTON CLICKED ==========")
-                console.log("[v0] Order ID:", validOrderId)
-                console.log("[v0] Time:", new Date().toISOString())
-                showConfirmation(validOrderId, "cancelled", "cancel")
-              }}
+              onClick={() => showConfirmation(validOrderId, "cancelled", "cancel")}
               size="sm"
               variant="destructive"
               className="flex-1"
+              disabled={connectionStatus === "disconnected"}
             >
               <X className="w-4 h-4" />
               Cancel
@@ -249,14 +315,10 @@ const EnhancedOrdersTable = ({
       return (
         <div className="space-y-3">
           <Button
-            onClick={() => {
-              console.log("[v0] ========== COMPLETE BUTTON CLICKED ==========")
-              console.log("[v0] Order ID:", validOrderId)
-              console.log("[v0] Time:", new Date().toISOString())
-              showConfirmation(validOrderId, "completed", "complete")
-            }}
+            onClick={() => showConfirmation(validOrderId, "completed", "complete")}
             size="sm"
             className="bg-blue-600 hover:bg-blue-700 text-white w-full"
+            disabled={connectionStatus === "disconnected"}
           >
             <CheckCircle className="w-4 h-4" />
             Complete
@@ -277,7 +339,6 @@ const EnhancedOrdersTable = ({
   }
 
   const getStatusBadge = (status: string) => {
-    console.log("[v0] Rendering status badge for:", status)
     const statusConfig = {
       confirmed: { color: "bg-green-600 text-white", label: "Order Confirmed" },
       cancelled: { color: "bg-red-600 text-white", label: "Order Canceled" },
@@ -289,27 +350,6 @@ const EnhancedOrdersTable = ({
     return <Badge className={`${config.color} px-3 py-1 font-medium rounded-full`}>{config.label}</Badge>
   }
 
-  useEffect(() => {
-    const handleGlobalClick = (e: MouseEvent) => {
-      console.log("[v0] ========== GLOBAL CLICK DETECTED ==========")
-      console.log("[v0] Target:", (e.target as HTMLElement).tagName)
-      console.log("[v0] Target class:", (e.target as HTMLElement).className)
-      console.log("[v0] Time:", new Date().toISOString())
-
-      // Check if it's a button click
-      const target = e.target as HTMLElement
-      if (target.tagName === "BUTTON" || target.closest("button")) {
-        console.log("[v0] BUTTON CLICK DETECTED!")
-        console.log("[v0] Button text:", target.textContent || target.closest("button")?.textContent)
-      }
-    }
-
-    document.addEventListener("click", handleGlobalClick)
-    return () => document.removeEventListener("click", handleGlobalClick)
-  }, [])
-
-  console.log("[v0] About to render component with", displayOrders.length, "orders")
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -319,47 +359,78 @@ const EnhancedOrdersTable = ({
             {displayOrders.length} order{displayOrders.length !== 1 ? "s" : ""} • Real-time updates enabled
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-          <span className="text-green-400 font-medium text-sm">LIVE</span>
+        <div className="flex items-center gap-4">
+          <Button
+            onClick={() => {
+              if (onRefresh) onRefresh()
+            }}
+            variant="outline"
+            size="sm"
+            className="border-gray-600 text-gray-300 hover:bg-gray-700"
+          >
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Refresh
+          </Button>
+          <div className="flex items-center gap-2">
+            {connectionStatus === "connected" ? (
+              <>
+                <Wifi className="w-4 h-4 text-green-400" />
+                <span className="text-green-400 font-medium text-sm">LIVE</span>
+              </>
+            ) : connectionStatus === "connecting" ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin text-yellow-400" />
+                <span className="text-yellow-400 font-medium text-sm">CONNECTING</span>
+              </>
+            ) : (
+              <>
+                <WifiOff className="w-4 h-4 text-red-400" />
+                <span className="text-red-400 font-medium text-sm">OFFLINE</span>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
-      <div className="flex gap-2 mb-4">
-        <Button
-          onClick={() => {
-            console.log("[v0] ========== COMPONENT TEST BUTTON CLICKED ==========")
-            console.log("[v0] Component state:", { displayOrders: displayOrders.length, loading })
-            alert("✅ EnhancedOrdersTable component is working! Orders: " + displayOrders.length)
-          }}
-          className="bg-purple-600 hover:bg-purple-700"
-        >
-          TEST COMPONENT ({displayOrders.length})
-        </Button>
+      {error && (
+        <div className="bg-red-900/20 border border-red-800 rounded-lg p-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <AlertCircle className="w-5 h-5 text-red-400" />
+            <div>
+              <p className="text-red-300 font-medium">Error</p>
+              <p className="text-red-400 text-sm">{error}</p>
+            </div>
+          </div>
+          {connectionStatus === "disconnected" && (
+            <Button
+              onClick={handleManualRetry}
+              size="sm"
+              variant="outline"
+              className="border-red-600 text-red-300 hover:bg-red-900/30 bg-transparent"
+            >
+              Retry Connection
+            </Button>
+          )}
+        </div>
+      )}
 
-        <Button
-          onClick={async () => {
-            console.log("[v0] ========== DIRECT API TEST ==========")
-            try {
-              const response = await fetch("/api/orders")
-              const data = await response.json()
-              console.log("[v0] Direct API response:", data)
-              alert("✅ Direct API call successful! Orders: " + (data.orders?.length || 0))
-            } catch (error) {
-              console.log("[v0] Direct API error:", error)
-              alert("❌ Direct API error: " + error)
-            }
-          }}
-          className="bg-blue-600 hover:bg-blue-700"
-        >
-          TEST API DIRECT
-        </Button>
-      </div>
+      {loading && (
+        <div className="flex items-center justify-center py-8">
+          <Loader2 className="w-6 h-6 animate-spin text-gray-400 mr-2" />
+          <span className="text-gray-400">Loading orders...</span>
+        </div>
+      )}
+
+      {!loading && displayOrders.length === 0 && (
+        <div className="text-center py-12">
+          <div className="text-gray-400 text-lg mb-2">No orders found</div>
+          <p className="text-gray-500 text-sm">Orders will appear here when customers place them</p>
+        </div>
+      )}
 
       <div className="space-y-4">
         {displayOrders.map((order) => {
           const validOrderId = getOrderId(order)
-          console.log("[v0] Rendering order:", validOrderId)
 
           return (
             <Card
@@ -371,8 +442,9 @@ const EnhancedOrdersTable = ({
                   <div className="col-span-3">
                     <div className="space-y-2">
                       <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">ORDER</p>
-                      <p className="font-mono text-lg font-bold text-white">{order.short_order_id}</p>
-                      <p className="font-mono text-sm text-gray-600">#{order.order_id.slice(0, 6)}</p>
+                      <p className="font-mono text-lg font-bold text-white">
+                        {order.short_order_id || order.order_id?.slice(-8).toUpperCase() || "N/A"}
+                      </p>
                       {getStatusBadge(order.status)}
                     </div>
                   </div>
@@ -394,6 +466,9 @@ const EnhancedOrdersTable = ({
                     <div className="space-y-2">
                       <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">TOTAL</p>
                       <p className="text-xl font-bold text-white">৳{order.total_price.toFixed(2)}</p>
+                      <p className="text-xs text-gray-400">
+                        {order.order_items?.length || 0} item{(order.order_items?.length || 0) !== 1 ? "s" : ""}
+                      </p>
                     </div>
                   </div>
 
@@ -422,10 +497,7 @@ const EnhancedOrdersTable = ({
 
               <div className="flex gap-3">
                 <Button
-                  onClick={() => {
-                    console.log("[v0] ========== MODAL CANCEL CLICKED ==========")
-                    cancelConfirmation()
-                  }}
+                  onClick={cancelConfirmation}
                   variant="outline"
                   disabled={confirmationModal.isProcessing}
                   className="flex-1 border-gray-600 text-gray-300 hover:bg-gray-700 bg-transparent"
@@ -433,11 +505,7 @@ const EnhancedOrdersTable = ({
                   Cancel
                 </Button>
                 <Button
-                  onClick={() => {
-                    console.log("[v0] ========== MODAL OK CLICKED ==========")
-                    console.log("[v0] Time:", new Date().toISOString())
-                    handleConfirmation()
-                  }}
+                  onClick={handleConfirmation}
                   disabled={confirmationModal.isProcessing}
                   className="flex-1 bg-green-600 hover:bg-green-700 text-white"
                 >

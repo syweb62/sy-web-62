@@ -91,14 +91,14 @@ export default function AnalyticsPage() {
           .from("orders")
           .select(`
             order_id,
-            total_price,
+            total_amount,
             status,
             created_at,
-            user_id,
+            customer_name,
             order_items (
-              item_name,
+              product_name,
               quantity,
-              price_at_purchase
+              price
             )
           `)
           .gte("created_at", startDate.toISOString())
@@ -137,18 +137,18 @@ export default function AnalyticsPage() {
   const processAnalyticsData = useMemo(() => {
     return (orders: any[], customers: any[], startDate: Date, endDate: Date): AnalyticsData => {
       // Revenue calculations
-      const totalRevenue = orders.reduce((sum, order) => sum + (order.total_price || 0), 0)
+      const totalRevenue = orders.reduce((sum, order) => sum + (order.total_amount || 0), 0)
       const previousPeriodOrders = orders.filter((order) => {
         const orderDate = new Date(order.created_at)
         return orderDate < startDate
       })
-      const previousRevenue = previousPeriodOrders.reduce((sum, order) => sum + (order.total_price || 0), 0)
+      const previousRevenue = previousPeriodOrders.reduce((sum, order) => sum + (order.total_amount || 0), 0)
       const revenueGrowth = previousRevenue > 0 ? ((totalRevenue - previousRevenue) / previousRevenue) * 100 : 0
 
       const dailyRevenueMap = new Map<string, number>()
       orders.forEach((order) => {
         const dateStr = order.created_at.split("T")[0]
-        dailyRevenueMap.set(dateStr, (dailyRevenueMap.get(dateStr) || 0) + (order.total_price || 0))
+        dailyRevenueMap.set(dateStr, (dailyRevenueMap.get(dateStr) || 0) + (order.total_amount || 0))
       })
 
       const dailyRevenue = Array.from(
@@ -195,10 +195,10 @@ export default function AnalyticsPage() {
       const itemCounts = new Map<string, { orders: number; revenue: number }>()
       orders.forEach((order) => {
         ;(order.order_items || []).forEach((item) => {
-          const existing = itemCounts.get(item.item_name) || { orders: 0, revenue: 0 }
+          const existing = itemCounts.get(item.product_name) || { orders: 0, revenue: 0 }
           existing.orders += item.quantity
-          existing.revenue += item.price_at_purchase * item.quantity
-          itemCounts.set(item.item_name, existing)
+          existing.revenue += item.price * item.quantity
+          itemCounts.set(item.product_name, existing)
         })
       })
 
@@ -214,7 +214,8 @@ export default function AnalyticsPage() {
         return customerDate >= startDate
       }).length
 
-      const returningCustomers = orders.filter((order) => order.user_id).length - newCustomers
+      const uniqueCustomers = new Set(orders.map((order) => order.customer_name).filter(Boolean))
+      const returningCustomers = orders.filter((order) => order.customer_name).length - newCustomers
       const customerGrowth = totalCustomers > 0 ? (newCustomers / totalCustomers) * 100 : 0
 
       // Performance metrics
@@ -236,7 +237,7 @@ export default function AnalyticsPage() {
           daily: dailyOrders,
         },
         customers: {
-          total: totalCustomers,
+          total: uniqueCustomers.size,
           new: newCustomers,
           returning: returningCustomers,
           growth: customerGrowth,

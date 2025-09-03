@@ -12,6 +12,7 @@ import { Separator } from "@/components/ui/separator"
 import { Settings, Store, Mail, Phone, Bell, Save, RefreshCw, Truck, Volume2, Percent, Receipt } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 import { LoadingSpinner } from "@/components/loading-spinner"
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 
 interface RestaurantSettings {
   name: string
@@ -80,16 +81,39 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false)
   const [activeTab, setActiveTab] = useState("basic")
 
+  const supabase = createClientComponentClient()
+
   useEffect(() => {
     loadSettings()
   }, [])
 
   const loadSettings = async () => {
     try {
-      // In a real app, you would load settings from your database
+      console.log("[v0] Loading settings from database...")
+
+      const { data: settings, error } = await supabase.from("website_settings").select("*").single()
+
+      if (error && error.code !== "PGRST116") {
+        throw error
+      }
+
+      if (settings) {
+        console.log("[v0] Settings loaded successfully:", settings)
+        setRestaurantSettings({
+          ...defaultRestaurantSettings,
+          ...settings.restaurant_settings,
+        })
+        setDeliverySettings({
+          ...defaultDeliverySettings,
+          ...settings.delivery_settings,
+        })
+      } else {
+        console.log("[v0] No settings found, using defaults")
+      }
+
       setLoading(false)
     } catch (error) {
-      console.error("Error loading settings:", error)
+      console.error("[v0] Error loading settings:", error)
       toast({
         title: "Error",
         description: "Failed to load settings",
@@ -102,15 +126,26 @@ export default function SettingsPage() {
   const saveSettings = async () => {
     setSaving(true)
     try {
-      // In a real app, you would save settings to your database
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      console.log("[v0] Saving settings to database...")
 
+      const settingsData = {
+        id: 1, // Single settings record
+        restaurant_settings: restaurantSettings,
+        delivery_settings: deliverySettings,
+        updated_at: new Date().toISOString(),
+      }
+
+      const { error } = await supabase.from("website_settings").upsert(settingsData)
+
+      if (error) throw error
+
+      console.log("[v0] Settings saved successfully")
       toast({
         title: "Success",
-        description: "Settings saved successfully",
+        description: "Settings saved successfully and will be reflected on the website",
       })
     } catch (error) {
-      console.error("Error saving settings:", error)
+      console.error("[v0] Error saving settings:", error)
       toast({
         title: "Error",
         description: "Failed to save settings",
