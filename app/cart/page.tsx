@@ -28,6 +28,7 @@ import { validation } from "@/lib/validation"
 import { customerStorage } from "@/lib/customer-storage"
 import { supabase } from "@/lib/supabase"
 import { generateShortOrderId } from "@/lib/order-id-generator"
+import { calculateOrderTotals } from "@/lib/order-calculations"
 
 const radioAccentStyle: React.CSSProperties = { accentColor: "#3b82f6" }
 
@@ -76,15 +77,27 @@ export default function Cart() {
   const discountRate = 0.15 // 15% discount
   const deliveryFee = 5
 
-  const subtotal = totalPrice
-  const discountAmount = discountApplied ? subtotal * discountRate : 0
-  const discountedSubtotal = subtotal - discountAmount
-  const vatAmount = discountedSubtotal * vatRate
-  const deliveryAmount = paymentMethod === "pickup" ? 0 : deliveryFee
-  const finalTotal = discountedSubtotal + vatAmount + deliveryAmount
+  const calculationInput = {
+    items: cartItems.map((item) => ({
+      price: item.price,
+      quantity: item.quantity,
+    })),
+    discountRate: discountApplied ? discountRate : 0,
+    vatRate,
+    deliveryFee,
+    freeDeliveryThreshold: 875,
+    paymentMethod: paymentMethod === "pickup" ? "pickup" : "delivery",
+  }
 
-  // Check if eligible for free delivery (orders over BDT 875)
-  const isFreeDelivery = discountedSubtotal >= 875 && paymentMethod !== "pickup"
+  const calculations = calculateOrderTotals(calculationInput)
+
+  const subtotal = calculations.subtotal
+  const discountAmount = calculations.discountAmount
+  const discountedSubtotal = calculations.discountedSubtotal
+  const vatAmount = calculations.vatAmount
+  const deliveryAmount = calculations.deliveryAmount
+  const finalTotal = calculations.finalTotal
+  const isFreeDelivery = calculations.isFreeDelivery
 
   // Load customer data on component mount
   useEffect(() => {
@@ -185,9 +198,17 @@ export default function Cart() {
         address: validation.sanitizeInput(formData.address),
         payment_method: paymentMethod,
         status: "pending" as const,
-        total_amount: isFreeDelivery ? finalTotal - deliveryFee : finalTotal,
+        total_amount: finalTotal,
         discount: discountAmount,
       }
+
+      console.log("[v0] Order calculation breakdown:", {
+        subtotal: calculations.subtotal,
+        discount: calculations.discountAmount,
+        vat: calculations.vatAmount,
+        delivery: calculations.deliveryAmount,
+        total: calculations.finalTotal,
+      })
 
       // Save order to Supabase
       if (supabase) {

@@ -1,10 +1,11 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Image from "next/image"
 import { ChevronDown, ChevronUp, Package, Clock, CheckCircle, XCircle, Truck } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { calculateOrderTotals, validateOrderCalculation } from "@/lib/order-calculations"
 
 interface OrderItem {
   id: string
@@ -50,6 +51,7 @@ function money(value: unknown): string {
 
 export function OrderCard({ order, onReorder }: OrderCardProps) {
   const [isExpanded, setIsExpanded] = useState(false)
+  const [calculationWarning, setCalculationWarning] = useState<string | null>(null)
 
   const statusInfo = (order?.status && (statusConfig as any)[order.status]) || statusConfig.confirmed
   const StatusIcon = statusInfo.icon
@@ -72,10 +74,40 @@ export function OrderCard({ order, onReorder }: OrderCardProps) {
   }
 
   const items = Array.isArray(order?.items) ? order.items : []
-  const subtotal = safeNum((order as any)?.subtotal)
-  const tax = safeNum((order as any)?.tax)
-  const delivery = safeNum((order as any)?.delivery)
-  const total = safeNum((order as any)?.total)
+
+  const recalculatedTotals = calculateOrderTotals({
+    items: items.map((item) => ({
+      price: safeNum(item?.price),
+      quantity: typeof item?.quantity === "number" ? item.quantity : 1,
+    })),
+    discountRate: 0.15, // Assuming 15% discount was applied
+    vatRate: 0.05,
+    deliveryFee: 5,
+    freeDeliveryThreshold: 875,
+    paymentMethod: "delivery",
+  })
+
+  useEffect(() => {
+    const validation = validateOrderCalculation(
+      {
+        subtotal: safeNum((order as any)?.subtotal),
+        total: safeNum((order as any)?.total),
+        discount: safeNum((order as any)?.discount),
+      },
+      recalculatedTotals,
+    )
+
+    if (!validation.isValid) {
+      setCalculationWarning(`Calculation discrepancy detected: ${validation.errors.join(", ")}`)
+      console.warn("[v0] Order calculation validation failed:", validation.errors)
+    }
+  }, [order, recalculatedTotals])
+
+  const displaySubtotal = recalculatedTotals.subtotal
+  const displayDiscount = recalculatedTotals.discountAmount
+  const displayVat = recalculatedTotals.vatAmount
+  const displayDelivery = recalculatedTotals.deliveryAmount
+  const displayTotal = recalculatedTotals.finalTotal
 
   const canReorder = typeof onReorder === "function" && items.length > 0
   const handleReorder = () => {
@@ -86,7 +118,12 @@ export function OrderCard({ order, onReorder }: OrderCardProps) {
 
   return (
     <div className="bg-black/30 rounded-lg border border-gray-800 p-6">
-      {/* Order Header */}
+      {calculationWarning && (
+        <div className="mb-4 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+          <p className="text-xs text-yellow-400">⚠️ Calculation corrected: {calculationWarning}</p>
+        </div>
+      )}
+
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
         <div className="flex items-center gap-4">
           <div>
@@ -103,7 +140,7 @@ export function OrderCard({ order, onReorder }: OrderCardProps) {
           <div className="text-right">
             <p className="text-2xl font-bold text-yellow-400">
               {"৳"}
-              {money(total)}
+              {money(displayTotal)}
             </p>
             <p className="text-gray-400 text-sm">
               {items.length} item{items.length !== 1 ? "s" : ""}
@@ -121,7 +158,6 @@ export function OrderCard({ order, onReorder }: OrderCardProps) {
         </div>
       </div>
 
-      {/* Items Preview */}
       <div className="space-y-3">
         {items.slice(0, 2).map((item, idx) => {
           const qty = typeof item?.quantity === "number" ? item.quantity : 1
@@ -134,6 +170,7 @@ export function OrderCard({ order, onReorder }: OrderCardProps) {
                   src={
                     item?.image ||
                     "/placeholder.svg?height=48&width=48&query=sushi%20item%20thumbnail" ||
+                    "/placeholder.svg" ||
                     "/placeholder.svg" ||
                     "/placeholder.svg" ||
                     "/placeholder.svg"
@@ -173,7 +210,6 @@ export function OrderCard({ order, onReorder }: OrderCardProps) {
           </Button>
         )}
 
-        {/* Expanded Items */}
         {isExpanded && items.length > 2 && (
           <div className="space-y-3 pt-3 border-t border-gray-700">
             {items.slice(2).map((item, idx) => {
@@ -187,6 +223,7 @@ export function OrderCard({ order, onReorder }: OrderCardProps) {
                       src={
                         item?.image ||
                         "/placeholder.svg?height=48&width=48&query=sushi%20item%20thumbnail" ||
+                        "/placeholder.svg" ||
                         "/placeholder.svg" ||
                         "/placeholder.svg" ||
                         "/placeholder.svg"
@@ -210,35 +247,43 @@ export function OrderCard({ order, onReorder }: OrderCardProps) {
           </div>
         )}
 
-        {/* Order Summary */}
         {isExpanded && (
           <div className="pt-4 border-t border-gray-700 space-y-2">
             <div className="flex justify-between text-sm">
               <span className="text-gray-400">Subtotal</span>
               <span>
                 {"৳"}
-                {money(subtotal)}
+                {money(displaySubtotal)}
               </span>
             </div>
+            {displayDiscount > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-400">Discount (15%)</span>
+                <span className="text-green-400">
+                  -{"৳"}
+                  {money(displayDiscount)}
+                </span>
+              </div>
+            )}
             <div className="flex justify-between text-sm">
-              <span className="text-gray-400">VAT</span>
+              <span className="text-gray-400">VAT (5%)</span>
               <span>
                 {"৳"}
-                {money(tax)}
+                {money(displayVat)}
               </span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-400">{order?.deliveryType === "delivery" ? "Delivery" : "Service Fee"}</span>
               <span>
                 {"৳"}
-                {money(delivery)}
+                {money(displayDelivery)}
               </span>
             </div>
             <div className="flex justify-between font-bold text-lg pt-2 border-t border-gray-700">
               <span>Total</span>
               <span className="text-yellow-400">
                 {"৳"}
-                {money(total)}
+                {money(displayTotal)}
               </span>
             </div>
           </div>
