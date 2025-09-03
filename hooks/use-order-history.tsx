@@ -45,26 +45,9 @@ export function useOrderHistory() {
 
       const { data, error: fetchError } = await supabase
         .from("orders")
-        .select(`
-          order_id,
-          short_order_id,
-          customer_name,
-          phone_number,
-          address,
-          payment_method,
-          status,
-          total_amount,
-          discount,
-          created_at,
-          order_items (
-            item_id,
-            quantity,
-            price,
-            product_name
-          )
-        `)
+        .select("*")
         .order("created_at", { ascending: false })
-        .limit(50) // Limit to recent 50 orders to improve performance
+        .limit(100)
 
       console.log("[v0] Database query result:", { data: data?.length || 0, error: fetchError })
 
@@ -80,7 +63,9 @@ export function useOrderHistory() {
         // For authenticated users, try to match by email or name patterns
         const emailPattern = user.email.toLowerCase()
         filteredData = filteredData.filter(
-          (order) => order.customer_name?.toLowerCase().includes(emailPattern) || order.phone_number === user.phone,
+          (order) =>
+            order.customer_name?.toLowerCase().includes(emailPattern.split("@")[0]) ||
+            order.phone_number === user.phone,
         )
         console.log("[v0] Filtered orders for authenticated user:", filteredData.length)
       } else {
@@ -103,33 +88,38 @@ export function useOrderHistory() {
           }
         }
 
-        // If no stored info or no matches, show recent orders from last 7 days
         if (filteredData.length === 0) {
-          const sevenDaysAgo = new Date()
-          sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
-          filteredData = (data || []).filter((order) => new Date(order.created_at) >= sevenDaysAgo)
-          console.log("[v0] Showing recent orders from last 7 days:", filteredData.length)
+          const oneDayAgo = new Date()
+          oneDayAgo.setDate(oneDayAgo.getDate() - 1)
+          filteredData = (data || []).filter((order) => new Date(order.created_at) >= oneDayAgo)
+          console.log("[v0] No stored order info, showing recent orders from last 24 hours")
         }
       }
 
-      const formattedOrders: OrderHistoryItem[] = filteredData.map((order: any) => ({
-        order_id: order.order_id,
-        short_order_id: order.short_order_id,
-        customer_name: order.customer_name || "Unknown",
-        phone_number: order.phone_number || "",
-        address: order.address || "",
-        payment_method: order.payment_method || "cash",
-        status: order.status,
-        total_amount: order.total_amount || 0,
-        discount: order.discount,
-        created_at: order.created_at,
-        items: (order.order_items || []).map((item: any) => ({
-          id: item.item_id,
-          quantity: item.quantity,
-          price: item.price,
-          product_name: item.product_name,
-        })),
-      }))
+      const formattedOrders: OrderHistoryItem[] = []
+
+      for (const order of filteredData) {
+        const { data: orderItems } = await supabase.from("order_items").select("*").eq("order_id", order.order_id)
+
+        formattedOrders.push({
+          order_id: order.order_id,
+          short_order_id: order.short_order_id,
+          customer_name: order.customer_name || "Unknown",
+          phone_number: order.phone_number || "",
+          address: order.address || "",
+          payment_method: order.payment_method || "cash",
+          status: order.status,
+          total_amount: order.total_amount || 0,
+          discount: order.discount,
+          created_at: order.created_at,
+          items: (orderItems || []).map((item: any) => ({
+            id: item.item_id,
+            quantity: item.quantity,
+            price: item.price,
+            product_name: item.product_name,
+          })),
+        })
+      }
 
       console.log("[v0] Final formatted orders count:", formattedOrders.length)
       if (formattedOrders.length > 0) {
