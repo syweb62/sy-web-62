@@ -47,7 +47,7 @@ export function useOrderHistory() {
         .from("orders")
         .select("*")
         .order("created_at", { ascending: false })
-        .limit(100)
+        .limit(50)
 
       console.log("[v0] Database query result:", { data: data?.length || 0, error: fetchError })
 
@@ -57,42 +57,55 @@ export function useOrderHistory() {
         return
       }
 
-      let filteredData = data || []
+      if (!data || data.length === 0) {
+        console.log("[v0] No orders found in database")
+        setOrders([])
+        return
+      }
 
+      let filteredData = data
+
+      // If user is authenticated, try to filter by their information
       if (user?.email) {
-        // For authenticated users, try to match by email or name patterns
-        const emailPattern = user.email.toLowerCase()
-        filteredData = filteredData.filter(
-          (order) =>
-            order.customer_name?.toLowerCase().includes(emailPattern.split("@")[0]) ||
-            order.phone_number === user.phone,
-        )
-        console.log("[v0] Filtered orders for authenticated user:", filteredData.length)
+        const userOrders = data.filter((order) => {
+          const emailMatch = order.customer_name?.toLowerCase().includes(user.email?.split("@")[0].toLowerCase() || "")
+          const phoneMatch = user.phone && order.phone_number === user.phone
+          return emailMatch || phoneMatch
+        })
+
+        if (userOrders.length > 0) {
+          filteredData = userOrders
+          console.log("[v0] Found user-specific orders:", userOrders.length)
+        } else {
+          console.log("[v0] No user-specific orders found, showing recent orders")
+          // Show recent orders from last 7 days if no user-specific orders
+          const sevenDaysAgo = new Date()
+          sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+          filteredData = data.filter((order) => new Date(order.created_at) >= sevenDaysAgo)
+        }
       } else {
-        // For non-authenticated users, check localStorage for recent order info
         const recentOrderInfo = localStorage.getItem("recent_order_info")
         if (recentOrderInfo) {
           try {
             const orderInfo = JSON.parse(recentOrderInfo)
             if (orderInfo.phone) {
-              filteredData = filteredData.filter((order) => order.phone_number === orderInfo.phone)
-              console.log("[v0] Filtered orders by stored phone:", filteredData.length)
-            } else if (orderInfo.name) {
-              filteredData = filteredData.filter((order) =>
-                order.customer_name?.toLowerCase().includes(orderInfo.name.toLowerCase()),
-              )
-              console.log("[v0] Filtered orders by stored name:", filteredData.length)
+              const phoneOrders = data.filter((order) => order.phone_number === orderInfo.phone)
+              if (phoneOrders.length > 0) {
+                filteredData = phoneOrders
+                console.log("[v0] Found orders by stored phone:", phoneOrders.length)
+              }
             }
           } catch (e) {
             console.log("[v0] Error parsing stored order info")
           }
         }
 
-        if (filteredData.length === 0) {
+        // If no stored info or no matching orders, show recent orders from last 24 hours
+        if (filteredData === data) {
           const oneDayAgo = new Date()
           oneDayAgo.setDate(oneDayAgo.getDate() - 1)
-          filteredData = (data || []).filter((order) => new Date(order.created_at) >= oneDayAgo)
-          console.log("[v0] No stored order info, showing recent orders from last 24 hours")
+          filteredData = data.filter((order) => new Date(order.created_at) >= oneDayAgo)
+          console.log("[v0] Showing recent orders from last 24 hours:", filteredData.length)
         }
       }
 
