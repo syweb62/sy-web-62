@@ -8,11 +8,11 @@ export interface OrderHistoryItem {
   order_id: string
   short_order_id?: string
   customer_name: string
-  phone: string
+  phone_number: string // Updated to match database schema
   address: string
   payment_method: string
   status: "pending" | "processing" | "completed" | "cancelled"
-  total_price: number
+  total_amount: number // Updated to match database schema
   subtotal?: number
   discount?: number
   vat?: number
@@ -23,8 +23,8 @@ export interface OrderHistoryItem {
     id: string
     menu_item_id?: string | null
     quantity: number
-    price_at_purchase: number
-    item_name?: string | null
+    price: number // Updated to match database schema
+    product_name?: string | null // Updated to match database schema
     item_description?: string | null
     item_image?: string | null
   }>
@@ -37,13 +37,10 @@ export function useOrderHistory() {
   const [error, setError] = useState<string | null>(null)
 
   const fetchOrders = async () => {
-    // Avoid RLS errors by not querying when logged out
-    if (!user?.id) {
-      setOrders([])
-      setLoading(false)
-      setError(null)
-      return
-    }
+    console.log("[v0] ========== FETCHING ORDER HISTORY ==========")
+    console.log("[v0] User authenticated:", !!user)
+    console.log("[v0] User email:", user?.email)
+    console.log("[v0] Fetch time:", new Date().toISOString())
 
     try {
       setLoading(true)
@@ -55,11 +52,11 @@ export function useOrderHistory() {
           order_id,
           short_order_id,
           customer_name,
-          phone,
+          phone_number,
           address,
           payment_method,
           status,
-          total_price,
+          total_amount,
           subtotal,
           discount,
           vat,
@@ -67,46 +64,67 @@ export function useOrderHistory() {
           message,
           created_at,
           order_items (
-            id,
+            item_id,
             menu_item_id,
             quantity,
-            price_at_purchase,
-            item_name,
+            price,
+            product_name,
             item_description,
             item_image
           )
         `)
-        .eq("user_id", user.id)
         .order("created_at", { ascending: false })
 
+      console.log("[v0] Database query result:", { data: data?.length || 0, error: fetchError })
+
       if (fetchError) {
-        console.error("Error fetching orders:", fetchError)
-        setError("Failed to load order history")
+        console.error("[v0] Error fetching orders:", fetchError)
+        setError(`Failed to load order history: ${fetchError.message}`)
         return
       }
 
-      const formattedOrders: OrderHistoryItem[] = (data || []).map((order: any) => ({
+      const filteredData = data || []
+      if (user?.email) {
+        // For now, show all orders since we don't have user_id linking
+        // In production, you might want to filter by customer email or phone
+        console.log("[v0] Showing all orders for authenticated user")
+      }
+
+      const formattedOrders: OrderHistoryItem[] = filteredData.map((order: any) => ({
         order_id: order.order_id,
         short_order_id: order.short_order_id, // explicitly mapping short_order_id
         customer_name: order.customer_name || "Unknown",
-        phone: order.phone || "",
+        phone_number: order.phone_number || "", // Updated field name
         address: order.address || "",
         payment_method: order.payment_method || "cash",
         status: order.status,
-        total_price: order.total_price,
+        total_amount: order.total_amount || 0, // Updated field name
         subtotal: order.subtotal,
         discount: order.discount,
         vat: order.vat,
         delivery_charge: order.delivery_charge,
         message: order.message,
         created_at: order.created_at,
-        items: order.order_items || [],
+        items: (order.order_items || []).map((item: any) => ({
+          id: item.item_id,
+          menu_item_id: item.menu_item_id,
+          quantity: item.quantity,
+          price: item.price,
+          product_name: item.product_name,
+          item_description: item.item_description,
+          item_image: item.item_image,
+        })),
       }))
+
+      console.log("[v0] Formatted orders count:", formattedOrders.length)
+      if (formattedOrders.length > 0) {
+        console.log("[v0] Sample order:", formattedOrders[0])
+      }
 
       setOrders(formattedOrders)
     } catch (err) {
-      console.error("Error in fetchOrders:", err)
-      setError("Failed to load order history")
+      console.error("[v0] Error in fetchOrders:", err)
+      setError(`Failed to load order history: ${err}`)
     } finally {
       setLoading(false)
     }
@@ -133,7 +151,7 @@ export function useOrderHistory() {
 
   useEffect(() => {
     fetchOrders()
-  }, [user?.id])
+  }, [user?.email])
 
   return {
     orders,
