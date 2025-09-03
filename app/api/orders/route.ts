@@ -13,8 +13,9 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get("status")
     const search = searchParams.get("search")
     const orderId = searchParams.get("orderId")
+    const userEmail = searchParams.get("user_email")
 
-    console.log("[v0] API GET: Query params:", { status, search, orderId })
+    console.log("[v0] API GET: Query params:", { status, search, orderId, userEmail })
 
     if (orderId) {
       console.log("[v0] API GET: Single order lookup for:", orderId)
@@ -29,7 +30,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ order, exists: true })
     }
 
-    console.log("[v0] API GET: Fetching all orders from database...")
+    console.log("[v0] API GET: Fetching orders from database...")
     let query = supabase
       .from("orders")
       .select(`
@@ -49,6 +50,35 @@ export async function GET(request: NextRequest) {
         )
       `)
       .order("created_at", { ascending: false })
+
+    if (userEmail) {
+      console.log("[v0] API GET: Filtering orders for user:", userEmail)
+
+      // Get user profile to find phone number
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("phone, full_name")
+        .eq("email", userEmail)
+        .single()
+
+      if (profile?.phone) {
+        // Filter by phone number if available
+        query = query.eq("phone_number", profile.phone)
+        console.log("[v0] API GET: Filtering by phone:", profile.phone)
+      } else {
+        // Fallback: filter by customer name patterns
+        const searchTerms = [userEmail]
+        if (profile?.full_name) {
+          searchTerms.push(profile.full_name)
+        }
+
+        const orConditions = searchTerms.map((term) => `customer_name.ilike.%${term}%`).join(",")
+        query = query.or(orConditions)
+        console.log("[v0] API GET: Filtering by name/email patterns:", searchTerms)
+      }
+    } else {
+      console.log("[v0] API GET: Admin access - showing all orders")
+    }
 
     if (status && status !== "all") {
       console.log("[v0] API GET: Filtering by status:", status)

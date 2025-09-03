@@ -43,7 +43,23 @@ export function useOrderHistory() {
       setLoading(true)
       setError(null)
 
-      const { data, error: fetchError } = await supabase
+      if (!user?.email) {
+        console.log("[v0] No authenticated user, showing empty order history")
+        setOrders([])
+        setLoading(false)
+        return
+      }
+
+      // Get user profile to find associated phone number or customer info
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("phone, full_name, email")
+        .eq("email", user.email)
+        .single()
+
+      console.log("[v0] User profile:", profile)
+
+      let query = supabase
         .from("orders")
         .select(`
           order_id,
@@ -65,6 +81,25 @@ export function useOrderHistory() {
         `)
         .order("created_at", { ascending: false })
 
+      if (profile?.phone) {
+        // Filter by phone number if available in profile
+        query = query.eq("phone_number", profile.phone)
+        console.log("[v0] Filtering orders by phone number:", profile.phone)
+      } else {
+        // Fallback: filter by customer name matching user's full name or email
+        const searchTerms = [user.email]
+        if (profile?.full_name) {
+          searchTerms.push(profile.full_name)
+        }
+
+        // Use OR condition to match either customer name or email-like patterns
+        const orConditions = searchTerms.map((term) => `customer_name.ilike.%${term}%`).join(",")
+        query = query.or(orConditions)
+        console.log("[v0] Filtering orders by customer name/email patterns:", searchTerms)
+      }
+
+      const { data, error: fetchError } = await query
+
       console.log("[v0] Database query result:", { data: data?.length || 0, error: fetchError })
 
       if (fetchError) {
@@ -74,11 +109,7 @@ export function useOrderHistory() {
       }
 
       const filteredData = data || []
-      if (user?.email) {
-        // For now, show all orders since we don't have user_id linking
-        // In production, you might want to filter by customer email or phone
-        console.log("[v0] Showing all orders for authenticated user")
-      }
+      console.log("[v0] User-specific orders found:", filteredData.length)
 
       const formattedOrders: OrderHistoryItem[] = filteredData.map((order: any) => ({
         order_id: order.order_id,

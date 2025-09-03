@@ -13,6 +13,7 @@ import { InvoiceButton } from "@/components/invoice-button"
 import { useOrderHistory, type OrderHistoryItem } from "@/hooks/use-order-history"
 import { useCart } from "@/hooks/use-cart"
 import { TimeBD } from "@/components/TimeBD"
+import { useAuth } from "@/hooks/use-auth"
 
 function money(n?: number) {
   const v = typeof n === "number" && isFinite(n) ? n : 0
@@ -28,6 +29,7 @@ function parseDate(value?: string) {
 export default function OrdersPage() {
   const router = useRouter()
   const cart = useCart()
+  const { user, loading: authLoading } = useAuth()
   const { orders, loading, error, refetch } = useOrderHistory()
 
   // Filters
@@ -35,6 +37,13 @@ export default function OrdersPage() {
   const [status, setStatus] = useState<string>("all")
   const [from, setFrom] = useState<string>("")
   const [to, setTo] = useState<string>("")
+
+  useEffect(() => {
+    if (!authLoading && !user) {
+      console.log("[v0] User not authenticated, redirecting to sign in")
+      router.push("/auth/signin")
+    }
+  }, [user, authLoading, router])
 
   const filtered: OrderHistoryItem[] = useMemo(() => {
     const list = Array.isArray(orders) ? orders : []
@@ -54,11 +63,12 @@ export default function OrdersPage() {
       if (q.trim()) {
         const term = q.toLowerCase()
         const idMatch = o.order_id.toLowerCase().includes(term)
+        const shortIdMatch = o.short_order_id?.toLowerCase().includes(term)
         const nameMatch = o.customer_name?.toLowerCase().includes(term)
         const itemMatch = (Array.isArray(o.items) ? o.items : []).some((it) =>
           it.product_name?.toLowerCase().includes(term),
         )
-        if (!idMatch && !nameMatch && !itemMatch) return false
+        if (!idMatch && !shortIdMatch && !nameMatch && !itemMatch) return false
       }
       return true
     })
@@ -120,10 +130,23 @@ export default function OrdersPage() {
     }
   }, [refetch])
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <main className="min-h-[60vh] flex items-center justify-center bg-darkBg text-white">
         <LoadingSpinner size="lg" text="Loading your orders..." />
+      </main>
+    )
+  }
+
+  if (!user) {
+    return (
+      <main className="max-w-4xl mx-auto px-4 py-10 bg-darkBg text-white">
+        <div className="rounded-lg border border-yellow-800/50 bg-yellow-900/15 p-5 text-center">
+          <p className="text-yellow-300 font-medium">Please sign in to view your order history.</p>
+          <Button onClick={() => router.push("/auth/signin")} className="mt-4 bg-gold text-black hover:bg-gold/90">
+            Sign In
+          </Button>
+        </div>
       </main>
     )
   }
@@ -148,7 +171,7 @@ export default function OrdersPage() {
         {/* Header */}
         <div className="mb-5">
           <h1 className="text-2xl md:text-3xl font-semibold text-gold">Order History</h1>
-          <p className="text-xs md:text-sm text-gray-400 mt-1">Search, filter, download receipt, and reorder.</p>
+          <p className="text-xs md:text-sm text-gray-400 mt-1">Your personal order history • {user.email}</p>
         </div>
 
         {/* Filters - simplified minimal UI */}
