@@ -21,12 +21,9 @@ export interface OrderHistoryItem {
   created_at: string
   items?: Array<{
     id: string
-    menu_item_id?: string | null
     quantity: number
     price: number // Updated to match database schema
     product_name?: string | null // Updated to match database schema
-    item_description?: string | null
-    item_image?: string | null
   }>
 }
 
@@ -50,27 +47,19 @@ export function useOrderHistory() {
         .from("orders")
         .select(`
           order_id,
-          short_order_id,
           customer_name,
           phone_number,
           address,
           payment_method,
           status,
           total_amount,
-          subtotal,
           discount,
-          vat,
-          delivery_charge,
-          message,
           created_at,
           order_items (
             item_id,
-            menu_item_id,
             quantity,
             price,
-            product_name,
-            item_description,
-            item_image
+            product_name
           )
         `)
         .order("created_at", { ascending: false })
@@ -92,27 +81,19 @@ export function useOrderHistory() {
 
       const formattedOrders: OrderHistoryItem[] = filteredData.map((order: any) => ({
         order_id: order.order_id,
-        short_order_id: order.short_order_id, // explicitly mapping short_order_id
         customer_name: order.customer_name || "Unknown",
         phone_number: order.phone_number || "", // Updated field name
         address: order.address || "",
         payment_method: order.payment_method || "cash",
         status: order.status,
         total_amount: order.total_amount || 0, // Updated field name
-        subtotal: order.subtotal,
         discount: order.discount,
-        vat: order.vat,
-        delivery_charge: order.delivery_charge,
-        message: order.message,
         created_at: order.created_at,
         items: (order.order_items || []).map((item: any) => ({
           id: item.item_id,
-          menu_item_id: item.menu_item_id,
           quantity: item.quantity,
           price: item.price,
           product_name: item.product_name,
-          item_description: item.item_description,
-          item_image: item.item_image,
         })),
       }))
 
