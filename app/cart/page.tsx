@@ -180,19 +180,13 @@ export default function Cart() {
 
       // Prepare order data for Supabase
       const orderData = {
-        short_order_id: shortOrderId, // Add short ID for user display
-        user_id: (user as any)?.id || null,
         customer_name: validation.sanitizeInput(formData.name),
-        phone: formData.phone.replace(/\D/g, ""),
+        phone_number: formData.phone.replace(/\D/g, ""),
         address: validation.sanitizeInput(formData.address),
         payment_method: paymentMethod,
         status: "pending" as const,
-        total_price: isFreeDelivery ? finalTotal - deliveryFee : finalTotal,
-        subtotal: subtotal,
+        total_amount: isFreeDelivery ? finalTotal - deliveryFee : finalTotal,
         discount: discountAmount,
-        vat: vatAmount,
-        delivery_charge: isFreeDelivery ? 0 : deliveryAmount,
-        message: formData.notes ? validation.sanitizeInput(formData.notes) : null,
       }
 
       // Save order to Supabase
@@ -204,15 +198,11 @@ export default function Cart() {
           throw new Error("Failed to create order in database")
         }
 
-        // Map cart items to order_items rows
         const orderItemsData = cartItems.map((item) => ({
-          order_id: order.order_id, // Use database-generated UUID
-          menu_item_id: null, // unknown UUID in cart; keep null to preserve FK integrity
+          order_id: order.order_id,
+          product_name: item.name,
           quantity: item.quantity,
-          price_at_purchase: item.price,
-          item_name: item.name,
-          item_description: (item as any).description || null,
-          item_image: item.image || null,
+          price: item.price,
         }))
 
         // Insert order items (best-effort)
@@ -225,7 +215,7 @@ export default function Cart() {
           console.error("Failed to save order items:", itemError)
         }
 
-        setOrderId(order.short_order_id || shortOrderId)
+        setOrderId(order.order_id.slice(-8).toUpperCase())
       } else {
         // If Supabase not configured, still allow UX to complete
         setOrderId(shortOrderId)
