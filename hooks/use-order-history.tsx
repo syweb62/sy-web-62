@@ -43,23 +43,7 @@ export function useOrderHistory() {
       setLoading(true)
       setError(null)
 
-      if (!user?.email) {
-        console.log("[v0] No authenticated user, showing empty order history")
-        setOrders([])
-        setLoading(false)
-        return
-      }
-
-      // Get user profile to find associated phone number or customer info
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("phone, full_name, email")
-        .eq("email", user.email)
-        .single()
-
-      console.log("[v0] User profile:", profile)
-
-      let query = supabase
+      const { data, error: fetchError } = await supabase
         .from("orders")
         .select(`
           order_id,
@@ -80,25 +64,7 @@ export function useOrderHistory() {
           )
         `)
         .order("created_at", { ascending: false })
-
-      if (profile?.phone) {
-        // Filter by phone number if available in profile
-        query = query.eq("phone_number", profile.phone)
-        console.log("[v0] Filtering orders by phone number:", profile.phone)
-      } else {
-        // Fallback: filter by customer name matching user's full name or email
-        const searchTerms = [user.email]
-        if (profile?.full_name) {
-          searchTerms.push(profile.full_name)
-        }
-
-        // Use OR condition to match either customer name or email-like patterns
-        const orConditions = searchTerms.map((term) => `customer_name.ilike.%${term}%`).join(",")
-        query = query.or(orConditions)
-        console.log("[v0] Filtering orders by customer name/email patterns:", searchTerms)
-      }
-
-      const { data, error: fetchError } = await query
+        .limit(50) // Limit to recent 50 orders to improve performance
 
       console.log("[v0] Database query result:", { data: data?.length || 0, error: fetchError })
 
@@ -108,12 +74,47 @@ export function useOrderHistory() {
         return
       }
 
-      const filteredData = data || []
-      console.log("[v0] User-specific orders found:", filteredData.length)
+      let filteredData = data || []
+
+      if (user?.email) {
+        // For authenticated users, try to match by email or name patterns
+        const emailPattern = user.email.toLowerCase()
+        filteredData = filteredData.filter(
+          (order) => order.customer_name?.toLowerCase().includes(emailPattern) || order.phone_number === user.phone,
+        )
+        console.log("[v0] Filtered orders for authenticated user:", filteredData.length)
+      } else {
+        // For non-authenticated users, check localStorage for recent order info
+        const recentOrderInfo = localStorage.getItem("recent_order_info")
+        if (recentOrderInfo) {
+          try {
+            const orderInfo = JSON.parse(recentOrderInfo)
+            if (orderInfo.phone) {
+              filteredData = filteredData.filter((order) => order.phone_number === orderInfo.phone)
+              console.log("[v0] Filtered orders by stored phone:", filteredData.length)
+            } else if (orderInfo.name) {
+              filteredData = filteredData.filter((order) =>
+                order.customer_name?.toLowerCase().includes(orderInfo.name.toLowerCase()),
+              )
+              console.log("[v0] Filtered orders by stored name:", filteredData.length)
+            }
+          } catch (e) {
+            console.log("[v0] Error parsing stored order info")
+          }
+        }
+
+        // If no stored info or no matches, show recent orders from last 7 days
+        if (filteredData.length === 0) {
+          const sevenDaysAgo = new Date()
+          sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+          filteredData = (data || []).filter((order) => new Date(order.created_at) >= sevenDaysAgo)
+          console.log("[v0] Showing recent orders from last 7 days:", filteredData.length)
+        }
+      }
 
       const formattedOrders: OrderHistoryItem[] = filteredData.map((order: any) => ({
         order_id: order.order_id,
-        short_order_id: order.short_order_id, // Added short_order_id field for human-readable order IDs
+        short_order_id: order.short_order_id,
         customer_name: order.customer_name || "Unknown",
         phone_number: order.phone_number || "",
         address: order.address || "",
@@ -130,7 +131,7 @@ export function useOrderHistory() {
         })),
       }))
 
-      console.log("[v0] Formatted orders count:", formattedOrders.length)
+      console.log("[v0] Final formatted orders count:", formattedOrders.length)
       if (formattedOrders.length > 0) {
         console.log("[v0] Sample order:", formattedOrders[0])
       }

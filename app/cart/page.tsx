@@ -250,6 +250,15 @@ export default function Cart() {
         notes: formData.notes?.trim(),
       })
 
+      localStorage.setItem(
+        "recent_order_info",
+        JSON.stringify({
+          name: formData.name.trim(),
+          phone: formData.phone.trim(),
+          timestamp: new Date().toISOString(),
+        }),
+      )
+
       setOrderPlaced(true)
       clearCart()
     } catch (error) {
