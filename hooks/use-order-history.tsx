@@ -47,6 +47,7 @@ export function useOrderHistory() {
         .from("orders")
         .select(`
           order_id,
+          short_order_id,
           customer_name,
           phone_number,
           address,
@@ -81,12 +82,13 @@ export function useOrderHistory() {
 
       const formattedOrders: OrderHistoryItem[] = filteredData.map((order: any) => ({
         order_id: order.order_id,
+        short_order_id: order.short_order_id, // Added short_order_id field for human-readable order IDs
         customer_name: order.customer_name || "Unknown",
-        phone_number: order.phone_number || "", // Updated field name
+        phone_number: order.phone_number || "",
         address: order.address || "",
         payment_method: order.payment_method || "cash",
         status: order.status,
-        total_amount: order.total_amount || 0, // Updated field name
+        total_amount: order.total_amount || 0,
         discount: order.discount,
         created_at: order.created_at,
         items: (order.order_items || []).map((item: any) => ({

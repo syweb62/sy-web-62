@@ -13,11 +13,6 @@ import { InvoiceButton } from "@/components/invoice-button"
 import { useOrderHistory, type OrderHistoryItem } from "@/hooks/use-order-history"
 import { useCart } from "@/hooks/use-cart"
 import { TimeBD } from "@/components/TimeBD"
-import { createClient } from "@/lib/supabase/client"
-
-console.log("[v0] ========== WEBSITE ORDER HISTORY PAGE LOADING ==========")
-console.log("[v0] Page load time:", new Date().toISOString())
-console.log("[v0] Window location:", typeof window !== "undefined" ? window.location.href : "SSR")
 
 function money(n?: number) {
   const v = typeof n === "number" && isFinite(n) ? n : 0
@@ -31,31 +26,15 @@ function parseDate(value?: string) {
 }
 
 export default function OrdersPage() {
-  console.log("[v0] ========== WEBSITE ORDER HISTORY COMPONENT FUNCTION ==========")
-  console.log("[v0] Component render time:", new Date().toISOString())
-
   const router = useRouter()
   const cart = useCart()
   const { orders, loading, error, refetch } = useOrderHistory()
-  const supabase = createClient()
 
   // Filters
   const [q, setQ] = useState("")
   const [status, setStatus] = useState<string>("all")
   const [from, setFrom] = useState<string>("")
   const [to, setTo] = useState<string>("")
-
-  useEffect(() => {
-    console.log("[v0] ========== WEBSITE COMPONENT MOUNTED ==========")
-    console.log("[v0] Mount time:", new Date().toISOString())
-    console.log("[v0] Orders count:", orders.length)
-    console.log("[v0] Loading:", loading)
-    console.log("[v0] Error:", error)
-    console.log("[v0] Supabase client created:", !!supabase)
-    if (orders.length > 0) {
-      console.log("[v0] Sample order:", orders[0])
-    }
-  }, [orders, loading, error, supabase])
 
   const filtered: OrderHistoryItem[] = useMemo(() => {
     const list = Array.isArray(orders) ? orders : []
@@ -76,8 +55,8 @@ export default function OrdersPage() {
         const term = q.toLowerCase()
         const idMatch = o.order_id.toLowerCase().includes(term)
         const nameMatch = o.customer_name?.toLowerCase().includes(term)
-        const itemMatch = (Array.isArray(o.items) ? o.items : []).some(
-          (it) => it.item_name?.toLowerCase().includes(term) || it.item_description?.toLowerCase().includes(term),
+        const itemMatch = (Array.isArray(o.items) ? o.items : []).some((it) =>
+          it.product_name?.toLowerCase().includes(term),
         )
         if (!idMatch && !nameMatch && !itemMatch) return false
       }
@@ -91,23 +70,18 @@ export default function OrdersPage() {
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize))
   const pageData = filtered.slice((page - 1) * pageSize, page * pageSize)
 
-  // Reorder (kept same behavior)
   const handleReorder = (order: OrderHistoryItem) => {
-    console.log("[v0] ========== REORDER BUTTON CLICKED ==========")
-    console.log("[v0] Order ID:", order.order_id)
-    console.log("[v0] Items count:", order.items?.length || 0)
-
     const items = Array.isArray(order.items) ? order.items : []
     if (!items.length) return
     if (cart && typeof cart.addItem === "function") {
       for (const it of items) {
         cart.addItem({
-          id: it.menu_item_id || it.id || `${order.order_id}-${Math.random().toString(36).slice(2)}`,
-          name: it.item_name || "Item",
-          price: typeof it.price_at_purchase === "number" ? it.price_at_purchase : 0,
+          id: it.id || `${order.order_id}-${Math.random().toString(36).slice(2)}`,
+          name: it.product_name || "Item", // Updated field name
+          price: typeof it.price === "number" ? it.price : 0, // Updated field name
           quantity: typeof it.quantity === "number" ? it.quantity : 1,
-          image: it.item_image || "/sushi-thumbnail.png",
-          notes: (it as any).notes || it.item_description || "",
+          image: "/sushi-thumbnail.png", // Default image since item_image doesn't exist
+          notes: "", // Notes field doesn't exist in current schema
         })
       }
       try {
@@ -120,130 +94,31 @@ export default function OrdersPage() {
   }
 
   useEffect(() => {
-    console.log("[v0] ========== SETTING UP WEBSITE REAL-TIME SUBSCRIPTIONS ==========")
-    console.log("[v0] Setup time:", new Date().toISOString())
+    const handleOrderStatusChange = (event: CustomEvent) => {
+      console.log("[v0] Order status changed event received:", event.detail)
+      console.log("[v0] Event type:", event.type)
+      console.log("[v0] Current window location:", window.location.href)
 
-    const immediateRefresh = () => {
-      console.log("[v0] ========== TRIGGERING IMMEDIATE ORDER HISTORY REFRESH ==========")
-      console.log("[v0] Refresh time:", new Date().toISOString())
+      // Refresh order history when status changes
       refetch()
     }
 
-    const handleOrderStatusChange = (event: CustomEvent) => {
-      console.log("[v0] ========== ORDER STATUS CHANGE EVENT RECEIVED ==========")
-      console.log("[v0] Event detail:", event.detail)
-      console.log("[v0] Event time:", new Date().toISOString())
-      if (event.detail?.orderId) {
-        console.log("[v0] Refreshing order history due to status change for order:", event.detail.orderId)
-        immediateRefresh()
-      }
-    }
-
-    const handleStorageChange = (event: StorageEvent) => {
-      console.log("[v0] ========== STORAGE CHANGE DETECTED ==========")
-      console.log("[v0] Storage key:", event.key)
-      console.log("[v0] New value:", event.newValue)
-      console.log("[v0] Event time:", new Date().toISOString())
-
-      if ((event.key === "orderUpdate" || event.key === "orderStatusUpdate") && event.newValue) {
-        console.log("[v0] Order-related storage change detected, refreshing order history")
-        try {
-          const data = JSON.parse(event.newValue)
-          console.log("[v0] Parsed order update data:", data)
-        } catch (e) {
-          console.log("[v0] Could not parse storage data:", e)
-        }
-        immediateRefresh()
-      }
-    }
-
-    const handleMessage = (event: MessageEvent) => {
-      console.log("[v0] ========== MESSAGE EVENT RECEIVED ==========")
-      console.log("[v0] Message data:", event.data)
-      console.log("[v0] Message origin:", event.origin)
-      console.log("[v0] Event time:", new Date().toISOString())
-
-      if (event.data?.type === "orderStatusChanged" && event.data?.orderId) {
-        console.log("[v0] Order status change message received for order:", event.data.orderId)
-        immediateRefresh()
-      }
-    }
-
-    console.log("[v0] Creating Supabase real-time subscription...")
-    const subscription = supabase
-      .channel("website-orders-updates")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "orders",
-        },
-        (payload) => {
-          console.log("[v0] ========== WEBSITE RECEIVED REAL-TIME DATABASE UPDATE ==========")
-          console.log("[v0] Update time:", new Date().toISOString())
-          console.log("[v0] Update type:", payload.eventType)
-          console.log("[v0] Updated record:", payload.new || payload.old)
-          console.log("[v0] Full payload:", payload)
-
-          if (payload.eventType === "UPDATE" && payload.new) {
-            console.log("[v0] Order status updated:", {
-              order_id: payload.new.order_id,
-              short_order_id: payload.new.short_order_id,
-              old_status: payload.old?.status,
-              new_status: payload.new.status,
-            })
-          }
-
-          immediateRefresh()
-        },
-      )
-      .subscribe((status) => {
-        console.log("[v0] ========== WEBSITE REAL-TIME SUBSCRIPTION STATUS ==========")
-        console.log("[v0] Status:", status)
-        console.log("[v0] Time:", new Date().toISOString())
-
-        if (status === "SUBSCRIBED") {
-          console.log("[v0] ✅ Website successfully subscribed to real-time order updates")
-        } else if (status === "CHANNEL_ERROR") {
-          console.log("[v0] ❌ Website real-time subscription error")
-        } else if (status === "CLOSED") {
-          console.log("[v0] ⚠️ Website real-time subscription closed")
-        }
-      })
-
-    console.log("[v0] Adding event listeners...")
+    console.log("[v0] Setting up orderStatusChanged event listener")
     window.addEventListener("orderStatusChanged", handleOrderStatusChange as EventListener)
-    window.addEventListener("storage", handleStorageChange)
-    window.addEventListener("message", handleMessage)
-    console.log("[v0] All event listeners added successfully")
 
-    const testTimer = setTimeout(() => {
-      console.log("[v0] Website real-time system is active after 2 seconds")
-      console.log("[v0] Current orders count:", orders.length)
-    }, 2000)
+    const handleOrderUpdated = (event: CustomEvent) => {
+      console.log("[v0] Order updated event received:", event.detail)
+      refetch()
+    }
+
+    window.addEventListener("orderUpdated", handleOrderUpdated as EventListener)
 
     return () => {
-      console.log("[v0] ========== CLEANING UP WEBSITE REAL-TIME SUBSCRIPTIONS ==========")
-      console.log("[v0] Cleanup time:", new Date().toISOString())
-
+      console.log("[v0] Cleaning up event listeners")
       window.removeEventListener("orderStatusChanged", handleOrderStatusChange as EventListener)
-      window.removeEventListener("storage", handleStorageChange)
-      window.removeEventListener("message", handleMessage)
-      subscription.unsubscribe()
-      clearTimeout(testTimer)
-
-      console.log("[v0] Website real-time cleanup completed")
+      window.removeEventListener("orderUpdated", handleOrderUpdated as EventListener)
     }
-  }, [refetch, supabase, orders.length])
-
-  const testWebsiteRefresh = () => {
-    console.log("[v0] ========== WEBSITE TEST REFRESH CLICKED ==========")
-    console.log("[v0] Current orders:", orders.length)
-    console.log("[v0] Time:", new Date().toISOString())
-    refetch()
-    alert("✅ Website refresh triggered! Orders: " + orders.length)
-  }
+  }, [refetch])
 
   if (loading) {
     return (
@@ -273,33 +148,7 @@ export default function OrdersPage() {
         {/* Header */}
         <div className="mb-5">
           <h1 className="text-2xl md:text-3xl font-semibold text-gold">Order History</h1>
-          <p className="text-xs md:text-sm text-gray-400 mt-1">
-            Search, filter, download receipt, and reorder • Real-time updates enabled
-          </p>
-        </div>
-
-        <div className="flex gap-2 mb-4">
-          <Button onClick={testWebsiteRefresh} className="bg-green-600 hover:bg-green-700">
-            TEST WEBSITE REFRESH ({orders.length})
-          </Button>
-
-          <Button
-            onClick={async () => {
-              console.log("[v0] ========== WEBSITE API TEST ==========")
-              try {
-                const response = await fetch("/api/orders")
-                const data = await response.json()
-                console.log("[v0] Website API response:", data)
-                alert("✅ Website API working! Orders: " + (data.orders?.length || 0))
-              } catch (error) {
-                console.log("[v0] Website API error:", error)
-                alert("❌ Website API error: " + error)
-              }
-            }}
-            className="bg-blue-600 hover:bg-blue-700"
-          >
-            TEST WEBSITE API
-          </Button>
+          <p className="text-xs md:text-sm text-gray-400 mt-1">Search, filter, download receipt, and reorder.</p>
         </div>
 
         {/* Filters - simplified minimal UI */}
@@ -410,7 +259,9 @@ export default function OrdersPage() {
                       <div className="leading-tight">
                         <p className="font-medium">
                           <span className="text-gray-400">ID:</span>{" "}
-                          <span className="font-mono text-gold">{o.short_order_id || o.order_id}</span>
+                          <span className="font-mono text-gold">
+                            {o.short_order_id || o.order_id.slice(-8).toUpperCase()}
+                          </span>
                         </p>
                         <TimeBD iso={o.created_at} className="text-xs text-gray-400" />
                       </div>
@@ -428,11 +279,10 @@ export default function OrdersPage() {
                   <div className="mt-3 divide-y divide-white/5">
                     {items.map((it, idx) => {
                       const qty = typeof it.quantity === "number" ? it.quantity : 1
-                      const unit = typeof it.price_at_purchase === "number" ? it.price_at_purchase : 0
+                      const unit = typeof it.price === "number" ? it.price : 0 // Updated field name
                       const line = unit * qty
-                      const name = it.item_name || "Item"
-                      const img = it.item_image || "/sushi-thumbnail.png"
-                      const notes = (it as any).notes || (it as any).modifiers || it.item_description
+                      const name = it.product_name || "Item" // Updated field name
+                      const img = "/sushi-thumbnail.png" // Default image
 
                       return (
                         <div key={it.id ?? `item-${idx}`} className="py-2.5 flex items-start gap-3">
@@ -456,43 +306,39 @@ export default function OrdersPage() {
                               Qty {qty} • {"৳"}
                               {money(unit)} each
                             </p>
-                            {notes ? (
-                              <p className="text-xs text-gray-400 mt-0.5 line-clamp-1">Notes: {String(notes)}</p>
-                            ) : null}
                           </div>
                         </div>
                       )
                     })}
                   </div>
 
-                  {/* Totals – minimal grid */}
                   <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs md:text-sm">
                     <div className="flex justify-between">
                       <span className="text-gray-400">Subtotal</span>
                       <span>
                         {"৳"}
-                        {money(o.subtotal)}
+                        {money(o.subtotal || o.total_amount - (o.discount || 0))}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Discount</span>
+                      <span>
+                        {"৳"}
+                        {money(o.discount)}
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-400">VAT</span>
                       <span>
                         {"৳"}
-                        {money(o.vat)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Delivery</span>
-                      <span>
-                        {"৳"}
-                        {money(o.delivery_charge)}
+                        {money(o.vat || 0)}
                       </span>
                     </div>
                     <div className="flex justify-between font-semibold">
                       <span>Total</span>
                       <span className="text-yellow-400">
                         {"৳"}
-                        {money(o.total_price)}
+                        {money(o.total_amount)}
                       </span>
                     </div>
                   </div>

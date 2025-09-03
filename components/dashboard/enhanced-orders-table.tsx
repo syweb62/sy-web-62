@@ -9,7 +9,7 @@ import { createClient } from "@/lib/supabase"
 
 interface Order {
   order_id: string
-  short_order_id: string
+  short_order_id?: string // Added short_order_id field
   customer_name: string
   phone: string
   address: string
@@ -492,7 +492,11 @@ const EnhancedOrdersTable = ({
 
               <p className="text-gray-300 mb-2">Are you sure you want to {confirmationModal.actionLabel} this order?</p>
               <p className="text-gray-400 text-sm mb-8">
-                Order ID: <span className="font-mono font-semibold text-white">{confirmationModal.orderId}</span>
+                Order ID:{" "}
+                <span className="font-mono font-semibold text-white">
+                  {displayOrders.find((o) => getOrderId(o) === confirmationModal.orderId)?.short_order_id ||
+                    confirmationModal.orderId}
+                </span>
               </p>
 
               <div className="flex gap-3">
