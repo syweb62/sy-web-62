@@ -11,18 +11,18 @@ interface Order {
   order_id: string
   short_order_id?: string // Added short_order_id field
   customer_name: string
-  phone: string
+  phone_number: string // Updated to match database schema
   address: string
   payment_method: string
-  total_price: number
+  total_amount: number // Updated from total_price to total_amount to match database
   status: "confirmed" | "cancelled" | "pending" | "completed"
   created_at: string
   updated_at?: string
   special_instructions?: string
   order_items: Array<{
-    item_name: string
+    product_name: string // Updated from item_name to product_name
     quantity: number
-    price_at_purchase: number
+    price: number // Updated from price_at_purchase to price
   }>
 }
 
@@ -454,7 +454,7 @@ const EnhancedOrdersTable = ({
                       <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">CUSTOMER</p>
                       <div className="space-y-1">
                         <p className="text-white font-semibold">{order.customer_name}</p>
-                        <p className="text-gray-300 text-sm">• {order.phone}</p>
+                        <p className="text-gray-300 text-sm">• {order.phone_number}</p> {/* Updated field name */}
                         <p className="text-gray-400 text-sm truncate" title={order.address}>
                           📍 {order.address}
                         </p>
@@ -465,7 +465,9 @@ const EnhancedOrdersTable = ({
                   <div className="col-span-2">
                     <div className="space-y-2">
                       <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">TOTAL</p>
-                      <p className="text-xl font-bold text-white">৳{order.total_price.toFixed(2)}</p>
+                      <p className="text-xl font-bold text-white">
+                        ৳{(order.total_amount || 0).toFixed(2)} {/* Added null check and updated field name */}
+                      </p>
                       <p className="text-xs text-gray-400">
                         {order.order_items?.length || 0} item{(order.order_items?.length || 0) !== 1 ? "s" : ""}
                       </p>
