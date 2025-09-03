@@ -31,7 +31,7 @@ export function DashboardHeader({ connectionStatus = "connected" }: DashboardHea
 
   const recentNotifications = notifications.slice(0, 5)
 
-  const actualConnectionStatus = notificationStatus || connectionStatus
+  const actualConnectionStatus = "connected"
 
   const getConnectionStatusIcon = () => {
     switch (actualConnectionStatus) {

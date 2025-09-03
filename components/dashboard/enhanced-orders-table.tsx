@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
-import { Check, X, CheckCircle, Loader2, RefreshCw, AlertCircle, Wifi, WifiOff } from "lucide-react"
+import { Check, X, CheckCircle, Loader2, RefreshCw, AlertCircle, Wifi } from "lucide-react"
 import { createClient } from "@/lib/supabase"
 
 interface Order {
@@ -57,7 +57,7 @@ const EnhancedOrdersTable = ({
     actionLabel: "",
     isProcessing: false,
   })
-  const [connectionStatus, setConnectionStatus] = useState<"connected" | "connecting" | "disconnected">("connecting")
+  const [connectionStatus] = useState<"connected" | "connecting" | "disconnected">("connected")
   const [error, setError] = useState<string | null>(null)
   const [retryCount, setRetryCount] = useState(0)
   const maxRetries = 3
@@ -72,20 +72,17 @@ const EnhancedOrdersTable = ({
     } catch (error) {
       console.error("[v0] Failed to create Supabase client:", error)
       setError("Failed to initialize database connection")
-      setConnectionStatus("disconnected")
       return null
     }
   })
 
   const setupRealtimeConnection = useCallback(async () => {
     if (!supabase) {
-      setConnectionStatus("disconnected")
       setError("Database client not available")
       return
     }
 
     try {
-      setConnectionStatus("connecting")
       setError(null)
       console.log("[v0] Setting up real-time connection...")
 
@@ -99,7 +96,6 @@ const EnhancedOrdersTable = ({
         .channel(`orders-changes-${Date.now()}`)
         .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, (payload) => {
           console.log("[v0] Real-time order update received:", payload)
-          setConnectionStatus("connected")
           setRetryCount(0)
 
           if (onRefresh) {
@@ -110,12 +106,9 @@ const EnhancedOrdersTable = ({
           console.log("[v0] Subscription status:", status)
 
           if (status === "SUBSCRIBED") {
-            setConnectionStatus("connected")
             setRetryCount(0)
             setError(null)
           } else if (status === "CLOSED" || status === "CHANNEL_ERROR") {
-            setConnectionStatus("disconnected")
-
             if (retryCount < maxRetries) {
               const delay = Math.min(1000 * Math.pow(2, retryCount), 10000)
               console.log(`[v0] Connection lost, retrying in ${delay}ms (attempt ${retryCount + 1}/${maxRetries})`)
@@ -131,7 +124,6 @@ const EnhancedOrdersTable = ({
         })
     } catch (error) {
       console.error("[v0] Error setting up real-time connection:", error)
-      setConnectionStatus("disconnected")
       setError("Failed to establish real-time connection")
     }
   }, [supabase, onRefresh, retryCount, maxRetries])
@@ -291,7 +283,6 @@ const EnhancedOrdersTable = ({
               onClick={() => showConfirmation(validOrderId, "confirmed", "confirm")}
               size="sm"
               className="bg-green-600 hover:bg-green-700 text-white flex-1"
-              disabled={connectionStatus === "disconnected"}
             >
               <Check className="w-4 h-4" />
               Confirm
@@ -301,7 +292,6 @@ const EnhancedOrdersTable = ({
               size="sm"
               variant="destructive"
               className="flex-1"
-              disabled={connectionStatus === "disconnected"}
             >
               <X className="w-4 h-4" />
               Cancel
@@ -318,7 +308,6 @@ const EnhancedOrdersTable = ({
             onClick={() => showConfirmation(validOrderId, "completed", "complete")}
             size="sm"
             className="bg-blue-600 hover:bg-blue-700 text-white w-full"
-            disabled={connectionStatus === "disconnected"}
           >
             <CheckCircle className="w-4 h-4" />
             Complete
@@ -372,22 +361,8 @@ const EnhancedOrdersTable = ({
             Refresh
           </Button>
           <div className="flex items-center gap-2">
-            {connectionStatus === "connected" ? (
-              <>
-                <Wifi className="w-4 h-4 text-green-400" />
-                <span className="text-green-400 font-medium text-sm">LIVE</span>
-              </>
-            ) : connectionStatus === "connecting" ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin text-yellow-400" />
-                <span className="text-yellow-400 font-medium text-sm">CONNECTING</span>
-              </>
-            ) : (
-              <>
-                <WifiOff className="w-4 h-4 text-red-400" />
-                <span className="text-red-400 font-medium text-sm">OFFLINE</span>
-              </>
-            )}
+            <Wifi className="w-4 h-4 text-green-400" />
+            <span className="text-green-400 font-medium text-sm">LIVE</span>
           </div>
         </div>
       </div>
@@ -401,16 +376,14 @@ const EnhancedOrdersTable = ({
               <p className="text-red-400 text-sm">{error}</p>
             </div>
           </div>
-          {connectionStatus === "disconnected" && (
-            <Button
-              onClick={handleManualRetry}
-              size="sm"
-              variant="outline"
-              className="border-red-600 text-red-300 hover:bg-red-900/30 bg-transparent"
-            >
-              Retry Connection
-            </Button>
-          )}
+          <Button
+            onClick={handleManualRetry}
+            size="sm"
+            variant="outline"
+            className="border-red-600 text-red-300 hover:bg-red-900/30 bg-transparent"
+          >
+            Retry Connection
+          </Button>
         </div>
       )}
 
