@@ -31,16 +31,26 @@ const NotificationContext = createContext<NotificationContextType | undefined>(u
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [connectionStatus, setConnectionStatus] = useState<"connected" | "connecting" | "disconnected">("connecting")
-  const [supabase] = useState(() => createClient())
+  const supabaseRef = useRef(createClient())
   const channelRef = useRef<any>(null)
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const reconnectAttemptsRef = useRef(0)
   const maxReconnectAttempts = 5
+  const isConnectingRef = useRef(false)
 
   const setupConnection = useCallback(async () => {
+    if (isConnectingRef.current) {
+      console.log("[v0] Connection attempt already in progress, skipping...")
+      return
+    }
+
+    isConnectingRef.current = true
+
     try {
       setConnectionStatus("connecting")
       console.log("[v0] Setting up notifications connection...")
+
+      const supabase = supabaseRef.current
 
       const { data, error } = await supabase
         .from("notifications")
@@ -66,7 +76,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       setNotifications(formattedNotifications)
 
       if (channelRef.current) {
-        supabase.removeChannel(channelRef.current)
+        await supabase.removeChannel(channelRef.current)
+        channelRef.current = null
       }
 
       channelRef.current = supabase
@@ -129,9 +140,11 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           if (status === "SUBSCRIBED") {
             setConnectionStatus("connected")
             reconnectAttemptsRef.current = 0
+            isConnectingRef.current = false
             console.log("[v0] Notifications real-time connection established")
           } else if (status === "CLOSED" || status === "CHANNEL_ERROR") {
             setConnectionStatus("disconnected")
+            isConnectingRef.current = false
             console.log("[v0] Notifications connection lost, attempting reconnection...")
 
             if (reconnectAttemptsRef.current < maxReconnectAttempts) {
@@ -140,12 +153,15 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
                 reconnectAttemptsRef.current++
                 setupConnection()
               }, delay)
+            } else {
+              console.log("[v0] Max reconnection attempts reached, stopping reconnection")
             }
           }
         })
     } catch (error) {
       console.error("[v0] Error setting up notifications connection:", error)
       setConnectionStatus("disconnected")
+      isConnectingRef.current = false
 
       if (reconnectAttemptsRef.current < maxReconnectAttempts) {
         const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 30000)
@@ -155,17 +171,20 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         }, delay)
       }
     }
-  }, [supabase])
+  }, [])
 
   useEffect(() => {
     setupConnection()
 
     return () => {
+      isConnectingRef.current = false
       if (channelRef.current) {
-        supabase.removeChannel(channelRef.current)
+        supabaseRef.current.removeChannel(channelRef.current)
+        channelRef.current = null
       }
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current)
+        reconnectTimeoutRef.current = null
       }
     }
   }, [setupConnection])
@@ -182,96 +201,87 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     return () => clearInterval(cleanup)
   }, [])
 
-  const addNotification = useCallback(
-    async (notification: Omit<Notification, "id" | "timestamp" | "read">) => {
-      const newNotification: Notification = {
-        ...notification,
-        id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        timestamp: new Date(),
-        read: false,
-      }
+  const addNotification = useCallback(async (notification: Omit<Notification, "id" | "timestamp" | "read">) => {
+    const newNotification: Notification = {
+      ...notification,
+      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      timestamp: new Date(),
+      read: false,
+    }
 
+    try {
+      await supabaseRef.current.from("notifications").insert({
+        notification_id: newNotification.id,
+        type: newNotification.type,
+        message: `${newNotification.title}: ${newNotification.message}`,
+        is_read: false,
+      })
+    } catch (error) {
+      console.error("[v0] Error saving notification to database:", error)
+    }
+
+    setNotifications((prev) => [newNotification, ...prev.slice(0, 99)])
+
+    if (notification.priority === "high" || notification.type === "order") {
       try {
-        await supabase.from("notifications").insert({
-          notification_id: newNotification.id,
-          type: newNotification.type,
-          message: `${newNotification.title}: ${newNotification.message}`,
-          is_read: false,
+        const audio = new Audio("/sounds/notification.mp3")
+        audio.volume = 0.3
+        audio.play().catch(() => {
+          if ("Notification" in window && Notification.permission === "granted") {
+            new Notification(notification.title, {
+              body: notification.message,
+              icon: "/favicon.ico",
+              tag: newNotification.id,
+            })
+          }
         })
       } catch (error) {
-        console.error("[v0] Error saving notification to database:", error)
+        console.log("[v0] Audio notification not available:", error)
       }
+    }
+  }, [])
 
-      setNotifications((prev) => [newNotification, ...prev.slice(0, 99)])
+  const markAsRead = useCallback(async (id: string) => {
+    try {
+      await supabaseRef.current.from("notifications").update({ is_read: true }).eq("notification_id", id)
+    } catch (error) {
+      console.error("[v0] Error updating notification read status:", error)
+    }
 
-      if (notification.priority === "high" || notification.type === "order") {
-        try {
-          const audio = new Audio("/sounds/notification.mp3")
-          audio.volume = 0.3
-          audio.play().catch(() => {
-            if ("Notification" in window && Notification.permission === "granted") {
-              new Notification(notification.title, {
-                body: notification.message,
-                icon: "/favicon.ico",
-                tag: newNotification.id,
-              })
-            }
-          })
-        } catch (error) {
-          console.log("[v0] Audio notification not available:", error)
-        }
-      }
-    },
-    [supabase],
-  )
-
-  const markAsRead = useCallback(
-    async (id: string) => {
-      try {
-        await supabase.from("notifications").update({ is_read: true }).eq("notification_id", id)
-      } catch (error) {
-        console.error("[v0] Error updating notification read status:", error)
-      }
-
-      setNotifications((prev) =>
-        prev.map((notification) => (notification.id === id ? { ...notification, read: true } : notification)),
-      )
-    },
-    [supabase],
-  )
+    setNotifications((prev) =>
+      prev.map((notification) => (notification.id === id ? { ...notification, read: true } : notification)),
+    )
+  }, [])
 
   const markAllAsRead = useCallback(async () => {
     try {
-      await supabase.from("notifications").update({ is_read: true }).eq("is_read", false)
+      await supabaseRef.current.from("notifications").update({ is_read: true }).eq("is_read", false)
     } catch (error) {
       console.error("[v0] Error marking all notifications as read:", error)
     }
 
     setNotifications((prev) => prev.map((notification) => ({ ...notification, read: true })))
-  }, [supabase])
+  }, [])
 
-  const removeNotification = useCallback(
-    async (id: string) => {
-      try {
-        await supabase.from("notifications").delete().eq("notification_id", id)
-      } catch (error) {
-        console.error("[v0] Error removing notification from database:", error)
-      }
+  const removeNotification = useCallback(async (id: string) => {
+    try {
+      await supabaseRef.current.from("notifications").delete().eq("notification_id", id)
+    } catch (error) {
+      console.error("[v0] Error removing notification from database:", error)
+    }
 
-      setNotifications((prev) => prev.filter((notification) => notification.id !== id))
-    },
-    [supabase],
-  )
+    setNotifications((prev) => prev.filter((notification) => notification.id !== id))
+  }, [])
 
   const clearAll = useCallback(async () => {
     try {
-      await supabase.from("notifications").delete().neq("notification_id", "")
+      await supabaseRef.current.from("notifications").delete().neq("notification_id", "")
     } catch (error) {
       console.error("[v0] Error clearing all notifications:", error)
     }
 
     setNotifications([])
-  }, [supabase])
+  }, [])
 
   const unreadCount = notifications.filter((n) => !n.read).length
 
