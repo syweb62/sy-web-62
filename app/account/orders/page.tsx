@@ -38,15 +38,9 @@ export default function OrdersPage() {
   const [from, setFrom] = useState<string>("")
   const [to, setTo] = useState<string>("")
 
-  useEffect(() => {
-    if (!authLoading && !user) {
-      console.log("[v0] User not authenticated, redirecting to sign in")
-      router.push("/auth/signin")
-    }
-  }, [user, authLoading, router])
-
   const filtered: OrderHistoryItem[] = useMemo(() => {
     const list = Array.isArray(orders) ? orders : []
+    console.log("[v0] Filtering orders, total count:", list.length)
     const fromDate = parseDate(from)
     const toDate = parseDate(to)
     return list.filter((o) => {
@@ -138,7 +132,7 @@ export default function OrdersPage() {
     )
   }
 
-  if (!user) {
+  if (!user && (!orders || orders.length === 0)) {
     return (
       <main className="max-w-4xl mx-auto px-4 py-10 bg-darkBg text-white">
         <div className="rounded-lg border border-yellow-800/50 bg-yellow-900/15 p-5 text-center">
@@ -171,7 +165,9 @@ export default function OrdersPage() {
         {/* Header */}
         <div className="mb-5">
           <h1 className="text-2xl md:text-3xl font-semibold text-gold">Order History</h1>
-          <p className="text-xs md:text-sm text-gray-400 mt-1">Your personal order history • {user.email}</p>
+          <p className="text-xs md:text-sm text-gray-400 mt-1">
+            {user ? `Your personal order history • ${user.email}` : "Recent order history"}
+          </p>
         </div>
 
         {/* Filters - simplified minimal UI */}
