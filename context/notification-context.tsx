@@ -43,23 +43,12 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
     if (notification.priority === "high" || notification.type === "order") {
       try {
-        if ("Notification" in window) {
-          if (Notification.permission === "granted") {
-            new Notification(notification.title, {
-              body: notification.message,
-              icon: "/favicon.ico",
-              tag: newNotification.id,
-            })
-          } else if (Notification.permission === "default") {
-            const permission = await Notification.requestPermission()
-            if (permission === "granted") {
-              new Notification(notification.title, {
-                body: notification.message,
-                icon: "/favicon.ico",
-                tag: newNotification.id,
-              })
-            }
-          }
+        if ("Notification" in window && Notification.permission === "granted") {
+          new Notification(notification.title, {
+            body: notification.message,
+            icon: "/favicon.ico",
+            tag: newNotification.id,
+          })
         }
       } catch (error) {
         console.log("[v0] Browser notification not available:", error)
