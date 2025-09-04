@@ -1,8 +1,10 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { supabase } from "@/lib/supabase"
+import { createClient } from "@/lib/supabase/client"
 import { useAuth } from "@/hooks/use-auth"
+
+const supabase = createClient()
 
 export interface OrderHistoryItem {
   order_id: string
@@ -28,7 +30,7 @@ export interface OrderHistoryItem {
 }
 
 export function useOrderHistory() {
-  const { user } = useAuth()
+  const { user, session } = useAuth()
   const [orders, setOrders] = useState<OrderHistoryItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -37,119 +39,146 @@ export function useOrderHistory() {
     console.log("[v0] ========== FETCHING ORDER HISTORY ==========")
     console.log("[v0] User authenticated:", !!user)
     console.log("[v0] User email:", user?.email)
-    console.log("[v0] Fetch time:", new Date().toISOString())
+    console.log("[v0] Session exists:", !!session)
 
     try {
       setLoading(true)
       setError(null)
 
-      let filteredData: any[] = []
+      if (!user || !session) {
+        const storedCustomerInfo = localStorage.getItem("customerInfo")
+        if (storedCustomerInfo) {
+          const customerInfo = JSON.parse(storedCustomerInfo)
+          console.log("[v0] Using stored customer info for order lookup")
 
-      if (user?.email) {
-        // For authenticated users, only show their orders
-        if (user.email === "admin@sushiyaki.com") {
-          // Admin can see all orders
           const { data, error: fetchError } = await supabase
             .from("orders")
-            .select("*")
+            .select(`
+              *,
+              order_items (
+                item_id,
+                quantity,
+                price,
+                product_name
+              )
+            `)
+            .eq("phone_number", customerInfo.phone)
             .order("created_at", { ascending: false })
-            .limit(50)
+            .limit(10)
 
           if (fetchError) {
-            console.error("[v0] Error fetching orders:", fetchError)
+            console.error("[v0] Error fetching orders by phone:", fetchError)
             setError(`Failed to load order history: ${fetchError.message}`)
             return
           }
 
-          filteredData = data || []
-          console.log("[v0] Admin access - showing all orders:", filteredData.length)
-        } else {
-          // Regular users - filter by their email or phone
-          const { data, error: fetchError } = await supabase
-            .from("orders")
-            .select("*")
-            .or(`customer_name.ilike.%${user.email.split("@")[0]}%,phone_number.eq.${user.phone || ""}`)
-            .order("created_at", { ascending: false })
-            .limit(50)
+          const filteredData = data || []
+          console.log("[v0] Orders found by phone:", filteredData.length)
 
-          if (fetchError) {
-            console.error("[v0] Error fetching user orders:", fetchError)
-            setError(`Failed to load order history: ${fetchError.message}`)
-            return
-          }
+          const formattedOrders: OrderHistoryItem[] = filteredData.map((order) => ({
+            order_id: order.order_id,
+            short_order_id: order.short_order_id,
+            customer_name: order.customer_name || "Unknown",
+            phone_number: order.phone_number || "",
+            address: order.address || "",
+            payment_method: order.payment_method || "cash",
+            status: order.status,
+            total_amount: order.total_amount || 0,
+            discount: order.discount,
+            created_at: order.created_at,
+            items: (order.order_items || []).map((item: any) => ({
+              id: item.item_id,
+              quantity: item.quantity,
+              price: item.price,
+              product_name: item.product_name,
+            })),
+          }))
 
-          filteredData = data || []
-          console.log("[v0] User-specific orders found:", filteredData.length)
-        }
-      } else {
-        // For non-authenticated users, try to match by stored phone number only
-        const recentOrderInfo = localStorage.getItem("recent_order_info")
-        if (recentOrderInfo) {
-          try {
-            const orderInfo = JSON.parse(recentOrderInfo)
-            if (orderInfo.phone) {
-              const { data, error: fetchError } = await supabase
-                .from("orders")
-                .select("*")
-                .eq("phone_number", orderInfo.phone)
-                .order("created_at", { ascending: false })
-                .limit(20)
-
-              if (fetchError) {
-                console.error("[v0] Error fetching orders by phone:", fetchError)
-                setError(`Failed to load order history: ${fetchError.message}`)
-                return
-              }
-
-              filteredData = data || []
-              console.log("[v0] Orders found by stored phone:", filteredData.length)
-            }
-          } catch (e) {
-            console.log("[v0] Error parsing stored order info")
-          }
-        }
-
-        // If no stored info, show empty results (don't show other users' orders)
-        if (!recentOrderInfo) {
-          console.log("[v0] No authentication or stored info - showing empty results")
-          setOrders([])
-          setLoading(false)
+          setOrders(formattedOrders)
           return
         }
-      }
 
-      console.log("[v0] Database query result:", { data: filteredData.length, error: null })
-
-      if (!filteredData || filteredData.length === 0) {
-        console.log("[v0] No orders found for this user")
+        console.log("[v0] No authenticated user and no stored customer info - showing empty results")
         setOrders([])
+        setLoading(false)
         return
       }
 
-      const formattedOrders: OrderHistoryItem[] = []
+      let filteredData: any[] = []
 
-      for (const order of filteredData) {
-        const { data: orderItems } = await supabase.from("order_items").select("*").eq("order_id", order.order_id)
+      if (user.email === "admin@sushiyaki.com") {
+        const { data, error: fetchError } = await supabase
+          .from("orders")
+          .select(`
+            *,
+            order_items (
+              item_id,
+              quantity,
+              price,
+              product_name
+            )
+          `)
+          .order("created_at", { ascending: false })
+          .limit(50)
 
-        formattedOrders.push({
-          order_id: order.order_id,
-          short_order_id: order.short_order_id,
-          customer_name: order.customer_name || "Unknown",
-          phone_number: order.phone_number || "",
-          address: order.address || "",
-          payment_method: order.payment_method || "cash",
-          status: order.status,
-          total_amount: order.total_amount || 0,
-          discount: order.discount,
-          created_at: order.created_at,
-          items: (orderItems || []).map((item: any) => ({
-            id: item.item_id,
-            quantity: item.quantity,
-            price: item.price,
-            product_name: item.product_name,
-          })),
-        })
+        if (fetchError) {
+          console.error("[v0] Error fetching orders:", fetchError)
+          setError(`Failed to load order history: ${fetchError.message}`)
+          return
+        }
+
+        filteredData = data || []
+        console.log("[v0] Admin access - showing all orders:", filteredData.length)
+      } else {
+        const { data: profile } = await supabase.from("profiles").select("phone").eq("email", user.email).single()
+        const userPhone = profile?.phone || ""
+
+        const { data, error: fetchError } = await supabase
+          .from("orders")
+          .select(`
+            *,
+            order_items (
+              item_id,
+              quantity,
+              price,
+              product_name
+            )
+          `)
+          .or(`customer_name.eq.${user.email},phone_number.eq.${userPhone}`)
+          .order("created_at", { ascending: false })
+          .limit(20)
+
+        if (fetchError) {
+          console.error("[v0] Error fetching user orders:", fetchError)
+          setError(`Failed to load order history: ${fetchError.message}`)
+          return
+        }
+
+        filteredData = (data || []).filter(
+          (order) => order.customer_name === user.email || (userPhone && order.phone_number === userPhone),
+        )
+
+        console.log("[v0] User-specific orders found:", filteredData.length)
       }
+
+      const formattedOrders: OrderHistoryItem[] = filteredData.map((order) => ({
+        order_id: order.order_id,
+        short_order_id: order.short_order_id,
+        customer_name: order.customer_name || "Unknown",
+        phone_number: order.phone_number || "",
+        address: order.address || "",
+        payment_method: order.payment_method || "cash",
+        status: order.status,
+        total_amount: order.total_amount || 0,
+        discount: order.discount,
+        created_at: order.created_at,
+        items: (order.order_items || []).map((item: any) => ({
+          id: item.item_id,
+          quantity: item.quantity,
+          price: item.price,
+          product_name: item.product_name,
+        })),
+      }))
 
       console.log("[v0] Final formatted orders count:", formattedOrders.length)
       if (formattedOrders.length > 0) {
@@ -186,7 +215,7 @@ export function useOrderHistory() {
 
   useEffect(() => {
     fetchOrders()
-  }, [])
+  }, [user?.email, session])
 
   return {
     orders,
