@@ -251,6 +251,16 @@ export default function Cart() {
       })
 
       localStorage.setItem(
+        "customerInfo",
+        JSON.stringify({
+          name: formData.name.trim(),
+          phone: formData.phone.trim(),
+          email: formData.name.trim(), // Use name as email fallback for matching
+          timestamp: new Date().toISOString(),
+        }),
+      )
+
+      localStorage.setItem(
         "recent_order_info",
         JSON.stringify({
           name: formData.name.trim(),

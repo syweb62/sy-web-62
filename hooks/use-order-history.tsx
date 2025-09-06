@@ -50,8 +50,7 @@ export function useOrderHistory() {
 
       let filteredData: any[] = []
 
-      // Check if user is admin
-      if (user?.email === "admin@sushiyaki.com") {
+      if (user?.email === "admin@sushiyaki.com" || user?.email === "jahid@sushiyaki.com") {
         console.log("[v0] Admin user detected - fetching all orders")
         const { data, error: fetchError } = await supabase
           .from("orders")
@@ -75,80 +74,54 @@ export function useOrderHistory() {
 
         filteredData = data || []
         console.log("[v0] Admin access - showing all orders:", filteredData.length)
-      } else {
-        // For regular users (authenticated or not), use phone number matching
-        let customerPhone = ""
-        let customerEmail = ""
+      } else if (user && session) {
+        console.log("[v0] Authenticated user - fetching user-specific orders")
 
-        if (user && session) {
-          // Authenticated user - get their profile info
-          customerEmail = user.email || ""
-          console.log("[v0] Authenticated user, email:", customerEmail)
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("phone, full_name")
+          .eq("email", user.email)
+          .single()
 
-          // Try to get phone from profile
-          const { data: profile } = await supabase.from("profiles").select("phone").eq("email", customerEmail).single()
+        console.log("[v0] User profile:", profile)
 
-          customerPhone = profile?.phone || ""
-          console.log("[v0] User profile phone:", customerPhone)
-        } else {
-          // Non-authenticated user - check localStorage
-          const storedCustomerInfo = localStorage.getItem("customerInfo")
-          if (storedCustomerInfo) {
-            try {
-              const customerInfo = JSON.parse(storedCustomerInfo)
-              customerPhone = customerInfo.phone || ""
-              customerEmail = customerInfo.email || ""
-              console.log("[v0] Using stored customer info - phone:", customerPhone, "email:", customerEmail)
-            } catch (e) {
-              console.error("[v0] Error parsing stored customer info:", e)
-            }
-          }
-        }
+        const { data, error: fetchError } = await supabase
+          .from("orders")
+          .select(`
+            *,
+            order_items (
+              item_id,
+              quantity,
+              price,
+              product_name
+            )
+          `)
+          .order("created_at", { ascending: false })
+          .limit(50)
 
-        // If we have either phone or email, fetch orders
-        if (customerPhone || customerEmail) {
-          let query = supabase.from("orders").select(`
-              *,
-              order_items (
-                item_id,
-                quantity,
-                price,
-                product_name
-              )
-            `)
-
-          // Build filter conditions
-          const conditions = []
-          if (customerPhone) conditions.push(`phone_number.eq.${customerPhone}`)
-          if (customerEmail) conditions.push(`customer_name.eq.${customerEmail}`)
-
-          if (conditions.length > 0) {
-            query = query.or(conditions.join(","))
-          }
-
-          const { data, error: fetchError } = await query.order("created_at", { ascending: false }).limit(20)
-
-          if (fetchError) {
-            console.error("[v0] Error fetching user orders:", fetchError)
-            setError(`Failed to load order history: ${fetchError.message}`)
-            return
-          }
-
-          // Additional client-side filtering for security
-          filteredData = (data || []).filter((order) => {
-            const phoneMatch = customerPhone && order.phone_number === customerPhone
-            const emailMatch = customerEmail && order.customer_name === customerEmail
-            return phoneMatch || emailMatch
-          })
-
-          console.log("[v0] User-specific orders found:", filteredData.length)
-          console.log("[v0] Filter criteria - phone:", customerPhone, "email:", customerEmail)
-        } else {
-          console.log("[v0] No customer identification available - showing empty results")
-          setOrders([])
-          setLoading(false)
+        if (fetchError) {
+          console.error("[v0] Error fetching orders:", fetchError)
+          setError(`Failed to load order history: ${fetchError.message}`)
           return
         }
+
+        filteredData = (data || []).filter((order) => {
+          const emailMatch =
+            order.customer_name && order.customer_name.toLowerCase().includes(user.email?.toLowerCase() || "")
+          const phoneMatch = profile?.phone && order.phone_number === profile.phone
+          const nameMatch = profile?.full_name && order.customer_name?.toLowerCase() === profile.full_name.toLowerCase()
+
+          return emailMatch || phoneMatch || nameMatch
+        })
+
+        console.log("[v0] User-specific orders found:", filteredData.length)
+        console.log("[v0] Filter criteria - email:", user.email, "phone:", profile?.phone, "name:", profile?.full_name)
+      } else {
+        console.log("[v0] User not authenticated - please sign in to view order history")
+        setOrders([])
+        setLoading(false)
+        setError("Please sign in to view your order history")
+        return
       }
 
       const formattedOrders: OrderHistoryItem[] = filteredData.map((order) => ({

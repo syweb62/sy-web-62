@@ -6,51 +6,39 @@ export async function updateSession(request: NextRequest) {
     request,
   })
 
-  try {
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll() {
-            return request.cookies.getAll()
-          },
-          setAll(cookiesToSet) {
-            cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
-            supabaseResponse = NextResponse.next({
-              request,
-            })
-            cookiesToSet.forEach(({ name, value, options }) => supabaseResponse.cookies.set(name, value, options))
-          },
+  // With Fluid compute, don't put this client in a global environment
+  // variable. Always create a new one on each request.
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll()
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
+          supabaseResponse = NextResponse.next({
+            request,
+          })
+          cookiesToSet.forEach(({ name, value, options }) => supabaseResponse.cookies.set(name, value, options))
         },
       },
-    )
+    },
+  )
 
-    const {
-      data: { user },
-      error,
-    } = await supabase.auth.getUser()
+  // Do not run code between createServerClient and
+  // supabase.auth.getUser(). A simple mistake could make it very hard to debug
+  // issues with users being randomly logged out.
 
-    if (error) {
-      console.warn("[v0] Auth session error:", error.message)
-    }
+  // IMPORTANT: If you remove getUser() and you use server-side rendering
+  // with the Supabase client, your users may be randomly logged out.
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
-    // Uncomment if you want to protect specific routes
-    /*
-    if (
-      request.nextUrl.pathname.startsWith("/dashboard") &&
-      !user &&
-      !request.nextUrl.pathname.startsWith("/auth")
-    ) {
-      const url = request.nextUrl.clone()
-      url.pathname = "/auth/signin"
-      return NextResponse.redirect(url)
-    }
-    */
-  } catch (error) {
-    console.warn("[v0] Supabase middleware error:", error)
-    // Continue without session refresh if there's an error
-  }
+  // Users can still access order history with stored customer info
 
+  // IMPORTANT: You *must* return the supabaseResponse object as it is.
   return supabaseResponse
 }
