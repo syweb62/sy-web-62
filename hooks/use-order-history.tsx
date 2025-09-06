@@ -48,8 +48,17 @@ export function useOrderHistory() {
       setLoading(true)
       setError(null)
 
+      if (!user || !session) {
+        console.log("[v0] User not authenticated - please sign in to view order history")
+        setOrders([])
+        setLoading(false)
+        setError("Please sign in to view your order history")
+        return
+      }
+
       let filteredData: any[] = []
 
+      // Admin users see all orders
       if (user?.email === "admin@sushiyaki.com" || user?.email === "jahid@sushiyaki.com") {
         console.log("[v0] Admin user detected - fetching all orders")
         const { data, error: fetchError } = await supabase
@@ -64,7 +73,7 @@ export function useOrderHistory() {
             )
           `)
           .order("created_at", { ascending: false })
-          .limit(50)
+          .limit(100)
 
         if (fetchError) {
           console.error("[v0] Error fetching admin orders:", fetchError)
@@ -74,16 +83,24 @@ export function useOrderHistory() {
 
         filteredData = data || []
         console.log("[v0] Admin access - showing all orders:", filteredData.length)
-      } else if (user && session) {
+      } else {
         console.log("[v0] Authenticated user - fetching user-specific orders")
 
         const { data: profile } = await supabase
           .from("profiles")
-          .select("phone, full_name")
-          .eq("email", user.email)
+          .select("phone, full_name, email")
+          .eq("id", user.id)
           .single()
 
         console.log("[v0] User profile:", profile)
+
+        if (!profile) {
+          console.log("[v0] No profile found for user")
+          setOrders([])
+          setLoading(false)
+          setError("Profile not found. Please complete your profile setup.")
+          return
+        }
 
         const { data, error: fetchError } = await supabase
           .from("orders")
@@ -96,32 +113,19 @@ export function useOrderHistory() {
               product_name
             )
           `)
+          .or(`phone_number.eq.${profile.phone},customer_name.ilike.%${profile.email}%`)
           .order("created_at", { ascending: false })
           .limit(50)
 
         if (fetchError) {
-          console.error("[v0] Error fetching orders:", fetchError)
+          console.error("[v0] Error fetching user orders:", fetchError)
           setError(`Failed to load order history: ${fetchError.message}`)
           return
         }
 
-        filteredData = (data || []).filter((order) => {
-          const emailMatch =
-            order.customer_name && order.customer_name.toLowerCase().includes(user.email?.toLowerCase() || "")
-          const phoneMatch = profile?.phone && order.phone_number === profile.phone
-          const nameMatch = profile?.full_name && order.customer_name?.toLowerCase() === profile.full_name.toLowerCase()
-
-          return emailMatch || phoneMatch || nameMatch
-        })
-
+        filteredData = data || []
         console.log("[v0] User-specific orders found:", filteredData.length)
-        console.log("[v0] Filter criteria - email:", user.email, "phone:", profile?.phone, "name:", profile?.full_name)
-      } else {
-        console.log("[v0] User not authenticated - please sign in to view order history")
-        setOrders([])
-        setLoading(false)
-        setError("Please sign in to view your order history")
-        return
+        console.log("[v0] Filter criteria - phone:", profile.phone, "email:", profile.email)
       }
 
       const formattedOrders: OrderHistoryItem[] = filteredData.map((order) => ({
