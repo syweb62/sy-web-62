@@ -42,6 +42,7 @@ export function useOrderHistory() {
     console.log("[v0] ========== FETCHING ORDER HISTORY ==========")
     console.log("[v0] User authenticated:", !!user)
     console.log("[v0] User email:", user?.email)
+    console.log("[v0] User ID:", user?.id)
     console.log("[v0] Session exists:", !!session)
 
     try {
@@ -84,23 +85,7 @@ export function useOrderHistory() {
         filteredData = data || []
         console.log("[v0] Admin access - showing all orders:", filteredData.length)
       } else {
-        console.log("[v0] Authenticated user - fetching user-specific orders")
-
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("phone, full_name, email")
-          .eq("id", user.id)
-          .single()
-
-        console.log("[v0] User profile:", profile)
-
-        if (!profile) {
-          console.log("[v0] No profile found for user")
-          setOrders([])
-          setLoading(false)
-          setError("Profile not found. Please complete your profile setup.")
-          return
-        }
+        console.log("[v0] Authenticated user - fetching user-specific orders by user_id")
 
         const { data, error: fetchError } = await supabase
           .from("orders")
@@ -113,7 +98,7 @@ export function useOrderHistory() {
               product_name
             )
           `)
-          .or(`phone_number.eq.${profile.phone},customer_name.ilike.%${profile.email}%`)
+          .eq("user_id", user.id)
           .order("created_at", { ascending: false })
           .limit(50)
 
@@ -125,7 +110,7 @@ export function useOrderHistory() {
 
         filteredData = data || []
         console.log("[v0] User-specific orders found:", filteredData.length)
-        console.log("[v0] Filter criteria - phone:", profile.phone, "email:", profile.email)
+        console.log("[v0] Filter criteria - user_id:", user.id)
       }
 
       const formattedOrders: OrderHistoryItem[] = filteredData.map((order) => ({
@@ -180,11 +165,25 @@ export function useOrderHistory() {
       .channel("order-changes")
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "orders" }, (payload) => {
         console.log("[v0] Real-time order update received:", payload)
-        fetchOrders() // Refresh orders when any order is updated
+        // Only refresh if it's the current user's order or admin
+        if (
+          payload.new.user_id === user?.id ||
+          user?.email === "admin@sushiyaki.com" ||
+          user?.email === "jahid@sushiyaki.com"
+        ) {
+          fetchOrders()
+        }
       })
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "orders" }, (payload) => {
         console.log("[v0] Real-time new order received:", payload)
-        fetchOrders() // Refresh orders when new order is created
+        // Only refresh if it's the current user's order or admin
+        if (
+          payload.new.user_id === user?.id ||
+          user?.email === "admin@sushiyaki.com" ||
+          user?.email === "jahid@sushiyaki.com"
+        ) {
+          fetchOrders()
+        }
       })
       .subscribe((status) => {
         console.log("[v0] Real-time subscription status:", status)
@@ -194,7 +193,7 @@ export function useOrderHistory() {
       console.log("[v0] Cleaning up real-time subscription")
       subscription.unsubscribe()
     }
-  }, [])
+  }, [user?.id, user?.email])
 
   const reorder = async (order: OrderHistoryItem) => {
     console.log("Reordering:", order)

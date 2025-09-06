@@ -200,6 +200,7 @@ export default function Cart() {
         status: "pending" as const,
         total_amount: finalTotal,
         discount: discountAmount,
+        user_id: user?.id || null, // Link order to authenticated user
       }
 
       console.log("[v0] Order calculation breakdown:", {
@@ -256,6 +257,7 @@ export default function Cart() {
           name: formData.name.trim(),
           phone: formData.phone.trim(),
           email: formData.name.trim(), // Use name as email fallback for matching
+          user_id: user?.id || null, // Store user_id for order history
           timestamp: new Date().toISOString(),
         }),
       )
