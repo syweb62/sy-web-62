@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Search, Plus, Edit, Trash2, RefreshCw, AlertTriangle } from "lucide-react"
-import { createClient } from "@/lib/supabase"
+import { createClient } from "@/lib/supabase/client"
 import { toast } from "@/hooks/use-toast"
 import { LoadingSpinner } from "@/components/loading-spinner"
 import Link from "next/link"
@@ -46,15 +46,26 @@ export default function MenuManagementPage() {
 
   const fetchMenuItems = useCallback(async () => {
     try {
+      console.log("[v0] Fetching menu items...")
+
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.getUser()
+      console.log("[v0] Current user:", user?.id, "Auth error:", authError)
+
       const { data, error } = await supabase.from("menu_items").select("*").order("created_at", { ascending: false })
+
+      console.log("[v0] Menu items fetch result - data count:", data?.length, "error:", error)
 
       if (error) throw error
 
       setMenuItems(data || [])
       const uniqueCategories = [...new Set(data?.map((item) => item.category).filter(Boolean) || [])]
       setCategories(uniqueCategories)
+      console.log("[v0] Menu items loaded successfully:", data?.length, "categories:", uniqueCategories.length)
     } catch (error) {
-      console.error("Error fetching menu items:", error)
+      console.error("[v0] Error fetching menu items:", error)
       toast({
         title: "Error",
         description: "Failed to load menu items",
@@ -121,29 +132,95 @@ export default function MenuManagementPage() {
     }
   }, [fetchMenuItems, supabase])
 
-  const deleteMenuItem = useCallback(async (menu_id: string, itemName: string) => {
-    console.log("[v0] Delete button clicked for item:", itemName, "with menu_id:", menu_id)
-    setDeleteConfirmation({
-      isOpen: true,
-      itemId: menu_id,
-      itemName: itemName,
-    })
-  }, [])
+  const deleteMenuItem = useCallback(
+    async (menu_id: string, itemName: string) => {
+      try {
+        console.log("[v0] Delete button clicked for item:", itemName, "with menu_id:", menu_id)
+        console.log("[v0] Current user authentication status...")
+
+        const {
+          data: { user },
+          error: authError,
+        } = await supabase.auth.getUser()
+        console.log("[v0] Current user:", user?.id, "Auth error:", authError)
+
+        if (!user) {
+          console.error("[v0] No authenticated user found")
+          toast({
+            title: "Authentication Error",
+            description: "Please log in to delete menu items",
+            variant: "destructive",
+          })
+          return
+        }
+
+        console.log("[v0] Setting delete confirmation dialog state")
+
+        setDeleteConfirmation({
+          isOpen: true,
+          itemId: menu_id,
+          itemName: itemName,
+        })
+
+        console.log("[v0] Delete confirmation dialog should now be open")
+      } catch (error) {
+        console.error("[v0] Error in deleteMenuItem function:", error)
+        toast({
+          title: "Error",
+          description: "Failed to open delete confirmation",
+          variant: "destructive",
+        })
+      }
+    },
+    [supabase],
+  )
 
   const handleConfirmDelete = useCallback(async () => {
     const { itemId, itemName } = deleteConfirmation
-    console.log("[v0] Delete confirmed, proceeding with deletion for:", itemName)
+    console.log("[v0] Delete confirmed, proceeding with deletion for:", itemName, "ID:", itemId)
+
+    if (!itemId || !itemName) {
+      console.error("[v0] Missing itemId or itemName for deletion")
+      toast({
+        title: "Error",
+        description: "Invalid item data for deletion",
+        variant: "destructive",
+      })
+      return
+    }
 
     setIsDeleting(true)
 
     try {
+      console.log("[v0] Checking authentication before delete...")
+
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.getUser()
+      console.log("[v0] Current user for delete:", user?.id, "Auth error:", authError)
+
+      if (!user) {
+        console.error("[v0] No authenticated user found for delete operation")
+        toast({
+          title: "Authentication Error",
+          description: "Please log in to delete menu items",
+          variant: "destructive",
+        })
+        return
+      }
+
       console.log("[v0] Calling Supabase delete for menu_id:", itemId)
-      const { error } = await supabase.from("menu_items").delete().eq("menu_id", itemId)
+      const { error, data } = await supabase.from("menu_items").delete().eq("menu_id", itemId)
+
+      console.log("[v0] Supabase delete response - error:", error, "data:", data)
 
       if (error) {
-        console.log("[v0] Supabase delete error:", error)
+        console.error("[v0] Supabase delete error:", error)
         throw error
       }
+
+      setMenuItems((prev) => prev.filter((item) => item.menu_id !== itemId))
 
       console.log("[v0] Delete successful for:", itemName)
       toast({
@@ -152,11 +229,11 @@ export default function MenuManagementPage() {
       })
 
       setDeleteConfirmation({ isOpen: false, itemId: "", itemName: "" })
-    } catch (error) {
+    } catch (error: any) {
       console.error("[v0] Error deleting menu item:", error)
       toast({
         title: "Error",
-        description: "Failed to delete menu item",
+        description: `Failed to delete ${itemName}: ${error.message || "Unknown error"}`,
         variant: "destructive",
       })
     } finally {
@@ -172,18 +249,43 @@ export default function MenuManagementPage() {
   const toggleAvailability = useCallback(
     async (menu_id: string, currentStatus: boolean, itemName: string) => {
       try {
+        console.log("[v0] Toggling availability for:", itemName, "from", currentStatus, "to", !currentStatus)
+
+        const {
+          data: { user },
+          error: authError,
+        } = await supabase.auth.getUser()
+        console.log("[v0] Current user for toggle:", user?.id, "Auth error:", authError)
+
+        if (!user) {
+          console.error("[v0] No authenticated user found for toggle operation")
+          toast({
+            title: "Authentication Error",
+            description: "Please log in to update menu items",
+            variant: "destructive",
+          })
+          return
+        }
+
         const { error } = await supabase.from("menu_items").update({ available: !currentStatus }).eq("menu_id", menu_id)
+
+        console.log("[v0] Toggle availability result - error:", error)
+
         if (error) throw error
+
+        setMenuItems((prev) =>
+          prev.map((item) => (item.menu_id === menu_id ? { ...item, available: !currentStatus } : item)),
+        )
 
         toast({
           title: "Success",
           description: `${itemName} ${!currentStatus ? "enabled" : "disabled"} successfully`,
         })
-      } catch (error) {
-        console.error("Error updating availability:", error)
+      } catch (error: any) {
+        console.error("[v0] Error updating availability:", error)
         toast({
           title: "Error",
-          description: "Failed to update menu item",
+          description: `Failed to update menu item: ${error.message || "Unknown error"}`,
           variant: "destructive",
         })
       }
@@ -389,9 +491,22 @@ export default function MenuManagementPage() {
                     variant="outline"
                     size="sm"
                     className="text-red-400 hover:text-red-300 bg-red-900/20 border-red-600"
-                    onClick={() => {
-                      console.log("[v0] Delete button clicked for:", item.name, item.menu_id)
-                      deleteMenuItem(item.menu_id, item.name)
+                    onClick={(e) => {
+                      try {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        console.log("[v0] Delete button onClick triggered for:", item.name, item.menu_id)
+                        console.log("[v0] Button element:", e.currentTarget)
+                        console.log("[v0] Event type:", e.type)
+                        deleteMenuItem(item.menu_id, item.name)
+                      } catch (error) {
+                        console.error("[v0] Error in delete button onClick:", error)
+                        toast({
+                          title: "Error",
+                          description: "Failed to initiate delete process",
+                          variant: "destructive",
+                        })
+                      }
                     }}
                   >
                     <Trash2 size={14} />
