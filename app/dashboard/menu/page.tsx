@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Search, Plus, Edit, Trash2, RefreshCw } from "lucide-react"
+import { Search, Plus, Edit, Trash2, RefreshCw, AlertTriangle } from "lucide-react"
 import { createClient } from "@/lib/supabase"
 import { toast } from "@/hooks/use-toast"
 import { LoadingSpinner } from "@/components/loading-spinner"
@@ -33,6 +33,16 @@ export default function MenuManagementPage() {
   const [statusFilter, setStatusFilter] = useState("all")
   const [categories, setCategories] = useState<string[]>([])
   const [supabase] = useState(() => createClient())
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{
+    isOpen: boolean
+    itemId: string
+    itemName: string
+  }>({
+    isOpen: false,
+    itemId: "",
+    itemName: "",
+  })
+  const [isDeleting, setIsDeleting] = useState(false)
 
   const fetchMenuItems = useCallback(async () => {
     try {
@@ -111,48 +121,58 @@ export default function MenuManagementPage() {
     }
   }, [fetchMenuItems, supabase])
 
-  const deleteMenuItem = useCallback(
-    async (menu_id: string, itemName: string) => {
-      // Changed id parameter to menu_id
-      console.log("[v0] Delete button clicked for item:", itemName, "with menu_id:", menu_id)
+  const deleteMenuItem = useCallback(async (menu_id: string, itemName: string) => {
+    console.log("[v0] Delete button clicked for item:", itemName, "with menu_id:", menu_id)
+    setDeleteConfirmation({
+      isOpen: true,
+      itemId: menu_id,
+      itemName: itemName,
+    })
+  }, [])
 
-      if (!confirm(`Are you sure you want to delete "${itemName}"?`)) {
-        console.log("[v0] Delete cancelled by user")
-        return
+  const handleConfirmDelete = useCallback(async () => {
+    const { itemId, itemName } = deleteConfirmation
+    console.log("[v0] Delete confirmed, proceeding with deletion for:", itemName)
+
+    setIsDeleting(true)
+
+    try {
+      console.log("[v0] Calling Supabase delete for menu_id:", itemId)
+      const { error } = await supabase.from("menu_items").delete().eq("menu_id", itemId)
+
+      if (error) {
+        console.log("[v0] Supabase delete error:", error)
+        throw error
       }
 
-      console.log("[v0] Delete confirmed, proceeding with deletion...")
+      console.log("[v0] Delete successful for:", itemName)
+      toast({
+        title: "Success",
+        description: `${itemName} deleted successfully`,
+      })
 
-      try {
-        console.log("[v0] Calling Supabase delete for menu_id:", menu_id)
-        const { error } = await supabase.from("menu_items").delete().eq("menu_id", menu_id) // Changed id to menu_id
-        if (error) {
-          console.log("[v0] Supabase delete error:", error)
-          throw error
-        }
+      setDeleteConfirmation({ isOpen: false, itemId: "", itemName: "" })
+    } catch (error) {
+      console.error("[v0] Error deleting menu item:", error)
+      toast({
+        title: "Error",
+        description: "Failed to delete menu item",
+        variant: "destructive",
+      })
+    } finally {
+      setIsDeleting(false)
+    }
+  }, [deleteConfirmation, supabase])
 
-        console.log("[v0] Delete successful for:", itemName)
-        toast({
-          title: "Success",
-          description: `${itemName} deleted successfully`,
-        })
-      } catch (error) {
-        console.error("[v0] Error deleting menu item:", error)
-        toast({
-          title: "Error",
-          description: "Failed to delete menu item",
-          variant: "destructive",
-        })
-      }
-    },
-    [supabase],
-  )
+  const handleCancelDelete = useCallback(() => {
+    console.log("[v0] Delete cancelled by user")
+    setDeleteConfirmation({ isOpen: false, itemId: "", itemName: "" })
+  }, [])
 
   const toggleAvailability = useCallback(
     async (menu_id: string, currentStatus: boolean, itemName: string) => {
-      // Changed id parameter to menu_id
       try {
-        const { error } = await supabase.from("menu_items").update({ available: !currentStatus }).eq("menu_id", menu_id) // Changed id to menu_id
+        const { error } = await supabase.from("menu_items").update({ available: !currentStatus }).eq("menu_id", menu_id)
         if (error) throw error
 
         toast({
@@ -393,6 +413,57 @@ export default function MenuManagementPage() {
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {/* Modern Delete Confirmation Dialog */}
+      {deleteConfirmation.isOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-gray-900 border border-gray-700 rounded-lg p-6 max-w-md w-full mx-4 shadow-2xl">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex-shrink-0 w-10 h-10 bg-red-900/30 rounded-full flex items-center justify-center">
+                <AlertTriangle className="w-5 h-5 text-red-400" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-white">Delete Menu Item</h3>
+                <p className="text-sm text-gray-400">This action cannot be undone</p>
+              </div>
+            </div>
+
+            <p className="text-gray-300 mb-6">
+              Are you sure you want to delete{" "}
+              <span className="font-semibold text-white">"{deleteConfirmation.itemName}"</span>? This will permanently
+              remove the item from your menu.
+            </p>
+
+            <div className="flex gap-3 justify-end">
+              <Button
+                variant="outline"
+                onClick={handleCancelDelete}
+                disabled={isDeleting}
+                className="border-gray-600 text-gray-300 hover:bg-gray-700 bg-transparent"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleConfirmDelete}
+                disabled={isDeleting}
+                className="bg-red-600 hover:bg-red-700 text-white"
+              >
+                {isDeleting ? (
+                  <>
+                    <LoadingSpinner size="sm" className="mr-2" />
+                    Deleting...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 size={14} className="mr-2" />
+                    Delete Item
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
