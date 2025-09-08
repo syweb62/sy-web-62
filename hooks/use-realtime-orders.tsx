@@ -46,13 +46,11 @@ export function useRealtimeOrders() {
 
   const fetchOrders = useCallback(async () => {
     if (requestInProgressRef.current) {
-      console.log("[v0] Request already in progress, skipping...")
       return
     }
 
     const now = Date.now()
-    if (now - lastFetchRef.current < 1000) {
-      console.log("[v0] Debouncing rapid request...")
+    if (now - lastFetchRef.current < 3000) {
       return
     }
 
@@ -61,10 +59,9 @@ export function useRealtimeOrders() {
 
     try {
       setError(null)
-      console.log("[v0] Fetching orders from API...")
 
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 8000)
+      const timeoutId = setTimeout(() => controller.abort(), 3000)
 
       const response = await fetch("/api/orders", {
         signal: controller.signal,
@@ -74,7 +71,6 @@ export function useRealtimeOrders() {
 
       if (response.ok) {
         const data = await response.json()
-        console.log("[v0] Orders API response:", data.orders?.length || 0, "orders")
         setOrders(data.orders || [])
         setConnectionStatus("connected")
         reconnectAttemptsRef.current = 0
@@ -82,7 +78,6 @@ export function useRealtimeOrders() {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`)
       }
     } catch (error) {
-      console.error("[v0] Error fetching orders:", error)
       setConnectionStatus("disconnected")
 
       if (error instanceof Error) {
@@ -107,11 +102,10 @@ export function useRealtimeOrders() {
 
     debounceTimeoutRef.current = setTimeout(() => {
       fetchOrders()
-    }, 300) // 300ms debounce for smooth performance
+    }, 1000)
   }, [fetchOrders])
 
   const setupRealtimeSubscription = useCallback(() => {
-    console.log("[v0] Setting up real-time subscription...")
     setConnectionStatus("connecting")
 
     // Clean up existing subscription
@@ -131,19 +125,14 @@ export function useRealtimeOrders() {
             table: "orders",
           },
           (payload) => {
-            console.log("[v0] Real-time update received:", payload.eventType)
             debouncedFetchOrders()
           },
         )
         .subscribe((status) => {
-          console.log("[v0] Subscription status:", status)
-
           if (status === "SUBSCRIBED") {
             setConnectionStatus("connected")
             reconnectAttemptsRef.current = 0
-            console.log("[v0] Real-time connection established successfully")
           } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
-            console.log("[v0] Real-time connection failed, attempting reconnection")
             setConnectionStatus("disconnected")
             attemptReconnection()
           }
@@ -153,19 +142,15 @@ export function useRealtimeOrders() {
 
       setTimeout(() => {
         if (connectionStatus !== "connected") {
-          console.log("[v0] Real-time connection timeout, attempting reconnection")
           attemptReconnection()
         }
-      }, 3000)
+      }, 2000)
     } catch (error) {
-      console.error("[v0] Error setting up real-time subscription:", error)
       attemptReconnection()
     }
   }, [supabase, debouncedFetchOrders, connectionStatus])
 
   const setupPollingFallback = useCallback(() => {
-    console.log("[v0] Setting up polling fallback...")
-
     // Clear any existing polling
     if (pollingIntervalRef.current) {
       clearInterval(pollingIntervalRef.current)
@@ -173,23 +158,19 @@ export function useRealtimeOrders() {
 
     pollingIntervalRef.current = setInterval(() => {
       fetchOrders()
-    }, 10000)
+    }, 60000)
 
     setConnectionStatus("connected")
   }, [fetchOrders])
 
   const attemptReconnection = useCallback(() => {
     if (reconnectAttemptsRef.current >= 3) {
-      // Reduced max attempts from 5 to 3
-      console.log("[v0] Max reconnection attempts reached, using polling fallback")
       setupPollingFallback()
       return
     }
 
-    const delay = Math.min(1000 * Math.pow(1.2, reconnectAttemptsRef.current), 5000)
+    const delay = Math.min(1000 * (reconnectAttemptsRef.current + 1), 3000)
     reconnectAttemptsRef.current++
-
-    console.log(`[v0] Attempting reconnection ${reconnectAttemptsRef.current}/3 in ${delay}ms`)
 
     reconnectTimeoutRef.current = setTimeout(() => {
       setupRealtimeSubscription()
@@ -200,16 +181,11 @@ export function useRealtimeOrders() {
     if (isInitializedRef.current) return
     isInitializedRef.current = true
 
-    console.log("[v0] Initializing real-time orders hook...")
-
     // Initial fetch
     fetchOrders()
-
     setupRealtimeSubscription()
 
     return () => {
-      console.log("[v0] Cleaning up real-time orders hook...")
-
       // Clean up subscription
       if (subscriptionRef.current) {
         subscriptionRef.current.unsubscribe()

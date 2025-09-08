@@ -1,50 +1,11 @@
 "use client"
 
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { Check, X, CheckCircle, Loader2, RefreshCw, AlertCircle, Wifi, ChevronDown, ChevronUp } from "lucide-react"
-import { createClient } from "@/lib/supabase"
-
-interface Order {
-  order_id: string
-  short_order_id?: string
-  customer_name: string
-  phone: string
-  address: string
-  payment_method: string
-  total_amount: number
-  subtotal?: number
-  discount?: number
-  vat?: number
-  delivery_charge?: number
-  status: "confirmed" | "cancelled" | "pending" | "completed"
-  created_at: string
-  updated_at?: string
-  special_instructions?: string
-  order_items: Array<{
-    product_name: string
-    quantity: number
-    price: number
-  }>
-}
-
-interface EnhancedOrdersTableProps {
-  orders?: Order[]
-  onStatusUpdate?: (orderId: string, newStatus: string) => void
-  onRefresh?: () => void
-  userRole?: "admin" | "manager"
-  loading?: boolean
-}
-
-interface ConfirmationModal {
-  isOpen: boolean
-  orderId: string
-  action: string
-  actionLabel: string
-  isProcessing: boolean
-}
+import type { EnhancedOrdersTableProps, Order, ConfirmationModal } from "@/types" // Declare or import types here
 
 const EnhancedOrdersTable = ({
   orders = [],
@@ -62,89 +23,7 @@ const EnhancedOrdersTable = ({
     actionLabel: "",
     isProcessing: false,
   })
-  const [connectionStatus] = useState<"connected" | "connecting" | "disconnected">("connected")
   const [error, setError] = useState<string | null>(null)
-  const [retryCount, setRetryCount] = useState(0)
-  const maxRetries = 3
-  const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const subscriptionRef = useRef<any>(null)
-
-  const [supabase] = useState(() => {
-    try {
-      const client = createClient()
-      console.log("[v0] Supabase client created successfully")
-      return client
-    } catch (error) {
-      console.error("[v0] Failed to create Supabase client:", error)
-      setError("Failed to initialize database connection")
-      return null
-    }
-  })
-
-  const setupRealtimeConnection = useCallback(async () => {
-    if (!supabase) {
-      setError("Database client not available")
-      return
-    }
-
-    try {
-      setError(null)
-      console.log("[v0] Setting up real-time connection...")
-
-      // Clean up existing subscription
-      if (subscriptionRef.current) {
-        await supabase.removeChannel(subscriptionRef.current)
-        subscriptionRef.current = null
-      }
-
-      subscriptionRef.current = supabase
-        .channel("orders-table-updates")
-        .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, (payload) => {
-          console.log("[v0] Real-time order update received:", payload)
-          setRetryCount(0)
-
-          if (onRefresh) {
-            onRefresh()
-          }
-        })
-        .subscribe((status) => {
-          console.log("[v0] Subscription status:", status)
-
-          if (status === "SUBSCRIBED") {
-            setRetryCount(0)
-            setError(null)
-          } else if (status === "CLOSED" || status === "CHANNEL_ERROR") {
-            if (retryCount < maxRetries) {
-              const delay = Math.min(500 * Math.pow(2, retryCount), 5000)
-              console.log(`[v0] Connection lost, retrying in ${delay}ms (attempt ${retryCount + 1}/${maxRetries})`)
-
-              retryTimeoutRef.current = setTimeout(() => {
-                setRetryCount((prev) => prev + 1)
-                setupRealtimeConnection()
-              }, delay)
-            } else {
-              setError("Real-time connection failed. Please refresh manually.")
-            }
-          }
-        })
-    } catch (error) {
-      console.error("[v0] Error setting up real-time connection:", error)
-      setError("Failed to establish real-time connection")
-    }
-  }, [supabase, onRefresh, retryCount, maxRetries])
-
-  useEffect(() => {
-    setupRealtimeConnection()
-
-    return () => {
-      if (retryTimeoutRef.current) {
-        clearTimeout(retryTimeoutRef.current)
-      }
-      if (subscriptionRef.current && supabase) {
-        supabase.removeChannel(subscriptionRef.current)
-      }
-    }
-  }, [setupRealtimeConnection])
 
   useEffect(() => {
     setDisplayOrders(orders)
@@ -162,10 +41,9 @@ const EnhancedOrdersTable = ({
 
     try {
       setError(null)
-      console.log("[v0] Updating order status:", { orderId, newStatus })
 
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 5000) // Reduced timeout from 10s to 5s
 
       const response = await fetch("/api/orders", {
         method: "PATCH",
@@ -192,19 +70,14 @@ const EnhancedOrdersTable = ({
         throw new Error(result.error || "Update failed")
       }
 
-      console.log("[v0] Order status updated successfully")
-
-      // Trigger refresh with delay to ensure database consistency
       setTimeout(() => {
         if (onRefresh) {
           onRefresh()
         }
-      }, 500)
+      }, 100)
 
       return true
     } catch (error) {
-      console.error("[v0] Error updating order status:", error)
-
       if (error instanceof Error) {
         if (error.name === "AbortError") {
           setError("Request timed out. Please try again.")
@@ -253,7 +126,6 @@ const EnhancedOrdersTable = ({
         setConfirmationModal((prev) => ({ ...prev, isProcessing: false }))
       }
     } catch (error) {
-      console.error("[v0] Confirmation error:", error)
       setConfirmationModal((prev) => ({ ...prev, isProcessing: false }))
     }
   }
@@ -263,88 +135,86 @@ const EnhancedOrdersTable = ({
     setConfirmationModal({ isOpen: false, orderId: "", action: "", actionLabel: "", isProcessing: false })
   }
 
-  const handleManualRetry = () => {
-    setRetryCount(0)
-    setError(null)
-    setupRealtimeConnection()
-  }
+  const getActionButtons = useMemo(() => {
+    return (order: Order) => {
+      const validOrderId = getOrderId(order)
 
-  const getActionButtons = (order: Order) => {
-    const validOrderId = getOrderId(order)
+      if (!validOrderId) {
+        return (
+          <div className="space-y-3">
+            <p className="text-red-400 text-xs">Invalid Order ID</p>
+          </div>
+        )
+      }
 
-    if (!validOrderId) {
+      if (order.status === "pending") {
+        return (
+          <div className="space-y-3">
+            <div className="flex gap-2">
+              <Button
+                onClick={() => showConfirmation(validOrderId, "confirmed", "confirm")}
+                size="sm"
+                className="bg-green-600 hover:bg-green-700 text-white flex-1"
+              >
+                <Check className="w-4 h-4" />
+                Confirm
+              </Button>
+              <Button
+                onClick={() => showConfirmation(validOrderId, "cancelled", "cancel")}
+                size="sm"
+                variant="destructive"
+                className="flex-1"
+              >
+                <X className="w-4 h-4" />
+                Cancel
+              </Button>
+            </div>
+          </div>
+        )
+      }
+
+      if (order.status === "confirmed") {
+        return (
+          <div className="space-y-3">
+            <Button
+              onClick={() => showConfirmation(validOrderId, "completed", "complete")}
+              size="sm"
+              className="bg-blue-600 hover:bg-blue-700 text-white w-full"
+            >
+              <CheckCircle className="w-4 h-4" />
+              Complete
+            </Button>
+          </div>
+        )
+      }
+
       return (
         <div className="space-y-3">
-          <p className="text-red-400 text-xs">Invalid Order ID</p>
-        </div>
-      )
-    }
-
-    if (order.status === "pending") {
-      return (
-        <div className="space-y-3">
-          <div className="flex gap-2">
-            <Button
-              onClick={() => showConfirmation(validOrderId, "confirmed", "confirm")}
-              size="sm"
-              className="bg-green-600 hover:bg-green-700 text-white flex-1"
-            >
-              <Check className="w-4 h-4" />
-              Confirm
-            </Button>
-            <Button
-              onClick={() => showConfirmation(validOrderId, "cancelled", "cancel")}
-              size="sm"
-              variant="destructive"
-              className="flex-1"
-            >
-              <X className="w-4 h-4" />
-              Cancel
-            </Button>
+          <div className="text-center">
+            <Badge className={order.status === "completed" ? "bg-blue-600 text-white" : "bg-red-600 text-white"}>
+              {order.status === "completed" ? "Completed" : "Cancelled"}
+            </Badge>
           </div>
         </div>
       )
     }
+  }, [])
 
-    if (order.status === "confirmed") {
-      return (
-        <div className="space-y-3">
-          <Button
-            onClick={() => showConfirmation(validOrderId, "completed", "complete")}
-            size="sm"
-            className="bg-blue-600 hover:bg-blue-700 text-white w-full"
-          >
-            <CheckCircle className="w-4 h-4" />
-            Complete
-          </Button>
-        </div>
-      )
+  const getStatusBadge = useMemo(() => {
+    return (status: string) => {
+      const statusConfig = {
+        confirmed: { color: "bg-green-600 text-white", label: "Order Confirmed" },
+        cancelled: { color: "bg-red-600 text-white", label: "Order Canceled" },
+        pending: { color: "bg-yellow-600 text-white", label: "Order Pending" },
+        completed: { color: "bg-blue-600 text-white", label: "Order Completed" },
+      }
+
+      const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.confirmed
+      return <Badge className={`${config.color} px-3 py-1 font-medium rounded-full`}>{config.label}</Badge>
     }
+  }, [])
 
-    return (
-      <div className="space-y-3">
-        <div className="text-center">
-          <Badge className={order.status === "completed" ? "bg-blue-600 text-white" : "bg-red-600 text-white"}>
-            {order.status === "completed" ? "Completed" : "Cancelled"}
-          </Badge>
-        </div>
-      </div>
-    )
-  }
-
-  const getStatusBadge = (status: string) => {
-    const statusConfig = {
-      confirmed: { color: "bg-green-600 text-white", label: "Order Confirmed" },
-      cancelled: { color: "bg-red-600 text-white", label: "Order Canceled" },
-      pending: { color: "bg-yellow-600 text-white", label: "Order Pending" },
-      completed: { color: "bg-blue-600 text-white", label: "Order Completed" },
-    }
-
-    const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.confirmed
-    return <Badge className={`${config.color} px-3 py-1 font-medium rounded-full`}>{config.label}</Badge>
-  }
-
-  const toggleOrderExpansion = (orderId: string) => {
+  const toggleOrderExpansion = useCallback((orderId: string) => {
     setExpandedOrders((prev) => {
       const newSet = new Set(prev)
       if (newSet.has(orderId)) {
@@ -354,7 +224,7 @@ const EnhancedOrdersTable = ({
       }
       return newSet
     })
-  }
+  }, [])
 
   return (
     <div className="space-y-6">
@@ -394,12 +264,12 @@ const EnhancedOrdersTable = ({
             </div>
           </div>
           <Button
-            onClick={handleManualRetry}
+            onClick={() => setError(null)}
             size="sm"
             variant="outline"
             className="border-red-600 text-red-300 hover:bg-red-900/30 bg-transparent"
           >
-            Retry Connection
+            Dismiss
           </Button>
         </div>
       )}
@@ -618,20 +488,6 @@ const EnhancedOrdersTable = ({
                               </div>
                             </div>
                           ))}
-
-                          {order.special_instructions && (
-                            <div className="mt-4 p-3 bg-blue-900/20 border border-blue-700/30 rounded-lg">
-                              <div className="flex items-start gap-2">
-                                <span className="text-blue-400 text-sm">💬</span>
-                                <div className="flex-1">
-                                  <p className="text-xs text-blue-300 font-medium mb-1">Special Instructions:</p>
-                                  <p className="text-sm text-gray-200 leading-relaxed">
-                                    "{order.special_instructions}"
-                                  </p>
-                                </div>
-                              </div>
-                            </div>
-                          )}
                         </>
                       ) : (
                         <div className="text-center py-6 bg-gray-800/20 rounded-lg border border-gray-700/30">
