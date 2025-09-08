@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useEffect, useCallback, useRef, useMemo } from "react"
-import { createClient } from "@/lib/supabase"
+import { useState, useEffect, useCallback, useRef } from "react"
+import { createBrowserClient } from "@supabase/ssr"
 import { useNotificationSystem } from "@/hooks/use-notification-system"
 
 interface Order {
@@ -30,19 +30,32 @@ export function useRealtimeOrders() {
   const [connectionStatus, setConnectionStatus] = useState<"connected" | "connecting" | "disconnected">("connecting")
   const [error, setError] = useState<string | null>(null)
   const { notifyOrderStatusChange } = useNotificationSystem()
-  const subscriptionsRef = useRef<any[]>([])
   const isInitializedRef = useRef(false)
+  const lastFetchRef = useRef<number>(0)
+  const pollingIntervalRef = useRef<NodeJS.Timeout>()
+  const subscriptionRef = useRef<any>(null)
   const reconnectTimeoutRef = useRef<NodeJS.Timeout>()
   const reconnectAttemptsRef = useRef(0)
-  const maxReconnectAttempts = 5
+
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+  )
 
   const fetchOrders = useCallback(async () => {
+    const now = Date.now()
+    if (now - lastFetchRef.current < 1000) {
+      console.log("[v0] Skipping fetch - too soon since last fetch")
+      return
+    }
+    lastFetchRef.current = now
+
     try {
       setError(null)
       console.log("[v0] Fetching orders from API...")
 
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 10000)
+      const timeoutId = setTimeout(() => controller.abort(), 15000)
 
       const response = await fetch("/api/orders", {
         signal: controller.signal,
@@ -55,7 +68,7 @@ export function useRealtimeOrders() {
         console.log("[v0] Orders API response:", data.orders?.length || 0, "orders")
         setOrders(data.orders || [])
         setConnectionStatus("connected")
-        reconnectAttemptsRef.current = 0
+        reconnectAttemptsRef.current = 0 // Reset reconnect attempts on success
       } else {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`)
       }
@@ -77,170 +90,133 @@ export function useRealtimeOrders() {
     }
   }, [])
 
-  const handleOrderNotification = useCallback(
-    (orderId: string, status: string, customerName: string, isNewOrder = false) => {
-      if (isNewOrder || status !== "pending") {
-        notifyOrderStatusChange(orderId, status, customerName)
-      }
-    },
-    [notifyOrderStatusChange],
-  )
+  const setupRealtimeSubscription = useCallback(() => {
+    console.log("[v0] Setting up real-time subscription...")
+    setConnectionStatus("connecting")
 
-  const debouncedRefresh = useMemo(() => {
-    let timeoutId: NodeJS.Timeout
-    return () => {
-      clearTimeout(timeoutId)
-      timeoutId = setTimeout(() => fetchOrders(), 300)
+    // Clean up existing subscription
+    if (subscriptionRef.current) {
+      subscriptionRef.current.unsubscribe()
+      subscriptionRef.current = null
     }
+
+    try {
+      const channel = supabase
+        .channel("orders-realtime")
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "orders",
+          },
+          (payload) => {
+            console.log("[v0] Real-time update received:", payload.eventType)
+
+            // Debounced refresh to avoid excessive API calls
+            setTimeout(() => {
+              fetchOrders()
+            }, 500)
+          },
+        )
+        .subscribe((status) => {
+          console.log("[v0] Subscription status:", status)
+
+          if (status === "SUBSCRIBED") {
+            setConnectionStatus("connected")
+            reconnectAttemptsRef.current = 0
+            console.log("[v0] Real-time connection established successfully")
+          } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+            console.log("[v0] Real-time connection failed, falling back to polling")
+            setConnectionStatus("disconnected")
+            setupPollingFallback()
+          }
+        })
+
+      subscriptionRef.current = channel
+
+      // Set a timeout to fallback to polling if subscription doesn't connect within 10 seconds
+      setTimeout(() => {
+        if (connectionStatus !== "connected") {
+          console.log("[v0] Real-time connection timeout, falling back to polling")
+          setupPollingFallback()
+        }
+      }, 10000)
+    } catch (error) {
+      console.error("[v0] Error setting up real-time subscription:", error)
+      setupPollingFallback()
+    }
+  }, [supabase, fetchOrders, connectionStatus])
+
+  const setupPollingFallback = useCallback(() => {
+    console.log("[v0] Setting up polling fallback...")
+
+    // Clear any existing polling
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current)
+    }
+
+    // Poll every 30 seconds as fallback
+    pollingIntervalRef.current = setInterval(() => {
+      fetchOrders()
+    }, 30000)
+
+    setConnectionStatus("connected") // Show as connected even with polling
   }, [fetchOrders])
 
-  const setupRealtimeSubscriptions = useCallback(() => {
-    const supabase = createClient()
-    setConnectionStatus("connecting")
-    setError(null)
+  const attemptReconnection = useCallback(() => {
+    if (reconnectAttemptsRef.current >= 3) {
+      console.log("[v0] Max reconnection attempts reached, using polling fallback")
+      setupPollingFallback()
+      return
+    }
 
-    // Clean up existing subscriptions
-    subscriptionsRef.current.forEach((sub) => {
-      try {
-        sub?.unsubscribe()
-      } catch (error) {
-        console.warn("[v0] Error unsubscribing:", error)
-      }
-    })
-    subscriptionsRef.current = []
+    const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 30000)
+    reconnectAttemptsRef.current++
 
-    console.log("[v0] Setting up real-time subscriptions...")
+    console.log(`[v0] Attempting reconnection ${reconnectAttemptsRef.current}/3 in ${delay}ms`)
 
-    const ordersSubscription = supabase
-      .channel(`orders-changes-${Date.now()}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "orders",
-        },
-        (payload) => {
-          console.log(
-            "[v0] Real-time order change:",
-            payload.eventType,
-            payload.new?.short_order_id || payload.old?.short_order_id,
-          )
-          setConnectionStatus("connected")
-          reconnectAttemptsRef.current = 0
-
-          if (payload.eventType === "INSERT") {
-            const newOrder = payload.new as Order
-            handleOrderNotification(
-              newOrder.short_order_id || newOrder.order_id,
-              "pending",
-              newOrder.customer_name,
-              true,
-            )
-
-            setOrders((prev) => {
-              const exists = prev.find((order) => order.order_id === newOrder.order_id)
-              if (exists) return prev
-              return [newOrder, ...prev]
-            })
-          } else if (payload.eventType === "UPDATE") {
-            const updatedOrder = payload.new as Order
-            handleOrderNotification(
-              updatedOrder.short_order_id || updatedOrder.order_id,
-              updatedOrder.status,
-              updatedOrder.customer_name,
-              false,
-            )
-
-            setOrders((prev) =>
-              prev.map((order) => (order.order_id === updatedOrder.order_id ? { ...order, ...updatedOrder } : order)),
-            )
-
-            const statusChangeEvent = new CustomEvent("orderStatusChanged", {
-              detail: {
-                orderId: updatedOrder.short_order_id || updatedOrder.order_id,
-                newStatus: updatedOrder.status,
-                customerName: updatedOrder.customer_name,
-              },
-            })
-            window.dispatchEvent(statusChangeEvent)
-          } else if (payload.eventType === "DELETE") {
-            setOrders((prev) => prev.filter((order) => order.order_id !== payload.old.order_id))
-          }
-        },
-      )
-      .subscribe((status) => {
-        console.log("[v0] Orders subscription status:", status)
-        if (status === "SUBSCRIBED") {
-          setConnectionStatus("connected")
-          reconnectAttemptsRef.current = 0
-          setError(null)
-          if (reconnectTimeoutRef.current) {
-            clearTimeout(reconnectTimeoutRef.current)
-            reconnectTimeoutRef.current = undefined
-          }
-        } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
-          console.warn("[v0] Orders subscription error, attempting reconnect...")
-          setConnectionStatus("disconnected")
-
-          if (reconnectAttemptsRef.current < maxReconnectAttempts) {
-            const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 30000)
-            reconnectTimeoutRef.current = setTimeout(() => {
-              reconnectAttemptsRef.current++
-              setupRealtimeSubscriptions()
-            }, delay)
-          } else {
-            setError("Real-time connection failed. Please refresh manually.")
-          }
-        }
-      })
-
-    const orderItemsSubscription = supabase
-      .channel(`order-items-changes-${Date.now()}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "order_items",
-        },
-        (payload) => {
-          console.log("[v0] Real-time order items change:", payload.eventType)
-          setConnectionStatus("connected")
-          debouncedRefresh()
-        },
-      )
-      .subscribe((status) => {
-        console.log("[v0] Order items subscription status:", status)
-      })
-
-    subscriptionsRef.current = [ordersSubscription, orderItemsSubscription]
-  }, [handleOrderNotification, debouncedRefresh])
+    reconnectTimeoutRef.current = setTimeout(() => {
+      setupRealtimeSubscription()
+    }, delay)
+  }, [setupRealtimeSubscription, setupPollingFallback])
 
   useEffect(() => {
     if (isInitializedRef.current) return
     isInitializedRef.current = true
 
     console.log("[v0] Initializing real-time orders hook...")
+
+    // Initial fetch
     fetchOrders()
-    setupRealtimeSubscriptions()
+
+    // Setup real-time subscription after initial fetch
+    setTimeout(() => {
+      setupRealtimeSubscription()
+    }, 2000)
 
     return () => {
       console.log("[v0] Cleaning up real-time orders hook...")
-      subscriptionsRef.current.forEach((sub) => {
-        try {
-          sub?.unsubscribe()
-        } catch (error) {
-          console.warn("[v0] Error during cleanup:", error)
-        }
-      })
-      subscriptionsRef.current = []
+
+      // Clean up subscription
+      if (subscriptionRef.current) {
+        subscriptionRef.current.unsubscribe()
+        subscriptionRef.current = null
+      }
+
+      // Clean up polling
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current)
+      }
+
+      // Clean up reconnection timeout
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current)
       }
+
       isInitializedRef.current = false
     }
-  }, []) // Removed dependencies to prevent subscription recreation
+  }, [fetchOrders, setupRealtimeSubscription])
 
   return { orders, loading, connectionStatus, error, refetch: fetchOrders }
 }

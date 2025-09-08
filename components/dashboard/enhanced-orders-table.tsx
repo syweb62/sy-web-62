@@ -455,15 +455,29 @@ const EnhancedOrdersTable = ({
                       <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">CUSTOMER</p>
                       <div className="space-y-1">
                         <p className="text-white font-semibold">{order.customer_name}</p>
-                        <p className="text-gray-300 text-sm">📞 {order.phone_number}</p>
-                        <p className="text-gray-400 text-sm truncate" title={order.address}>
-                          📍 {order.address}
-                        </p>
+                        {order.phone_number && <p className="text-gray-300 text-sm">{order.phone_number}</p>}
                         {order.payment_method && (
-                          <p className="text-gray-400 text-sm">
-                            💳 {order.payment_method === "bkash" ? "bKash" : order.payment_method}
-                          </p>
+                          <div className="inline-block">
+                            <span
+                              className={`px-2 py-1 rounded text-xs font-medium border ${
+                                order.payment_method === "bkash"
+                                  ? "bg-pink-500/20 text-pink-400 border-pink-500/30"
+                                  : order.payment_method === "pickup"
+                                    ? "bg-blue-500/20 text-blue-400 border-blue-500/30"
+                                    : "bg-green-500/20 text-green-400 border-green-500/30"
+                              }`}
+                            >
+                              {order.payment_method === "bkash"
+                                ? "bKash"
+                                : order.payment_method === "pickup"
+                                  ? "Pickup"
+                                  : "Cash"}
+                            </span>
+                          </div>
                         )}
+                        <p className="text-gray-400 text-sm truncate" title={order.address}>
+                          {order.address}
+                        </p>
                       </div>
                     </div>
                   </div>
@@ -502,8 +516,16 @@ const EnhancedOrdersTable = ({
                             <div className="flex justify-between">
                               <span className="text-gray-400">Delivery:</span>
                               <span className="text-white flex items-center gap-1">
-                                {order.delivery_charge === 0 ? "FREE" : `Tk${order.delivery_charge.toFixed(2)}`}
-                                <span className="text-xs text-gray-500 ml-1">
+                                {order.delivery_charge === 0 ? "FREE" : `Tk${Number(order.delivery_charge).toFixed(2)}`}
+                                <span
+                                  className={`text-xs ml-1 px-1 py-0.5 rounded ${
+                                    order.payment_method === "bkash"
+                                      ? "text-pink-400"
+                                      : order.payment_method === "pickup"
+                                        ? "text-blue-400"
+                                        : "text-green-400"
+                                  }`}
+                                >
                                   (
                                   {order.payment_method === "pickup"
                                     ? "Pickup"
@@ -518,20 +540,31 @@ const EnhancedOrdersTable = ({
                           <div className="border-t border-gray-600 pt-1 mt-2">
                             <div className="flex justify-between font-bold">
                               <span className="text-white">Total:</span>
-                              <span className="text-yellow-400">Tk{(order.total_amount || 0).toFixed(2)}</span>
+                              <span className="text-yellow-400">Tk{Number(order.total_amount || 0).toFixed(2)}</span>
                             </div>
                           </div>
                         </div>
                       ) : (
                         <div>
-                          <p className="text-xl font-bold text-yellow-400">Tk{(order.total_amount || 0).toFixed(2)}</p>
+                          <p className="text-xl font-bold text-yellow-400">
+                            Tk{Number(order.total_amount || 0).toFixed(2)}
+                          </p>
                           <p className="text-xs text-gray-400">
                             {order.order_items?.length || 0} item{(order.order_items?.length || 0) !== 1 ? "s" : ""}
                           </p>
                           {order.delivery_charge !== undefined && (
                             <p className="text-xs text-gray-400">
-                              Delivery: {order.delivery_charge === 0 ? "FREE" : `Tk${order.delivery_charge.toFixed(2)}`}
-                              <span className="text-gray-500 ml-1">
+                              Delivery:{" "}
+                              {order.delivery_charge === 0 ? "FREE" : `Tk${Number(order.delivery_charge).toFixed(2)}`}
+                              <span
+                                className={`ml-1 ${
+                                  order.payment_method === "bkash"
+                                    ? "text-pink-400"
+                                    : order.payment_method === "pickup"
+                                      ? "text-blue-400"
+                                      : "text-green-400"
+                                }`}
+                              >
                                 (
                                 {order.payment_method === "pickup"
                                   ? "Pickup"
@@ -550,19 +583,37 @@ const EnhancedOrdersTable = ({
                   <div className="col-span-3">{getActionButtons(order)}</div>
                 </div>
 
-                {isExpanded && order.order_items && order.order_items.length > 0 && (
+                {isExpanded && (
                   <div className="mt-4 pt-4 border-t border-gray-700">
                     <p className="text-xs text-gray-400 uppercase tracking-wide font-medium mb-3">ORDER ITEMS</p>
                     <div className="space-y-2">
-                      {order.order_items.map((item, index) => (
-                        <div key={index} className="flex justify-between items-center text-sm">
-                          <div className="flex-1">
-                            <span className="text-white">{item.product_name}</span>
-                            <span className="text-gray-400 ml-2">x{item.quantity}</span>
+                      {order.order_items && order.order_items.length > 0 ? (
+                        order.order_items.map((item, index) => (
+                          <div key={index} className="flex justify-between items-center text-sm">
+                            <div className="flex-1">
+                              <span className="text-white">{item.product_name || "Unknown Item"}</span>
+                              <span className="text-gray-400 ml-2">x{item.quantity || 1}</span>
+                            </div>
+                            <span className="text-gray-300">
+                              Tk{Number(item.price * item.quantity || 0).toFixed(2)}
+                            </span>
                           </div>
-                          <span className="text-gray-300">Tk{(item.price * item.quantity).toFixed(2)}</span>
+                        ))
+                      ) : (
+                        <div className="text-center py-4">
+                          <p className="text-gray-400 text-sm">Order items not available</p>
+                          <p className="text-gray-500 text-xs mt-1">
+                            Total: Tk{Number(order.total_amount || 0).toFixed(2)}
+                          </p>
                         </div>
-                      ))}
+                      )}
+
+                      {order.special_instructions && (
+                        <div className="mt-3 pt-2 border-t border-gray-700/50">
+                          <p className="text-xs text-gray-400 mb-1">Special Instructions:</p>
+                          <p className="text-sm text-gray-300 italic">{order.special_instructions}</p>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
