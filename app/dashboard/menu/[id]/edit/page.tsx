@@ -18,13 +18,13 @@ import { LoadingSpinner } from "@/components/loading-spinner"
 import Link from "next/link"
 
 interface MenuItem {
-  id: string
+  menu_id: string
   name: string
   description: string
   price: number
   category: string
   image_url: string
-  is_available: boolean
+  available: boolean
 }
 
 export default function EditMenuItemPage() {
@@ -42,7 +42,7 @@ export default function EditMenuItemPage() {
     price: "",
     category: "",
     image_url: "",
-    is_available: true,
+    available: true,
   })
 
   useEffect(() => {
@@ -73,7 +73,7 @@ export default function EditMenuItemPage() {
 
   const fetchMenuItem = async (id: string) => {
     try {
-      const { data, error } = await supabase.from("menu_items").select("*").eq("id", id).single()
+      const { data, error } = await supabase.from("menu_items").select("*").eq("menu_id", id).single()
 
       if (error) throw error
 
@@ -84,7 +84,7 @@ export default function EditMenuItemPage() {
         price: data.price.toString(),
         category: data.category,
         image_url: data.image_url || "",
-        is_available: data.is_available,
+        available: data.available,
       })
     } catch (error) {
       toast({
@@ -177,9 +177,9 @@ export default function EditMenuItemPage() {
           price: Number.parseFloat(formData.price),
           category: formData.category,
           image_url: formData.image_url,
-          is_available: formData.is_available,
+          available: formData.available,
         })
-        .eq("id", params.id)
+        .eq("menu_id", params.id)
 
       if (error) throw error
 
@@ -364,11 +364,11 @@ export default function EditMenuItemPage() {
 
             <div className="flex items-center space-x-2">
               <Switch
-                id="is_available"
-                checked={formData.is_available}
-                onCheckedChange={(checked) => handleInputChange("is_available", checked)}
+                id="available"
+                checked={formData.available}
+                onCheckedChange={(checked) => handleInputChange("available", checked)}
               />
-              <Label htmlFor="is_available" className="text-white">
+              <Label htmlFor="available" className="text-white">
                 Available for ordering
               </Label>
             </div>

@@ -7,14 +7,14 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Search, Plus, Edit, Trash2, Eye, RefreshCw } from "lucide-react"
+import { Search, Plus, Edit, Trash2, RefreshCw } from "lucide-react"
 import { createClient } from "@/lib/supabase"
 import { toast } from "@/hooks/use-toast"
 import { LoadingSpinner } from "@/components/loading-spinner"
 import Link from "next/link"
 
 interface MenuItem {
-  menu_id: string
+  menu_id: string // Changed from id to menu_id to match database schema
   name: string
   description: string
   price: number
@@ -113,10 +113,11 @@ export default function MenuManagementPage() {
 
   const deleteMenuItem = useCallback(
     async (menu_id: string, itemName: string) => {
+      // Changed id parameter to menu_id
       if (!confirm(`Are you sure you want to delete "${itemName}"?`)) return
 
       try {
-        const { error } = await supabase.from("menu_items").delete().eq("menu_id", menu_id)
+        const { error } = await supabase.from("menu_items").delete().eq("menu_id", menu_id) // Changed id to menu_id
         if (error) throw error
 
         toast({
@@ -137,8 +138,9 @@ export default function MenuManagementPage() {
 
   const toggleAvailability = useCallback(
     async (menu_id: string, currentStatus: boolean, itemName: string) => {
+      // Changed id parameter to menu_id
       try {
-        const { error } = await supabase.from("menu_items").update({ available: !currentStatus }).eq("menu_id", menu_id)
+        const { error } = await supabase.from("menu_items").update({ available: !currentStatus }).eq("menu_id", menu_id) // Changed id to menu_id
         if (error) throw error
 
         toast({
@@ -200,6 +202,26 @@ export default function MenuManagementPage() {
       return matchesSearch && matchesCategory && matchesStatus
     })
   }, [menuItems, searchTerm, categoryFilter, statusFilter])
+
+  const ToggleSwitch = ({
+    isOn,
+    onToggle,
+    disabled = false,
+  }: { isOn: boolean; onToggle: () => void; disabled?: boolean }) => (
+    <button
+      onClick={onToggle}
+      disabled={disabled}
+      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2 focus:ring-offset-gray-900 ${
+        isOn ? "bg-green-600" : "bg-gray-600"
+      } ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+    >
+      <span
+        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+          isOn ? "translate-x-6" : "translate-x-1"
+        }`}
+      />
+    </button>
+  )
 
   if (loading) {
     return (
@@ -299,14 +321,9 @@ export default function MenuManagementPage() {
                 }}
               />
               <div className="absolute top-2 right-2 flex gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className={`${getStatusColor(item.available)} border-none text-xs px-2 py-1 h-auto`}
-                  onClick={() => toggleAvailability(item.menu_id, item.available, item.name)}
-                >
+                <Badge className={`${getStatusColor(item.available)} border-none text-xs px-2 py-1`}>
                   {item.available ? "Available" : "Unavailable"}
-                </Button>
+                </Badge>
                 <Badge className={getCategoryColor(item.category)}>{item.category}</Badge>
               </div>
             </div>
@@ -317,27 +334,34 @@ export default function MenuManagementPage() {
               </div>
               <p className="text-gray-400 text-sm mb-4 line-clamp-2">{item.description}</p>
 
-              <div className="flex items-center gap-2">
-                <Link href={`/dashboard/menu/${item.menu_id}/edit`} className="flex-1">
-                  <Button variant="outline" size="sm" className="w-full bg-transparent">
-                    <Eye size={14} className="mr-1" />
-                    View
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span className="text-sm text-gray-400">{item.available ? "Available" : "Unavailable"}</span>
+                  <ToggleSwitch
+                    isOn={item.available}
+                    onToggle={() => toggleAvailability(item.menu_id, item.available, item.name)}
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <Link href={`/dashboard/menu/${item.menu_id}/edit`}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="bg-blue-900/30 text-blue-400 border-blue-600 hover:bg-blue-900/50"
+                    >
+                      <Edit size={14} className="mr-1" />
+                      Edit
+                    </Button>
+                  </Link>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-red-400 hover:text-red-300 bg-red-900/20 border-red-600"
+                    onClick={() => deleteMenuItem(item.menu_id, item.name)}
+                  >
+                    <Trash2 size={14} />
                   </Button>
-                </Link>
-                <Link href={`/dashboard/menu/${item.menu_id}/edit`} className="flex-1">
-                  <Button variant="outline" size="sm" className="w-full bg-transparent">
-                    <Edit size={14} className="mr-1" />
-                    Edit
-                  </Button>
-                </Link>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-red-400 hover:text-red-300 bg-transparent"
-                  onClick={() => deleteMenuItem(item.menu_id, item.name)}
-                >
-                  <Trash2 size={14} />
-                </Button>
+                </div>
               </div>
             </CardContent>
           </Card>

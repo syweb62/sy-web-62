@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -8,13 +8,32 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { EnhancedOrdersTable } from "@/components/dashboard/enhanced-orders-table"
 import { Search, RefreshCw, Filter, TrendingUp } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
-import { useRealtimeOrders } from "@/hooks/use-realtime-orders"
 
 export default function OrdersPage() {
-  const { orders, loading, connectionStatus, refetch: fetchOrders } = useRealtimeOrders()
+  const [orders, setOrders] = useState([])
+  const [loading, setLoading] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const { user } = useAuth()
+
+  const fetchOrders = async () => {
+    setLoading(true)
+    try {
+      const response = await fetch("/api/orders")
+      if (response.ok) {
+        const data = await response.json()
+        setOrders(data.orders || [])
+      }
+    } catch (error) {
+      console.error("Failed to fetch orders:", error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchOrders()
+  }, [])
 
   const filteredOrders = useMemo(() => {
     return orders.filter((order) => {
@@ -39,7 +58,7 @@ export default function OrdersPage() {
   }, [filteredOrders])
 
   const handleStatusUpdate = (orderId: string, newStatus: string) => {
-    // Real-time updates will handle the state changes automatically
+    fetchOrders()
   }
 
   const getUserRole = (): "admin" | "manager" => {

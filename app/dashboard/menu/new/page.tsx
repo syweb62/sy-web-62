@@ -37,7 +37,29 @@ export default function NewMenuItemPage() {
 
   useEffect(() => {
     fetchCategories()
+    initializeStorageBucket()
   }, [])
+
+  const initializeStorageBucket = async () => {
+    try {
+      const { data: buckets } = await supabase.storage.listBuckets()
+      const bucketExists = buckets?.some((bucket) => bucket.name === "menu-images")
+
+      if (!bucketExists) {
+        const { error } = await supabase.storage.createBucket("menu-images", {
+          public: true,
+          allowedMimeTypes: ["image/jpeg", "image/png", "image/webp", "image/gif"],
+          fileSizeLimit: 5242880, // 5MB
+        })
+
+        if (error && !error.message.includes("already exists")) {
+          console.error("Error creating storage bucket:", error)
+        }
+      }
+    } catch (error) {
+      console.error("Error initializing storage bucket:", error)
+    }
+  }
 
   const fetchCategories = async () => {
     try {
@@ -85,17 +107,16 @@ export default function NewMenuItemPage() {
     const file = event.target.files?.[0]
     if (!file) return
 
-    // Validate file type
-    if (!file.type.startsWith("image/")) {
+    const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif"]
+    if (!allowedTypes.includes(file.type)) {
       toast({
         title: "Error",
-        description: "Please select a valid image file",
+        description: "Please select a valid image file (JPG, PNG, WebP, or GIF)",
         variant: "destructive",
       })
       return
     }
 
-    // Validate file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
       toast({
         title: "Error",
@@ -108,11 +129,32 @@ export default function NewMenuItemPage() {
     setImageUploading(true)
 
     try {
-      const fileExt = file.name.split(".").pop()
-      const fileName = `menu-${Date.now()}.${fileExt}`
+      const fileExt = file.name.split(".").pop()?.toLowerCase()
+      const sanitizedName = formData.name.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase() || "menu-item"
+      const fileName = `${sanitizedName}-${Date.now()}.${fileExt}`
       const filePath = `menu-images/${fileName}`
 
-      const { error: uploadError } = await supabase.storage.from("menu-images").upload(filePath, file)
+      let uploadError = null
+      let retries = 3
+
+      while (retries > 0) {
+        const { error } = await supabase.storage.from("menu-images").upload(filePath, file, {
+          cacheControl: "3600",
+          upsert: false,
+        })
+
+        if (!error) {
+          uploadError = null
+          break
+        }
+
+        uploadError = error
+        retries--
+
+        if (retries > 0) {
+          await new Promise((resolve) => setTimeout(resolve, 1000)) // Wait 1 second before retry
+        }
+      }
 
       if (uploadError) throw uploadError
 
@@ -120,17 +162,27 @@ export default function NewMenuItemPage() {
         data: { publicUrl },
       } = supabase.storage.from("menu-images").getPublicUrl(filePath)
 
-      setUploadedImageUrl(publicUrl)
-
-      toast({
-        title: "Success",
-        description: "Image uploaded successfully",
-      })
-    } catch (error) {
+      const img = new Image()
+      img.onload = () => {
+        setUploadedImageUrl(publicUrl)
+        toast({
+          title: "Success",
+          description: "Image uploaded and verified successfully",
+        })
+      }
+      img.onerror = () => {
+        toast({
+          title: "Warning",
+          description: "Image uploaded but may not be immediately accessible",
+        })
+        setUploadedImageUrl(publicUrl)
+      }
+      img.src = publicUrl
+    } catch (error: any) {
       console.error("Error uploading image:", error)
       toast({
         title: "Error",
-        description: "Failed to upload image",
+        description: error.message || "Failed to upload image. Please try again.",
         variant: "destructive",
       })
     } finally {
@@ -138,7 +190,17 @@ export default function NewMenuItemPage() {
     }
   }
 
-  const removeImage = () => {
+  const removeImage = async () => {
+    if (uploadedImageUrl) {
+      try {
+        const fileName = uploadedImageUrl.split("/").pop()
+        if (fileName) {
+          await supabase.storage.from("menu-images").remove([`menu-images/${fileName}`])
+        }
+      } catch (error) {
+        console.error("Error removing image from storage:", error)
+      }
+    }
     setUploadedImageUrl("")
   }
 
@@ -147,11 +209,20 @@ export default function NewMenuItemPage() {
     setLoading(true)
 
     try {
+      if (!formData.name.trim() || !formData.description.trim() || !formData.category || !formData.price) {
+        throw new Error("Please fill in all required fields")
+      }
+
+      const price = Number.parseFloat(formData.price)
+      if (isNaN(price) || price <= 0) {
+        throw new Error("Please enter a valid price")
+      }
+
       const { error } = await supabase.from("menu_items").insert([
         {
-          name: formData.name,
-          description: formData.description,
-          price: Number.parseFloat(formData.price),
+          name: formData.name.trim(),
+          description: formData.description.trim(),
+          price: price,
           category: formData.category,
           available: formData.available,
           image_url: uploadedImageUrl || null,
@@ -165,11 +236,11 @@ export default function NewMenuItemPage() {
         description: "Menu item created successfully",
       })
       router.push("/dashboard/menu")
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error creating menu item:", error)
       toast({
         title: "Error",
-        description: "Failed to create menu item",
+        description: error.message || "Failed to create menu item",
         variant: "destructive",
       })
     } finally {
@@ -333,6 +404,10 @@ export default function NewMenuItemPage() {
                         alt="Menu item preview"
                         fill
                         className="object-cover"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement
+                          target.src = `/placeholder.svg?height=128&width=200&query=${encodeURIComponent(formData.name || "menu item")}`
+                        }}
                       />
                     </div>
                     <Button
@@ -346,33 +421,38 @@ export default function NewMenuItemPage() {
                     </Button>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-2">
-                    <Input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleImageUpload}
-                      className="bg-gray-800/50 border-gray-700 text-white file:bg-gray-700 file:text-white file:border-0 file:rounded file:px-3 file:py-1"
-                      disabled={imageUploading}
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={imageUploading}
-                      className="border-gray-600 text-gray-300 hover:bg-gray-700 bg-transparent"
-                    >
-                      {imageUploading ? (
-                        <>Uploading...</>
-                      ) : (
-                        <>
-                          <Upload size={16} className="mr-1" />
-                          Upload
-                        </>
-                      )}
-                    </Button>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="file"
+                        accept="image/jpeg,image/jpg,image/png,image/webp,image/gif"
+                        onChange={handleImageUpload}
+                        className="bg-gray-800/50 border-gray-700 text-white file:bg-gray-700 file:text-white file:border-0 file:rounded file:px-3 file:py-1"
+                        disabled={imageUploading}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={imageUploading}
+                        className="border-gray-600 text-gray-300 hover:bg-gray-700 bg-transparent"
+                        onClick={() => document.querySelector('input[type="file"]')?.click()}
+                      >
+                        {imageUploading ? (
+                          <>Uploading...</>
+                        ) : (
+                          <>
+                            <Upload size={16} className="mr-1" />
+                            Upload
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                    <p className="text-xs text-gray-400">
+                      Upload an image for your menu item (max 5MB, JPG/PNG/WebP/GIF)
+                    </p>
                   </div>
                 )}
-                <p className="text-xs text-gray-400">Upload an image for your menu item (max 5MB, JPG/PNG)</p>
               </div>
             </div>
 
