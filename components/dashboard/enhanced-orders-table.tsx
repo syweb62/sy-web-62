@@ -11,7 +11,7 @@ interface Order {
   order_id: string
   short_order_id?: string
   customer_name: string
-  phone_number: string
+  phone: string
   address: string
   payment_method: string
   total_amount: number
@@ -98,7 +98,7 @@ const EnhancedOrdersTable = ({
       }
 
       subscriptionRef.current = supabase
-        .channel(`orders-changes-${Date.now()}`)
+        .channel("orders-table-updates")
         .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, (payload) => {
           console.log("[v0] Real-time order update received:", payload)
           setRetryCount(0)
@@ -115,7 +115,7 @@ const EnhancedOrdersTable = ({
             setError(null)
           } else if (status === "CLOSED" || status === "CHANNEL_ERROR") {
             if (retryCount < maxRetries) {
-              const delay = Math.min(1000 * Math.pow(2, retryCount), 10000)
+              const delay = Math.min(500 * Math.pow(2, retryCount), 5000)
               console.log(`[v0] Connection lost, retrying in ${delay}ms (attempt ${retryCount + 1}/${maxRetries})`)
 
               retryTimeoutRef.current = setTimeout(() => {
@@ -455,16 +455,19 @@ const EnhancedOrdersTable = ({
                       <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">CUSTOMER</p>
                       <div className="space-y-1">
                         <p className="text-white font-semibold">{order.customer_name}</p>
-                        {order.phone_number && <p className="text-gray-300 text-sm">{order.phone_number}</p>}
+                        {order.phone && order.phone !== "N/A" && (
+                          <p className="text-gray-300 text-sm">📞 {order.phone}</p>
+                        )}
                         {order.payment_method && (
-                          <div className="inline-block">
+                          <p className="text-gray-300 text-sm">
+                            💳{" "}
                             <span
-                              className={`px-2 py-1 rounded text-xs font-medium border ${
+                              className={`${
                                 order.payment_method === "bkash"
-                                  ? "bg-pink-500/20 text-pink-400 border-pink-500/30"
+                                  ? "text-pink-400"
                                   : order.payment_method === "pickup"
-                                    ? "bg-blue-500/20 text-blue-400 border-blue-500/30"
-                                    : "bg-green-500/20 text-green-400 border-green-500/30"
+                                    ? "text-blue-400"
+                                    : "text-green-400"
                               }`}
                             >
                               {order.payment_method === "bkash"
@@ -473,10 +476,10 @@ const EnhancedOrdersTable = ({
                                   ? "Pickup"
                                   : "Cash"}
                             </span>
-                          </div>
+                          </p>
                         )}
                         <p className="text-gray-400 text-sm truncate" title={order.address}>
-                          {order.address}
+                          📍 {order.address}
                         </p>
                       </div>
                     </div>
@@ -517,22 +520,14 @@ const EnhancedOrdersTable = ({
                               <span className="text-gray-400">Delivery:</span>
                               <span className="text-white flex items-center gap-1">
                                 {order.delivery_charge === 0 ? "FREE" : `Tk${Number(order.delivery_charge).toFixed(2)}`}
-                                <span
-                                  className={`text-xs ml-1 px-1 py-0.5 rounded ${
-                                    order.payment_method === "bkash"
-                                      ? "text-pink-400"
-                                      : order.payment_method === "pickup"
-                                        ? "text-blue-400"
-                                        : "text-green-400"
-                                  }`}
-                                >
-                                  (
-                                  {order.payment_method === "pickup"
-                                    ? "Pickup"
-                                    : order.payment_method === "bkash"
-                                      ? "bKash"
-                                      : "Cash"}
-                                  )
+                                <span className="text-xs text-gray-400 ml-2">
+                                  •{" "}
+                                  {new Date(order.created_at).toLocaleString("en-BD", {
+                                    timeZone: "Asia/Dhaka",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                    hour12: true,
+                                  })}
                                 </span>
                               </span>
                             </div>
@@ -573,6 +568,15 @@ const EnhancedOrdersTable = ({
                                     : "Cash"}
                                 )
                               </span>
+                              <span className="text-gray-500 ml-2">
+                                •{" "}
+                                {new Date(order.created_at).toLocaleString("en-BD", {
+                                  timeZone: "Asia/Dhaka",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                  hour12: true,
+                                })}
+                              </span>
                             </p>
                           )}
                         </div>
@@ -586,32 +590,58 @@ const EnhancedOrdersTable = ({
                 {isExpanded && (
                   <div className="mt-4 pt-4 border-t border-gray-700">
                     <p className="text-xs text-gray-400 uppercase tracking-wide font-medium mb-3">ORDER ITEMS</p>
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       {order.order_items && order.order_items.length > 0 ? (
-                        order.order_items.map((item, index) => (
-                          <div key={index} className="flex justify-between items-center text-sm">
-                            <div className="flex-1">
-                              <span className="text-white">{item.product_name || "Unknown Item"}</span>
-                              <span className="text-gray-400 ml-2">x{item.quantity || 1}</span>
+                        <>
+                          {order.order_items.map((item, index) => (
+                            <div
+                              key={index}
+                              className="flex justify-between items-start text-sm bg-gray-800/40 rounded-lg p-3 border border-gray-700/30"
+                            >
+                              <div className="flex-1 space-y-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-white font-semibold">
+                                    {item.product_name || "Unknown Item"}
+                                  </span>
+                                  <span className="text-xs bg-gray-700 text-gray-300 px-2 py-0.5 rounded-full">
+                                    ×{item.quantity || 1}
+                                  </span>
+                                </div>
+                                <p className="text-gray-400 text-xs">
+                                  Unit price: Tk{Number(item.price || 0).toFixed(2)}
+                                </p>
+                              </div>
+                              <div className="text-right">
+                                <span className="text-yellow-400 font-bold text-base">
+                                  Tk{Number((item.price || 0) * (item.quantity || 1)).toFixed(2)}
+                                </span>
+                              </div>
                             </div>
-                            <span className="text-gray-300">
-                              Tk{Number(item.price * item.quantity || 0).toFixed(2)}
-                            </span>
-                          </div>
-                        ))
-                      ) : (
-                        <div className="text-center py-4">
-                          <p className="text-gray-400 text-sm">Order items not available</p>
-                          <p className="text-gray-500 text-xs mt-1">
-                            Total: Tk{Number(order.total_amount || 0).toFixed(2)}
-                          </p>
-                        </div>
-                      )}
+                          ))}
 
-                      {order.special_instructions && (
-                        <div className="mt-3 pt-2 border-t border-gray-700/50">
-                          <p className="text-xs text-gray-400 mb-1">Special Instructions:</p>
-                          <p className="text-sm text-gray-300 italic">{order.special_instructions}</p>
+                          {order.special_instructions && (
+                            <div className="mt-4 p-3 bg-blue-900/20 border border-blue-700/30 rounded-lg">
+                              <div className="flex items-start gap-2">
+                                <span className="text-blue-400 text-sm">💬</span>
+                                <div className="flex-1">
+                                  <p className="text-xs text-blue-300 font-medium mb-1">Special Instructions:</p>
+                                  <p className="text-sm text-gray-200 leading-relaxed">
+                                    "{order.special_instructions}"
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <div className="text-center py-6 bg-gray-800/20 rounded-lg border border-gray-700/30">
+                          <div className="space-y-2">
+                            <p className="text-gray-400 text-sm">⚠️ Order items not available</p>
+                            <div className="text-xs text-gray-500 space-y-1">
+                              <p>Total Amount: Tk{Number(order.total_amount || 0).toFixed(2)}</p>
+                              <p>Items Count: {order.order_items?.length || 0}</p>
+                            </div>
+                          </div>
                         </div>
                       )}
                     </div>

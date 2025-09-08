@@ -131,8 +131,11 @@ export async function GET(request: NextRequest) {
         order_items:
           order.order_items?.map((item: any) => ({
             item_name: item.product_name,
+            product_name: item.product_name,
             quantity: item.quantity,
+            price: item.price,
             price_at_purchase: item.price,
+            special_instructions: "",
           })) || [],
         items:
           order.order_items?.map((item: any) => ({
@@ -143,6 +146,7 @@ export async function GET(request: NextRequest) {
             item_image: "/sushi-thumbnail.png",
             quantity: item.quantity,
             price_at_purchase: item.price,
+            special_instructions: "",
           })) || [],
       })) || []
 

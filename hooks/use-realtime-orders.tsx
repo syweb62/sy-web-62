@@ -36,6 +36,8 @@ export function useRealtimeOrders() {
   const subscriptionRef = useRef<any>(null)
   const reconnectTimeoutRef = useRef<NodeJS.Timeout>()
   const reconnectAttemptsRef = useRef(0)
+  const debounceTimeoutRef = useRef<NodeJS.Timeout>()
+  const requestInProgressRef = useRef(false)
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -43,19 +45,26 @@ export function useRealtimeOrders() {
   )
 
   const fetchOrders = useCallback(async () => {
-    const now = Date.now()
-    if (now - lastFetchRef.current < 1000) {
-      console.log("[v0] Skipping fetch - too soon since last fetch")
+    if (requestInProgressRef.current) {
+      console.log("[v0] Request already in progress, skipping...")
       return
     }
+
+    const now = Date.now()
+    if (now - lastFetchRef.current < 1000) {
+      console.log("[v0] Debouncing rapid request...")
+      return
+    }
+
     lastFetchRef.current = now
+    requestInProgressRef.current = true
 
     try {
       setError(null)
       console.log("[v0] Fetching orders from API...")
 
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 15000)
+      const timeoutId = setTimeout(() => controller.abort(), 8000)
 
       const response = await fetch("/api/orders", {
         signal: controller.signal,
@@ -68,7 +77,7 @@ export function useRealtimeOrders() {
         console.log("[v0] Orders API response:", data.orders?.length || 0, "orders")
         setOrders(data.orders || [])
         setConnectionStatus("connected")
-        reconnectAttemptsRef.current = 0 // Reset reconnect attempts on success
+        reconnectAttemptsRef.current = 0
       } else {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`)
       }
@@ -87,8 +96,19 @@ export function useRealtimeOrders() {
       }
     } finally {
       setLoading(false)
+      requestInProgressRef.current = false
     }
   }, [])
+
+  const debouncedFetchOrders = useCallback(() => {
+    if (debounceTimeoutRef.current) {
+      clearTimeout(debounceTimeoutRef.current)
+    }
+
+    debounceTimeoutRef.current = setTimeout(() => {
+      fetchOrders()
+    }, 300) // 300ms debounce for smooth performance
+  }, [fetchOrders])
 
   const setupRealtimeSubscription = useCallback(() => {
     console.log("[v0] Setting up real-time subscription...")
@@ -102,7 +122,7 @@ export function useRealtimeOrders() {
 
     try {
       const channel = supabase
-        .channel("orders-realtime")
+        .channel("orders-realtime-instant")
         .on(
           "postgres_changes",
           {
@@ -112,11 +132,7 @@ export function useRealtimeOrders() {
           },
           (payload) => {
             console.log("[v0] Real-time update received:", payload.eventType)
-
-            // Debounced refresh to avoid excessive API calls
-            setTimeout(() => {
-              fetchOrders()
-            }, 500)
+            debouncedFetchOrders()
           },
         )
         .subscribe((status) => {
@@ -126,27 +142,26 @@ export function useRealtimeOrders() {
             setConnectionStatus("connected")
             reconnectAttemptsRef.current = 0
             console.log("[v0] Real-time connection established successfully")
-          } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-            console.log("[v0] Real-time connection failed, falling back to polling")
+          } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+            console.log("[v0] Real-time connection failed, attempting reconnection")
             setConnectionStatus("disconnected")
-            setupPollingFallback()
+            attemptReconnection()
           }
         })
 
       subscriptionRef.current = channel
 
-      // Set a timeout to fallback to polling if subscription doesn't connect within 10 seconds
       setTimeout(() => {
         if (connectionStatus !== "connected") {
-          console.log("[v0] Real-time connection timeout, falling back to polling")
-          setupPollingFallback()
+          console.log("[v0] Real-time connection timeout, attempting reconnection")
+          attemptReconnection()
         }
-      }, 10000)
+      }, 3000)
     } catch (error) {
       console.error("[v0] Error setting up real-time subscription:", error)
-      setupPollingFallback()
+      attemptReconnection()
     }
-  }, [supabase, fetchOrders, connectionStatus])
+  }, [supabase, debouncedFetchOrders, connectionStatus])
 
   const setupPollingFallback = useCallback(() => {
     console.log("[v0] Setting up polling fallback...")
@@ -156,22 +171,22 @@ export function useRealtimeOrders() {
       clearInterval(pollingIntervalRef.current)
     }
 
-    // Poll every 30 seconds as fallback
     pollingIntervalRef.current = setInterval(() => {
       fetchOrders()
-    }, 30000)
+    }, 10000)
 
-    setConnectionStatus("connected") // Show as connected even with polling
+    setConnectionStatus("connected")
   }, [fetchOrders])
 
   const attemptReconnection = useCallback(() => {
     if (reconnectAttemptsRef.current >= 3) {
+      // Reduced max attempts from 5 to 3
       console.log("[v0] Max reconnection attempts reached, using polling fallback")
       setupPollingFallback()
       return
     }
 
-    const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 30000)
+    const delay = Math.min(1000 * Math.pow(1.2, reconnectAttemptsRef.current), 5000)
     reconnectAttemptsRef.current++
 
     console.log(`[v0] Attempting reconnection ${reconnectAttemptsRef.current}/3 in ${delay}ms`)
@@ -190,10 +205,7 @@ export function useRealtimeOrders() {
     // Initial fetch
     fetchOrders()
 
-    // Setup real-time subscription after initial fetch
-    setTimeout(() => {
-      setupRealtimeSubscription()
-    }, 2000)
+    setupRealtimeSubscription()
 
     return () => {
       console.log("[v0] Cleaning up real-time orders hook...")
@@ -212,6 +224,10 @@ export function useRealtimeOrders() {
       // Clean up reconnection timeout
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current)
+      }
+
+      if (debounceTimeoutRef.current) {
+        clearTimeout(debounceTimeoutRef.current)
       }
 
       isInitializedRef.current = false
