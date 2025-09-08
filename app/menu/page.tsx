@@ -291,7 +291,7 @@ export default function Menu() {
                         {item.name}
                       </h3>
                       <span className={`font-medium text-lg ${item.available ? "text-gold" : "text-gray-500"}`}>
-                        BDT {item.price.toFixed(2)}
+                        Tk {item.price.toFixed(2)}
                       </span>
                     </div>
                     <p className={`text-sm mb-4 line-clamp-2 ${item.available ? "text-gray-300" : "text-gray-500"}`}>

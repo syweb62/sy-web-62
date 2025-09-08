@@ -138,10 +138,7 @@ export function OrderCard({ order, onReorder }: OrderCardProps) {
 
         <div className="flex items-center gap-4">
           <div className="text-right">
-            <p className="text-2xl font-bold text-yellow-400">
-              {"৳"}
-              {money(displayTotal)}
-            </p>
+            <p className="text-2xl font-bold text-yellow-400">Tk{money(displayTotal)}</p>
             <p className="text-gray-400 text-sm">
               {items.length} item{items.length !== 1 ? "s" : ""}
             </p>
@@ -173,6 +170,7 @@ export function OrderCard({ order, onReorder }: OrderCardProps) {
                     "/placeholder.svg" ||
                     "/placeholder.svg" ||
                     "/placeholder.svg" ||
+                    "/placeholder.svg" ||
                     "/placeholder.svg"
                   }
                   alt={item?.name || "Item"}
@@ -184,10 +182,7 @@ export function OrderCard({ order, onReorder }: OrderCardProps) {
                 <p className="font-medium">{item?.name || "Unknown Item"}</p>
                 <p className="text-gray-400 text-sm">Qty: {qty}</p>
               </div>
-              <p className="font-medium">
-                {"৳"}
-                {money(lineTotal)}
-              </p>
+              <p className="font-medium">Tk{money(lineTotal)}</p>
             </div>
           )
         })}
@@ -226,6 +221,7 @@ export function OrderCard({ order, onReorder }: OrderCardProps) {
                         "/placeholder.svg" ||
                         "/placeholder.svg" ||
                         "/placeholder.svg" ||
+                        "/placeholder.svg" ||
                         "/placeholder.svg"
                       }
                       alt={item?.name || "Item"}
@@ -237,10 +233,7 @@ export function OrderCard({ order, onReorder }: OrderCardProps) {
                     <p className="font-medium">{item?.name || "Unknown Item"}</p>
                     <p className="text-gray-400 text-sm">Qty: {qty}</p>
                   </div>
-                  <p className="font-medium">
-                    {"৳"}
-                    {money(lineTotal)}
-                  </p>
+                  <p className="font-medium">Tk{money(lineTotal)}</p>
                 </div>
               )
             })}
@@ -251,40 +244,25 @@ export function OrderCard({ order, onReorder }: OrderCardProps) {
           <div className="pt-4 border-t border-gray-700 space-y-2">
             <div className="flex justify-between text-sm">
               <span className="text-gray-400">Subtotal</span>
-              <span>
-                {"৳"}
-                {money(displaySubtotal)}
-              </span>
+              <span>Tk{money(displaySubtotal)}</span>
             </div>
             {displayDiscount > 0 && (
               <div className="flex justify-between text-sm">
                 <span className="text-gray-400">Discount (15%)</span>
-                <span className="text-green-400">
-                  -{"৳"}
-                  {money(displayDiscount)}
-                </span>
+                <span className="text-green-400">-Tk{money(displayDiscount)}</span>
               </div>
             )}
             <div className="flex justify-between text-sm">
               <span className="text-gray-400">VAT (5%)</span>
-              <span>
-                {"৳"}
-                {money(displayVat)}
-              </span>
+              <span>Tk{money(displayVat)}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-400">{order?.deliveryType === "delivery" ? "Delivery" : "Service Fee"}</span>
-              <span>
-                {"৳"}
-                {money(displayDelivery)}
-              </span>
+              <span>Tk{money(displayDelivery)}</span>
             </div>
             <div className="flex justify-between font-bold text-lg pt-2 border-t border-gray-700">
               <span>Total</span>
-              <span className="text-yellow-400">
-                {"৳"}
-                {money(displayTotal)}
-              </span>
+              <span className="text-yellow-400">Tk{money(displayTotal)}</span>
             </div>
           </div>
         )}

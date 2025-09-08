@@ -16,6 +16,7 @@ import { TimeBD } from "@/components/TimeBD"
 
 interface OrderDetails {
   order_id: string
+  short_order_id: string
   customer_name: string
   phone: string
   address: string
@@ -155,7 +156,7 @@ export default function OrderDetailsPage() {
         </Link>
         <div className="flex-1">
           <h1 className="text-3xl font-serif font-bold text-white">Order Details</h1>
-          <p className="text-gray-400 mt-1">Order #{order.order_id}</p>
+          <p className="text-gray-400 mt-1">Order #{order.short_order_id || order.order_id}</p>
         </div>
         <div className="flex items-center gap-4">
           <Badge className={getStatusColor(order.status)}>{order.status}</Badge>
@@ -189,11 +190,11 @@ export default function OrderDetailsPage() {
                     <p className="text-sm text-gray-400">{item.item_description}</p>
                     <div className="flex items-center gap-4 mt-2">
                       <span className="text-sm text-gray-300">Qty: {item.quantity}</span>
-                      <span className="text-sm text-gold">৳{item.price_at_purchase}</span>
+                      <span className="text-sm text-gold">Tk{item.price_at_purchase}</span>
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="font-medium text-gold">৳{(item.price_at_purchase * item.quantity).toFixed(2)}</p>
+                    <p className="font-medium text-gold">Tk{(item.price_at_purchase * item.quantity).toFixed(2)}</p>
                   </div>
                 </div>
               ))}
@@ -246,30 +247,30 @@ export default function OrderDetailsPage() {
             <CardContent className="space-y-4">
               <div className="flex justify-between">
                 <span className="text-gray-400">Subtotal:</span>
-                <span className="text-white">৳{order.subtotal.toFixed(2)}</span>
+                <span className="text-white">Tk{order.subtotal.toFixed(2)}</span>
               </div>
               {order.vat > 0 && (
                 <div className="flex justify-between">
                   <span className="text-gray-400">VAT:</span>
-                  <span className="text-white">৳{order.vat.toFixed(2)}</span>
+                  <span className="text-white">Tk{order.vat.toFixed(2)}</span>
                 </div>
               )}
               {order.delivery_charge > 0 && (
                 <div className="flex justify-between">
                   <span className="text-gray-400">Delivery:</span>
-                  <span className="text-white">৳{order.delivery_charge.toFixed(2)}</span>
+                  <span className="text-white">Tk{order.delivery_charge.toFixed(2)}</span>
                 </div>
               )}
               {order.discount > 0 && (
                 <div className="flex justify-between">
                   <span className="text-gray-400">Discount:</span>
-                  <span className="text-green-400">-৳{order.discount.toFixed(2)}</span>
+                  <span className="text-green-400">-Tk{order.discount.toFixed(2)}</span>
                 </div>
               )}
               <Separator className="bg-gray-700" />
               <div className="flex justify-between text-lg font-medium">
                 <span className="text-white">Total:</span>
-                <span className="text-gold">৳{order.total_price.toFixed(2)}</span>
+                <span className="text-gold">Tk{order.total_price.toFixed(2)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-400">Payment Method:</span>

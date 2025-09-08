@@ -316,14 +316,10 @@ export default function OrdersPage() {
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between gap-3">
                               <p className="font-medium truncate">{name}</p>
-                              <p className="font-medium shrink-0 text-white">
-                                {"৳"}
-                                {money(line)}
-                              </p>
+                              <p className="font-medium shrink-0 text-white">Tk {money(line)}</p>
                             </div>
-                            <p className="text-xs text-gray-400">
-                              Qty {qty} • {"৳"}
-                              {money(unit)} each
+                            <p className="text-sm text-gold px-2 py-1 rounded-md inline-block bg-transparent font-thin">
+                              x{qty}
                             </p>
                             {unit === 0 && <p className="text-xs text-red-400 mt-1">⚠️ Price data missing</p>}
                           </div>
@@ -332,37 +328,31 @@ export default function OrdersPage() {
                     })}
                   </div>
 
-                  <div className="mt-3 grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs md:text-sm">
+                  <div className="mt-3 space-y-2 text-xs md:text-sm">
                     <div className="flex justify-between">
                       <span className="text-gray-400">Subtotal</span>
-                      <span>
-                        {"৳"}
-                        {money(items.reduce((sum, it) => sum + (it.price || 0) * (it.quantity || 1), 0))}
-                      </span>
+                      <span>Tk {money(items.reduce((sum, it) => sum + (it.price || 0) * (it.quantity || 1), 0))}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-400">Discount</span>
                       <span className="text-green-400">
-                        {o.discount && o.discount > 0 ? "-" : ""}৳{money(o.discount)}
+                        {o.discount && o.discount > 0 ? "-" : ""}Tk {money(o.discount)}
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-400">VAT</span>
-                      <span>
-                        {"৳"}
-                        {money(o.vat || 0)} {/* Use actual VAT from database */}
-                      </span>
+                      <span>Tk {money(o.vat || 0)}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-400">Delivery</span>
-                      <span>{o.delivery_charge === 0 ? "FREE" : `৳${money(o.delivery_charge)}`}</span>
-                    </div>
-                    <div className="flex justify-between font-semibold">
-                      <span>Total</span>
-                      <span className="text-yellow-400">
-                        {"৳"}
-                        {money(o.total_amount)}
+                      <span className="text-gray-400">
+                        Delivery (
+                        {o.payment_method === "pickup" ? "Pickup" : o.payment_method === "bkash" ? "bKash" : "Cash"})
                       </span>
+                      <span>{o.delivery_charge === 0 ? "FREE" : `Tk ${money(o.delivery_charge)}`}</span>
+                    </div>
+                    <div className="flex justify-between font-bold text-base md:text-lg pt-2 border-t border-white/20 bg-gradient-to-r from-gold/5 to-transparent rounded-md px-2 py-2 mt-2">
+                      <span className="text-gold">Total</span>
+                      <span className="text-gold text-lg md:text-xl">Tk {money(o.total_amount)}</span>
                     </div>
                   </div>
                 </li>

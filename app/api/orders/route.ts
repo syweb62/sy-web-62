@@ -35,6 +35,7 @@ export async function GET(request: NextRequest) {
       .from("orders")
       .select(`
         order_id,
+        short_order_id,
         customer_name,
         phone_number,
         address,
@@ -113,12 +114,12 @@ export async function GET(request: NextRequest) {
       orders?.map((order) => ({
         id: order.order_id,
         order_id: order.order_id,
-        short_order_id: order.order_id.slice(-8).toUpperCase(),
+        short_order_id: order.short_order_id || order.order_id.slice(-8).toUpperCase(),
         customer_name: order.customer_name || "Guest",
         phone: order.phone_number || "N/A",
         address: order.address || "No address provided",
         total_price: order.total_amount,
-        subtotal: order.subtotal || order.total_amount,
+        subtotal: order.subtotal || 0,
         vat: order.vat || 0,
         delivery_charge: order.delivery_charge || 0,
         discount: order.discount || 0,
@@ -223,15 +224,20 @@ export async function POST(request: NextRequest) {
       .insert([
         {
           customer_name: orderData.customer_name,
-          phone_number: orderData.phone,
+          phone_number: orderData.phone_number,
           address: orderData.address,
-          total_amount: orderData.total_price,
+          total_amount: orderData.total_amount,
+          subtotal: orderData.subtotal,
+          vat: orderData.vat,
+          delivery_charge: orderData.delivery_charge,
           discount: orderData.discount || 0,
           status: orderData.status || "pending",
           payment_method: orderData.payment_method || "cash",
+          user_id: orderData.user_id || null,
+          short_order_id: orderData.short_order_id || null,
         },
       ])
-      .select()
+      .select("*, short_order_id")
       .single()
 
     if (orderError) throw orderError

@@ -21,11 +21,11 @@ import { useNotifications } from "@/context/notification-context"
 
 const safeFormatBangladeshiTaka = (amount: number): string => {
   try {
-    if (typeof amount !== "number" || isNaN(amount)) return "৳0"
-    return `৳${amount.toLocaleString("en-BD")}`
+    if (typeof amount !== "number" || isNaN(amount)) return "Tk0"
+    return `Tk${amount.toLocaleString("en-BD")}`
   } catch (error) {
     console.warn("[v0] Error formatting currency:", error)
-    return `৳${amount || 0}`
+    return `Tk${amount || 0}`
   }
 }
 

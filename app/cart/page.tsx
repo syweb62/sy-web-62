@@ -191,16 +191,19 @@ export default function Cart() {
       )
       console.log("[v0] Order ID:", shortOrderId)
 
-      // Prepare order data for Supabase
       const orderData = {
         customer_name: validation.sanitizeInput(formData.name),
         phone_number: formData.phone.replace(/\D/g, ""),
         address: validation.sanitizeInput(formData.address),
         payment_method: paymentMethod,
         status: "pending" as const,
-        total_amount: finalTotal,
-        discount: discountAmount,
-        user_id: user?.id || null, // Link order to authenticated user
+        total_amount: calculations.finalTotal,
+        subtotal: calculations.subtotal,
+        vat: calculations.vatAmount,
+        delivery_charge: calculations.deliveryAmount,
+        discount: calculations.discountAmount,
+        user_id: user?.id || null,
+        short_order_id: shortOrderId,
       }
 
       console.log("[v0] Order calculation breakdown:", {
@@ -237,7 +240,7 @@ export default function Cart() {
           console.error("Failed to save order items:", itemError)
         }
 
-        setOrderId(order.order_id.slice(-8).toUpperCase())
+        setOrderId(order.short_order_id || order.order_id.slice(-8).toUpperCase())
       } else {
         // If Supabase not configured, still allow UX to complete
         setOrderId(shortOrderId)
@@ -544,7 +547,7 @@ export default function Cart() {
                           <h4 className="font-medium text-sm truncate">{item.name}</h4>
                           <p className="text-xs text-gray-400">Qty: {item.quantity}</p>
                         </div>
-                        <div className="text-sm text-gold">BDT {(item.price * item.quantity).toFixed(2)}</div>
+                        <div className="text-sm text-gold">Tk {(item.price * item.quantity).toFixed(2)}</div>
                       </div>
                     ))}
                   </div>
@@ -552,7 +555,7 @@ export default function Cart() {
                   <div className="space-y-3 mb-6 border-t border-gray-700 pt-4">
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-300">Subtotal ({totalItems} items)</span>
-                      <span>BDT {subtotal.toFixed(2)}</span>
+                      <span>Tk {subtotal.toFixed(2)}</span>
                     </div>
 
                     {/* Discount Section (read-only) */}
@@ -577,13 +580,13 @@ export default function Cart() {
                         {"🎉 15% Off Special!"}
                       </button>
                       <span className={`text-sm font-medium ${discountApplied ? "text-green-400" : "text-gray-500"}`}>
-                        {discountApplied ? `-BDT ${discountAmount.toFixed(2)}` : "BDT 0.00"}
+                        {discountApplied ? `-Tk ${discountAmount.toFixed(2)}` : "Tk 0.00"}
                       </span>
                     </div>
 
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-300">VAT (5%)</span>
-                      <span>BDT {vatAmount.toFixed(2)}</span>
+                      <span>Tk {vatAmount.toFixed(2)}</span>
                     </div>
 
                     <div className="flex justify-between text-sm">
@@ -593,11 +596,11 @@ export default function Cart() {
                           "FREE"
                         ) : isFreeDelivery ? (
                           <>
-                            <span className="line-through text-red-500">BDT {deliveryFee.toFixed(2)}</span>
+                            <span className="line-through text-red-500">Tk {deliveryFee.toFixed(2)}</span>
                             <span>FREE</span>
                           </>
                         ) : (
-                          `BDT ${deliveryFee.toFixed(2)}`
+                          `Tk ${deliveryFee.toFixed(2)}`
                         )}
                       </span>
                     </div>
@@ -609,7 +612,7 @@ export default function Cart() {
                           Get <span className="text-red-500">FREE</span> delivery
                         </span>
                         <span className="text-gray-400">
-                          Add more <span className="text-green-400">BDT {(875 - discountedSubtotal).toFixed(2)}</span>
+                          Add more <span className="text-green-400">Tk {(875 - discountedSubtotal).toFixed(2)}</span>
                         </span>
                       </div>
                     )}
@@ -617,9 +620,7 @@ export default function Cart() {
                     <div className="border-t border-gray-700 pt-3 mt-3">
                       <div className="flex justify-between font-medium text-lg">
                         <span>Total</span>
-                        <span className="text-gold">
-                          BDT {(isFreeDelivery ? finalTotal - deliveryFee : finalTotal).toFixed(2)}
-                        </span>
+                        <span className="text-gold">Tk {finalTotal.toFixed(2)}</span>
                       </div>
                     </div>
                   </div>
@@ -686,7 +687,7 @@ export default function Cart() {
                     <p>• No account required</p>
                     <p>• Multiple payment options available</p>
                     <p>
-                      • {paymentMethod === "pickup" ? "Free pickup available" : "Free delivery on orders over BDT 875"}
+                      • {paymentMethod === "pickup" ? "Free pickup available" : "Free delivery on orders over Tk 875"}
                     </p>
                   </div>
                 </div>
@@ -719,7 +720,7 @@ export default function Cart() {
                           {/* Item Details */}
                           <div className="flex-grow min-w-0">
                             <h3 className="font-medium text-base sm:text-lg truncate">{item.name}</h3>
-                            <p className="text-gold text-sm sm:text-base">BDT {item.price.toFixed(2)}</p>
+                            <p className="text-gold text-sm sm:text-base">Tk {item.price.toFixed(2)}</p>
                             {(item as any).options && Object.keys((item as any).options).length > 0 && (
                               <div className="mt-1 text-xs sm:text-sm text-gray-400">
                                 {Object.entries((item as any).options).map(([key, value]) => (
@@ -748,7 +749,7 @@ export default function Cart() {
                               </button>
                             </div>
                             <div className="text-sm font-medium text-gold">
-                              BDT {(item.price * item.quantity).toFixed(2)}
+                              Tk {(item.price * item.quantity).toFixed(2)}
                             </div>
                           </div>
                         </div>
@@ -777,7 +778,7 @@ export default function Cart() {
                   <div className="space-y-3 mb-6">
                     <div className="flex justify-between">
                       <span className="text-gray-300">Subtotal</span>
-                      <span>BDT {subtotal.toFixed(2)}</span>
+                      <span>Tk {subtotal.toFixed(2)}</span>
                     </div>
 
                     {/* Discount (editable in Cart) */}
@@ -800,13 +801,13 @@ export default function Cart() {
                         🎉 15% Off Special!
                       </button>
                       <span className={`text-sm font-medium ${discountApplied ? "text-green-400" : "text-gray-500"}`}>
-                        {discountApplied ? `-BDT ${discountAmount.toFixed(2)}` : "BDT 0.00"}
+                        {discountApplied ? `-Tk ${discountAmount.toFixed(2)}` : "Tk 0.00"}
                       </span>
                     </div>
 
                     <div className="flex justify-between">
                       <span className="text-gray-300">VAT (5%)</span>
-                      <span>BDT {vatAmount.toFixed(2)}</span>
+                      <span>Tk {vatAmount.toFixed(2)}</span>
                     </div>
 
                     <div className="flex justify-between">
@@ -816,11 +817,11 @@ export default function Cart() {
                           "FREE"
                         ) : isFreeDelivery ? (
                           <>
-                            <span className="line-through text-red-500">BDT {deliveryFee.toFixed(2)}</span>
+                            <span className="line-through text-red-500">Tk {deliveryFee.toFixed(2)}</span>
                             <span>FREE</span>
                           </>
                         ) : (
-                          `BDT ${deliveryFee.toFixed(2)}`
+                          `Tk ${deliveryFee.toFixed(2)}`
                         )}
                       </span>
                     </div>
@@ -831,7 +832,7 @@ export default function Cart() {
                           Get <span className="text-red-500">FREE</span> delivery
                         </span>
                         <span className="text-gray-400">
-                          Add more <span className="text-green-400">BDT {(875 - discountedSubtotal).toFixed(2)}</span>
+                          Add more <span className="text-green-400">Tk {(875 - discountedSubtotal).toFixed(2)}</span>
                         </span>
                       </div>
                     )}
@@ -839,9 +840,7 @@ export default function Cart() {
                     <div className="border-t border-gray-700 pt-3 mt-3">
                       <div className="flex justify-between font-medium">
                         <span>Total</span>
-                        <span className="text-gold">
-                          BDT {(isFreeDelivery ? finalTotal - deliveryFee : finalTotal).toFixed(2)}
-                        </span>
+                        <span className="text-gold">Tk {finalTotal.toFixed(2)}</span>
                       </div>
                     </div>
                   </div>
@@ -900,7 +899,7 @@ export default function Cart() {
                     <p>• No account required</p>
                     <p>• Multiple payment options available</p>
                     <p>
-                      • {paymentMethod === "pickup" ? "Free pickup available" : "Free delivery on orders over BDT 875"}
+                      • {paymentMethod === "pickup" ? "Free pickup available" : "Free delivery on orders over Tk 875"}
                     </p>
                   </div>
                 </div>

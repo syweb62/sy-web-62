@@ -9,7 +9,7 @@ interface TimeBDProps {
 
 /**
  * Client-only Bangladesh timezone renderer
- * Treats input timestamps as already being in Bangladesh time
+ * Properly converts UTC timestamps to Bangladesh time (Asia/Dhaka)
  */
 export function TimeBD({ iso, className }: TimeBDProps) {
   const [text, setText] = useState("")
@@ -17,11 +17,9 @@ export function TimeBD({ iso, className }: TimeBDProps) {
   useEffect(() => {
     console.log("[v0] TimeBD input:", iso)
 
-    // Remove timezone suffix and treat as local Bangladesh time
-    const cleanIso = iso.replace(/[+-]\d{2}:\d{2}$|Z$/, "")
-    const date = new Date(cleanIso)
+    const date = new Date(iso) // Keep original ISO string with timezone info
 
-    // Format directly without timezone conversion since it's already Bangladesh time
+    // Format with proper Bangladesh timezone conversion
     const result =
       new Intl.DateTimeFormat("en-GB", {
         day: "2-digit",
@@ -31,7 +29,8 @@ export function TimeBD({ iso, className }: TimeBDProps) {
         minute: "2-digit",
         second: "2-digit",
         hour12: true,
-      }).format(date) + " BDT"
+        timeZone: "Asia/Dhaka", // Specify Bangladesh timezone (UTC+6)
+      }).format(date) + " BD"
 
     console.log("[v0] TimeBD output:", result)
     setText(result)

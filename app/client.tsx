@@ -100,7 +100,7 @@ export default function ClientComponent({
                       {/* Skip to main content for accessibility */}
                       <a
                         href="#main-content"
-                        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 bg-gold text-black px-4 py-2 rounded z-50 touch-manipulation focus:outline-none focus:ring-2 focus:ring-gold focus:ring-offset-2"
+                        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 bg-black text-gold px-4 py-2 rounded z-50 touch-manipulation focus:outline-none focus:ring-2 focus:ring-gold focus:ring-offset-2 border border-gold"
                       >
                         Skip to main content
                       </a>

@@ -32,7 +32,7 @@ export async function generateInvoicePdf(order: OrderHistoryItem) {
 
   // Order info
   const infoLeft = [
-    `Order ID: ${order.order_id}`,
+    `Order ID: ${order.short_order_id || order.order_id}`,
     `Status: ${order.status}`,
     `Date: ${new Date(order.created_at).toLocaleString()}`,
   ]

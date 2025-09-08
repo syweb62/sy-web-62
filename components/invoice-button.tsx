@@ -17,7 +17,7 @@ export function InvoiceButton({ order }: { order: OrderHistoryItem }) {
       const url = URL.createObjectURL(blob)
       const a = document.createElement("a")
       a.href = url
-      a.download = `invoice-${order.order_id}.pdf`
+      a.download = `invoice-${order.short_order_id || order.order_id}.pdf`
       document.body.appendChild(a)
       a.click()
       a.remove()

@@ -30,7 +30,7 @@ function toTitle(label: string) {
     .join(" ")
 }
 
-function formatBDT(amount: number) {
+function formatTk(amount: number) {
   return new Intl.NumberFormat("en-US", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
@@ -251,7 +251,7 @@ export function MenuClient({ items = [], fetchFromDatabase = false }: Props) {
                         {item.name}
                       </h3>
                       <span className={`font-medium text-lg ${available ? "text-gold" : "text-gray-500"}`}>
-                        BDT {formatBDT(item.price)}
+                        Tk {formatTk(item.price)}
                       </span>
                     </div>
 

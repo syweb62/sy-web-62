@@ -323,7 +323,7 @@ export default function CustomersPage() {
                       </TableCell>
                       <TableCell className="text-white">{customer.total_orders || 0}</TableCell>
                       <TableCell className="text-gold font-medium">
-                        ৳{customer.total_spent?.toFixed(2) || "0.00"}
+                        Tk{customer.total_spent?.toFixed(2) || "0.00"}
                       </TableCell>
                       <TableCell className="text-gray-300">
                         {new Date(customer.created_at).toLocaleDateString()}

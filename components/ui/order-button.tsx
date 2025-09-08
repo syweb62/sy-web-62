@@ -90,7 +90,7 @@ export function OrderButton({
           <>
             <ShoppingCart className="h-4 w-4 mr-2" />
             Quick Add
-            {showPrice && <span className="ml-2">BDT {item.price.toFixed(2)}</span>}
+            {showPrice && <span className="ml-2">Tk {item.price.toFixed(2)}</span>}
           </>
         )
       case "reorder":
@@ -105,7 +105,7 @@ export function OrderButton({
           <>
             <ShoppingCart className="h-4 w-4 mr-2" />
             Add to Cart
-            {showPrice && <span className="ml-2">BDT {item.price.toFixed(2)}</span>}
+            {showPrice && <span className="ml-2">Tk {item.price.toFixed(2)}</span>}
           </>
         )
     }

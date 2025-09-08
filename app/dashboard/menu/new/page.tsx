@@ -252,7 +252,7 @@ export default function NewMenuItemPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="price" className="text-white">
-                  Price (৳) *
+                  Price (Tk) *
                 </Label>
                 <Input
                   id="price"

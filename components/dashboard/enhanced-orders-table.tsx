@@ -484,44 +484,62 @@ const EnhancedOrdersTable = ({
                         <div className="space-y-1 text-sm">
                           <div className="flex justify-between">
                             <span className="text-gray-400">Subtotal:</span>
-                            <span className="text-white">৳{(order.subtotal || 0).toFixed(2)}</span>
+                            <span className="text-white">Tk{(order.subtotal || 0).toFixed(2)}</span>
                           </div>
                           {order.discount && order.discount > 0 && (
                             <div className="flex justify-between">
                               <span className="text-gray-400">Discount:</span>
-                              <span className="text-green-400">-৳{order.discount.toFixed(2)}</span>
+                              <span className="text-green-400">-Tk{order.discount.toFixed(2)}</span>
                             </div>
                           )}
                           {order.vat && order.vat > 0 && (
                             <div className="flex justify-between">
                               <span className="text-gray-400">VAT:</span>
-                              <span className="text-white">৳{order.vat.toFixed(2)}</span>
+                              <span className="text-white">Tk{order.vat.toFixed(2)}</span>
                             </div>
                           )}
                           {order.delivery_charge !== undefined && (
                             <div className="flex justify-between">
                               <span className="text-gray-400">Delivery:</span>
-                              <span className="text-white">
-                                {order.delivery_charge === 0 ? "FREE" : `৳${order.delivery_charge.toFixed(2)}`}
+                              <span className="text-white flex items-center gap-1">
+                                {order.delivery_charge === 0 ? "FREE" : `Tk${order.delivery_charge.toFixed(2)}`}
+                                <span className="text-xs text-gray-500 ml-1">
+                                  (
+                                  {order.payment_method === "pickup"
+                                    ? "Pickup"
+                                    : order.payment_method === "bkash"
+                                      ? "bKash"
+                                      : "Cash"}
+                                  )
+                                </span>
                               </span>
                             </div>
                           )}
                           <div className="border-t border-gray-600 pt-1 mt-2">
                             <div className="flex justify-between font-bold">
                               <span className="text-white">Total:</span>
-                              <span className="text-yellow-400">৳{(order.total_amount || 0).toFixed(2)}</span>
+                              <span className="text-yellow-400">Tk{(order.total_amount || 0).toFixed(2)}</span>
                             </div>
                           </div>
                         </div>
                       ) : (
                         <div>
-                          <p className="text-xl font-bold text-yellow-400">৳{(order.total_amount || 0).toFixed(2)}</p>
+                          <p className="text-xl font-bold text-yellow-400">Tk{(order.total_amount || 0).toFixed(2)}</p>
                           <p className="text-xs text-gray-400">
                             {order.order_items?.length || 0} item{(order.order_items?.length || 0) !== 1 ? "s" : ""}
                           </p>
                           {order.delivery_charge !== undefined && (
                             <p className="text-xs text-gray-400">
-                              Delivery: {order.delivery_charge === 0 ? "FREE" : `৳${order.delivery_charge.toFixed(2)}`}
+                              Delivery: {order.delivery_charge === 0 ? "FREE" : `Tk${order.delivery_charge.toFixed(2)}`}
+                              <span className="text-gray-500 ml-1">
+                                (
+                                {order.payment_method === "pickup"
+                                  ? "Pickup"
+                                  : order.payment_method === "bkash"
+                                    ? "bKash"
+                                    : "Cash"}
+                                )
+                              </span>
                             </p>
                           )}
                         </div>
@@ -542,7 +560,7 @@ const EnhancedOrdersTable = ({
                             <span className="text-white">{item.product_name}</span>
                             <span className="text-gray-400 ml-2">x{item.quantity}</span>
                           </div>
-                          <span className="text-gray-300">৳{(item.price * item.quantity).toFixed(2)}</span>
+                          <span className="text-gray-300">Tk{(item.price * item.quantity).toFixed(2)}</span>
                         </div>
                       ))}
                     </div>

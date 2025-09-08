@@ -339,7 +339,7 @@ export default function MenuManagementPage() {
             <CardContent className="p-4">
               <div className="flex justify-between items-start mb-2">
                 <h3 className="font-serif text-lg font-semibold text-white">{item.name}</h3>
-                <span className="text-yellow-500 font-bold">৳{item.price}</span>
+                <span className="text-yellow-500 font-bold">Tk{item.price}</span>
               </div>
               <p className="text-gray-400 text-sm mb-4 line-clamp-2">{item.description}</p>
 

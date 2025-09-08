@@ -42,7 +42,7 @@ export function StructuredData({ type, data }: StructuredDataProps) {
           offers: {
             "@type": "Offer",
             price: data.price,
-            priceCurrency: data.currency || "BDT",
+            priceCurrency: data.currency || "Tk",
           },
           nutrition: data.nutrition,
         }

@@ -25,7 +25,7 @@ export function formatDhaka(iso: string | Date) {
 
 export function formatBD(iso: string): string {
   try {
-    return `${formatDhaka(iso)} BDT`
+    return `${formatDhaka(iso)} Tk`
   } catch (error) {
     console.error("[v0] formatBD error:", error)
     return "—"

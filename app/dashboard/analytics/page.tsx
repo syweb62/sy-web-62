@@ -330,7 +330,7 @@ export default function AnalyticsPage() {
         categoryData.items.forEach((item) => {
           const itemText = `${item.name.toLowerCase()}`
           const quantityText = `${item.orders}p`
-          const revenueText = `৳${item.revenue.toFixed(0)}/-`
+          const revenueText = `Tk${item.revenue.toFixed(0)}/-`
 
           doc.text(itemText, 30, yPosition)
           doc.text("-", 120, yPosition)
@@ -346,7 +346,7 @@ export default function AnalyticsPage() {
         yPosition += 8
         doc.text(`Total = ${categoryData.totalItems}p`, 30, yPosition)
         doc.text("-", 160, yPosition)
-        doc.text(`৳${categoryData.totalRevenue.toFixed(0)}/-`, 170, yPosition)
+        doc.text(`Tk${categoryData.totalRevenue.toFixed(0)}/-`, 170, yPosition)
         yPosition += 20
 
         // Check if we need a new page
@@ -369,13 +369,13 @@ export default function AnalyticsPage() {
 
       doc.setFontSize(11)
       doc.setFont("helvetica", "normal")
-      doc.text(`Total Revenue: ৳${data.revenue.total.toFixed(2)}`, 20, yPosition)
+      doc.text(`Total Revenue: Tk${data.revenue.total.toFixed(2)}`, 20, yPosition)
       yPosition += 10
       doc.text(`Total Orders: ${data.orders.total}`, 20, yPosition)
       yPosition += 10
       doc.text(`Total Customers: ${data.customers.total}`, 20, yPosition)
       yPosition += 10
-      doc.text(`Average Order Value: ৳${data.performance.avgOrderValue.toFixed(2)}`, 20, yPosition)
+      doc.text(`Average Order Value: Tk${data.performance.avgOrderValue.toFixed(2)}`, 20, yPosition)
 
       // Save the PDF
       const fileName = `sushi-yaki-category-sales-${new Date().toISOString().split("T")[0]}.pdf`
@@ -459,7 +459,7 @@ export default function AnalyticsPage() {
             <DollarSign className="h-4 w-4 text-gold" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-white">৳{data.revenue.total.toFixed(2)}</div>
+            <div className="text-2xl font-bold text-white">Tk{data.revenue.total.toFixed(2)}</div>
             <div
               className={`flex items-center text-xs mt-1 ${data.revenue.growth >= 0 ? "text-green-400" : "text-red-400"}`}
             >
@@ -481,7 +481,7 @@ export default function AnalyticsPage() {
           <CardContent>
             <div className="text-2xl font-bold text-white">{data.orders.total}</div>
             <div className="text-xs text-gray-400 mt-1">
-              Avg: ৳{data.performance.avgOrderValue.toFixed(2)} per order
+              Avg: Tk{data.performance.avgOrderValue.toFixed(2)} per order
             </div>
           </CardContent>
         </Card>
@@ -594,7 +594,7 @@ export default function AnalyticsPage() {
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="font-medium text-gold">৳{item.revenue.toFixed(2)}</p>
+                      <p className="font-medium text-gold">Tk{item.revenue.toFixed(2)}</p>
                     </div>
                   </div>
                 ))}
@@ -636,12 +636,12 @@ export default function AnalyticsPage() {
               <CardContent className="space-y-4">
                 <div className="flex justify-between items-center">
                   <span className="text-gray-400">Avg Order Value</span>
-                  <span className="text-gold font-medium">৳{data.performance.avgOrderValue.toFixed(2)}</span>
+                  <span className="text-gold font-medium">Tk{data.performance.avgOrderValue.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-gray-400">Customer LTV</span>
                   <span className="text-blue-400 font-medium">
-                    ৳{data.performance.customerLifetimeValue.toFixed(2)}
+                    Tk{data.performance.customerLifetimeValue.toFixed(2)}
                   </span>
                 </div>
               </CardContent>
@@ -655,7 +655,7 @@ export default function AnalyticsPage() {
                 <div className="flex justify-between items-center">
                   <span className="text-gray-400">Revenue per Customer</span>
                   <span className="text-gold font-medium">
-                    ৳{data.customers.total > 0 ? (data.revenue.total / data.customers.total).toFixed(2) : "0.00"}
+                    Tk{data.customers.total > 0 ? (data.revenue.total / data.customers.total).toFixed(2) : "0.00"}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">

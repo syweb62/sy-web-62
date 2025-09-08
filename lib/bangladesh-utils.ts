@@ -4,7 +4,9 @@ export function formatBangladeshiTaka(amount: number): string {
     currency: "BDT",
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
-  }).format(amount)
+  })
+    .format(amount)
+    .replace("BDT", "Tk")
 }
 
 export function getBangladeshTime(): string {
