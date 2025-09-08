@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Search, Plus, Edit, Trash2, RefreshCw, AlertTriangle } from "lucide-react"
+import { Search, Plus, Edit, Trash2, RefreshCw } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { toast } from "@/hooks/use-toast"
 import { LoadingSpinner } from "@/components/loading-spinner"
@@ -33,16 +33,6 @@ export default function MenuManagementPage() {
   const [statusFilter, setStatusFilter] = useState("all")
   const [categories, setCategories] = useState<string[]>([])
   const [supabase] = useState(() => createClient())
-  const [deleteConfirmation, setDeleteConfirmation] = useState<{
-    isOpen: boolean
-    itemId: string
-    itemName: string
-  }>({
-    isOpen: false,
-    itemId: "",
-    itemName: "",
-  })
-  const [isDeleting, setIsDeleting] = useState(false)
 
   const fetchMenuItems = useCallback(async () => {
     try {
@@ -134,40 +124,28 @@ export default function MenuManagementPage() {
 
   const deleteMenuItem = useCallback(
     async (menu_id: string, itemName: string) => {
+      const confirmed = confirm(`Are you sure you want to delete "${itemName}"? This action cannot be undone.`)
+
+      if (!confirmed) return
+
       try {
-        console.log("[v0] Delete button clicked for item:", itemName, "with menu_id:", menu_id)
-        console.log("[v0] Current user authentication status...")
+        console.log("[v0] Deleting menu item:", itemName, "ID:", menu_id)
 
-        const {
-          data: { user },
-          error: authError,
-        } = await supabase.auth.getUser()
-        console.log("[v0] Current user:", user?.id, "Auth error:", authError)
+        const { error } = await supabase.from("menu_items").delete().eq("menu_id", menu_id)
 
-        if (!user) {
-          console.error("[v0] No authenticated user found")
-          toast({
-            title: "Authentication Error",
-            description: "Please log in to delete menu items",
-            variant: "destructive",
-          })
-          return
-        }
+        if (error) throw error
 
-        console.log("[v0] Setting delete confirmation dialog state")
+        setMenuItems((prev) => prev.filter((item) => item.menu_id !== menu_id))
 
-        setDeleteConfirmation({
-          isOpen: true,
-          itemId: menu_id,
-          itemName: itemName,
+        toast({
+          title: "Success",
+          description: `${itemName} deleted successfully`,
         })
-
-        console.log("[v0] Delete confirmation dialog should now be open")
-      } catch (error) {
-        console.error("[v0] Error in deleteMenuItem function:", error)
+      } catch (error: any) {
+        console.error("[v0] Error deleting menu item:", error)
         toast({
           title: "Error",
-          description: "Failed to open delete confirmation",
+          description: `Failed to delete ${itemName}: ${error.message}`,
           variant: "destructive",
         })
       }
@@ -175,101 +153,12 @@ export default function MenuManagementPage() {
     [supabase],
   )
 
-  const handleConfirmDelete = useCallback(async () => {
-    const { itemId, itemName } = deleteConfirmation
-    console.log("[v0] Delete confirmed, proceeding with deletion for:", itemName, "ID:", itemId)
-
-    if (!itemId || !itemName) {
-      console.error("[v0] Missing itemId or itemName for deletion")
-      toast({
-        title: "Error",
-        description: "Invalid item data for deletion",
-        variant: "destructive",
-      })
-      return
-    }
-
-    setIsDeleting(true)
-
-    try {
-      console.log("[v0] Checking authentication before delete...")
-
-      const {
-        data: { user },
-        error: authError,
-      } = await supabase.auth.getUser()
-      console.log("[v0] Current user for delete:", user?.id, "Auth error:", authError)
-
-      if (!user) {
-        console.error("[v0] No authenticated user found for delete operation")
-        toast({
-          title: "Authentication Error",
-          description: "Please log in to delete menu items",
-          variant: "destructive",
-        })
-        return
-      }
-
-      console.log("[v0] Calling Supabase delete for menu_id:", itemId)
-      const { error, data } = await supabase.from("menu_items").delete().eq("menu_id", itemId)
-
-      console.log("[v0] Supabase delete response - error:", error, "data:", data)
-
-      if (error) {
-        console.error("[v0] Supabase delete error:", error)
-        throw error
-      }
-
-      setMenuItems((prev) => prev.filter((item) => item.menu_id !== itemId))
-
-      console.log("[v0] Delete successful for:", itemName)
-      toast({
-        title: "Success",
-        description: `${itemName} deleted successfully`,
-      })
-
-      setDeleteConfirmation({ isOpen: false, itemId: "", itemName: "" })
-    } catch (error: any) {
-      console.error("[v0] Error deleting menu item:", error)
-      toast({
-        title: "Error",
-        description: `Failed to delete ${itemName}: ${error.message || "Unknown error"}`,
-        variant: "destructive",
-      })
-    } finally {
-      setIsDeleting(false)
-    }
-  }, [deleteConfirmation, supabase])
-
-  const handleCancelDelete = useCallback(() => {
-    console.log("[v0] Delete cancelled by user")
-    setDeleteConfirmation({ isOpen: false, itemId: "", itemName: "" })
-  }, [])
-
   const toggleAvailability = useCallback(
     async (menu_id: string, currentStatus: boolean, itemName: string) => {
       try {
-        console.log("[v0] Toggling availability for:", itemName, "from", currentStatus, "to", !currentStatus)
-
-        const {
-          data: { user },
-          error: authError,
-        } = await supabase.auth.getUser()
-        console.log("[v0] Current user for toggle:", user?.id, "Auth error:", authError)
-
-        if (!user) {
-          console.error("[v0] No authenticated user found for toggle operation")
-          toast({
-            title: "Authentication Error",
-            description: "Please log in to update menu items",
-            variant: "destructive",
-          })
-          return
-        }
+        console.log("[v0] Toggling availability for:", itemName)
 
         const { error } = await supabase.from("menu_items").update({ available: !currentStatus }).eq("menu_id", menu_id)
-
-        console.log("[v0] Toggle availability result - error:", error)
 
         if (error) throw error
 
@@ -285,7 +174,7 @@ export default function MenuManagementPage() {
         console.error("[v0] Error updating availability:", error)
         toast({
           title: "Error",
-          description: `Failed to update menu item: ${error.message || "Unknown error"}`,
+          description: `Failed to update menu item: ${error.message}`,
           variant: "destructive",
         })
       }
@@ -491,23 +380,7 @@ export default function MenuManagementPage() {
                     variant="outline"
                     size="sm"
                     className="text-red-400 hover:text-red-300 bg-red-900/20 border-red-600"
-                    onClick={(e) => {
-                      try {
-                        e.preventDefault()
-                        e.stopPropagation()
-                        console.log("[v0] Delete button onClick triggered for:", item.name, item.menu_id)
-                        console.log("[v0] Button element:", e.currentTarget)
-                        console.log("[v0] Event type:", e.type)
-                        deleteMenuItem(item.menu_id, item.name)
-                      } catch (error) {
-                        console.error("[v0] Error in delete button onClick:", error)
-                        toast({
-                          title: "Error",
-                          description: "Failed to initiate delete process",
-                          variant: "destructive",
-                        })
-                      }
-                    }}
+                    onClick={() => deleteMenuItem(item.menu_id, item.name)}
                   >
                     <Trash2 size={14} />
                   </Button>
@@ -528,57 +401,6 @@ export default function MenuManagementPage() {
             </div>
           </CardContent>
         </Card>
-      )}
-
-      {/* Modern Delete Confirmation Dialog */}
-      {deleteConfirmation.isOpen && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-gray-900 border border-gray-700 rounded-lg p-6 max-w-md w-full mx-4 shadow-2xl">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="flex-shrink-0 w-10 h-10 bg-red-900/30 rounded-full flex items-center justify-center">
-                <AlertTriangle className="w-5 h-5 text-red-400" />
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-white">Delete Menu Item</h3>
-                <p className="text-sm text-gray-400">This action cannot be undone</p>
-              </div>
-            </div>
-
-            <p className="text-gray-300 mb-6">
-              Are you sure you want to delete{" "}
-              <span className="font-semibold text-white">"{deleteConfirmation.itemName}"</span>? This will permanently
-              remove the item from your menu.
-            </p>
-
-            <div className="flex gap-3 justify-end">
-              <Button
-                variant="outline"
-                onClick={handleCancelDelete}
-                disabled={isDeleting}
-                className="border-gray-600 text-gray-300 hover:bg-gray-700 bg-transparent"
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleConfirmDelete}
-                disabled={isDeleting}
-                className="bg-red-600 hover:bg-red-700 text-white"
-              >
-                {isDeleting ? (
-                  <>
-                    <LoadingSpinner size="sm" className="mr-2" />
-                    Deleting...
-                  </>
-                ) : (
-                  <>
-                    <Trash2 size={14} className="mr-2" />
-                    Delete Item
-                  </>
-                )}
-              </Button>
-            </div>
-          </div>
-        </div>
       )}
     </div>
   )

@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { ArrowLeft, Save, Plus, Upload, X } from "lucide-react"
-import { createClient } from "@/lib/supabase/client"
+import { createClient } from "@/lib/supabase"
 import { toast } from "@/hooks/use-toast"
 import Link from "next/link"
 import Image from "next/image"
@@ -107,21 +107,16 @@ export default function NewMenuItemPage() {
     const file = event.target.files?.[0]
     if (!file) return
 
-    console.log("[v0] Image upload started for file:", file.name, "size:", file.size, "type:", file.type)
-
-    const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif"]
-    if (!allowedTypes.includes(file.type)) {
-      console.error("[v0] Invalid file type:", file.type)
+    if (!file.type.startsWith("image/")) {
       toast({
         title: "Error",
-        description: "Please select a valid image file (JPG, PNG, WebP, or GIF)",
+        description: "Please select a valid image file",
         variant: "destructive",
       })
       return
     }
 
     if (file.size > 5 * 1024 * 1024) {
-      console.error("[v0] File too large:", file.size)
       toast({
         title: "Error",
         description: "Image size must be less than 5MB",
@@ -133,94 +128,29 @@ export default function NewMenuItemPage() {
     setImageUploading(true)
 
     try {
-      console.log("[v0] Checking authentication before image upload...")
-
-      const {
-        data: { user },
-        error: authError,
-      } = await supabase.auth.getUser()
-      console.log("[v0] Current user for image upload:", user?.id, "Auth error:", authError)
-
-      if (!user) {
-        console.error("[v0] No authenticated user found for image upload")
-        toast({
-          title: "Authentication Error",
-          description: "Please log in to upload images",
-          variant: "destructive",
-        })
-        return
-      }
-
-      const fileExt = file.name.split(".").pop()?.toLowerCase()
-      const sanitizedName = formData.name.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase() || "menu-item"
-      const fileName = `${sanitizedName}-${Date.now()}.${fileExt}`
+      const fileExt = file.name.split(".").pop()
+      const fileName = `${Date.now()}.${fileExt}`
       const filePath = `menu-images/${fileName}`
 
-      console.log("[v0] Uploading file to path:", filePath)
+      const { error: uploadError } = await supabase.storage.from("menu-images").upload(filePath, file)
 
-      let uploadError = null
-      let retries = 3
-
-      while (retries > 0) {
-        console.log("[v0] Upload attempt, retries left:", retries)
-
-        const { error } = await supabase.storage.from("menu-images").upload(filePath, file, {
-          cacheControl: "3600",
-          upsert: false,
-        })
-
-        console.log("[v0] Upload attempt result - error:", error)
-
-        if (!error) {
-          uploadError = null
-          break
-        }
-
-        uploadError = error
-        retries--
-
-        if (retries > 0) {
-          console.log("[v0] Upload failed, retrying in 1 second...")
-          await new Promise((resolve) => setTimeout(resolve, 1000))
-        }
-      }
-
-      if (uploadError) {
-        console.error("[v0] Upload failed after all retries:", uploadError)
-        throw uploadError
-      }
-
-      console.log("[v0] Upload successful, getting public URL...")
+      if (uploadError) throw uploadError
 
       const {
         data: { publicUrl },
       } = supabase.storage.from("menu-images").getPublicUrl(filePath)
 
-      console.log("[v0] Public URL generated:", publicUrl)
+      setUploadedImageUrl(publicUrl)
 
-      const img = new Image()
-      img.onload = () => {
-        console.log("[v0] Image verification successful")
-        setUploadedImageUrl(publicUrl)
-        toast({
-          title: "Success",
-          description: "Image uploaded and verified successfully",
-        })
-      }
-      img.onerror = () => {
-        console.log("[v0] Image verification failed, but URL set anyway")
-        toast({
-          title: "Warning",
-          description: "Image uploaded but may not be immediately accessible",
-        })
-        setUploadedImageUrl(publicUrl)
-      }
-      img.src = publicUrl
+      toast({
+        title: "Success",
+        description: "Image uploaded successfully",
+      })
     } catch (error: any) {
-      console.error("[v0] Error uploading image:", error)
+      console.error("Error uploading image:", error)
       toast({
         title: "Error",
-        description: error.message || "Failed to upload image. Please try again.",
+        description: "Failed to upload image. Please try again.",
         variant: "destructive",
       })
     } finally {
@@ -247,9 +177,6 @@ export default function NewMenuItemPage() {
     setLoading(true)
 
     try {
-      console.log("[v0] Form submission started with data:", formData)
-      console.log("[v0] Uploaded image URL:", uploadedImageUrl)
-
       if (!formData.name.trim() || !formData.description.trim() || !formData.category || !formData.price) {
         throw new Error("Please fill in all required fields")
       }
@@ -259,49 +186,27 @@ export default function NewMenuItemPage() {
         throw new Error("Please enter a valid price")
       }
 
-      console.log("[v0] Checking authentication before menu item creation...")
-
-      const {
-        data: { user },
-        error: authError,
-      } = await supabase.auth.getUser()
-      console.log("[v0] Current user for menu item creation:", user?.id, "Auth error:", authError)
-
-      if (!user) {
-        console.error("[v0] No authenticated user found for menu item creation")
-        toast({
-          title: "Authentication Error",
-          description: "Please log in to create menu items",
-          variant: "destructive",
-        })
-        return
-      }
-
-      const menuItemData = {
-        name: formData.name.trim(),
-        description: formData.description.trim(),
-        price: price,
-        category: formData.category,
-        available: formData.available,
-        image_url: uploadedImageUrl || null,
-      }
-
-      console.log("[v0] Inserting menu item with data:", menuItemData)
-
-      const { error } = await supabase.from("menu_items").insert([menuItemData])
-
-      console.log("[v0] Menu item insert result - error:", error)
+      const { error } = await supabase.from("menu_items").insert([
+        {
+          name: formData.name.trim(),
+          description: formData.description.trim(),
+          price: price,
+          category: formData.category,
+          available: formData.available,
+          image_url: uploadedImageUrl || null,
+        },
+      ])
 
       if (error) throw error
 
-      console.log("[v0] Menu item created successfully")
       toast({
         title: "Success",
         description: "Menu item created successfully",
       })
+
       router.push("/dashboard/menu")
     } catch (error: any) {
-      console.error("[v0] Error creating menu item:", error)
+      console.error("Error creating menu item:", error)
       toast({
         title: "Error",
         description: error.message || "Failed to create menu item",
