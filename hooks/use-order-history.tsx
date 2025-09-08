@@ -126,10 +126,10 @@ export function useOrderHistory() {
         status: order.status,
         total_price: order.total_amount || 0,
         total_amount: order.total_amount || 0,
-        subtotal: order.total_amount ? order.total_amount - (order.discount || 0) : 0,
+        subtotal: order.subtotal || 0, // Use actual subtotal from database
         discount: order.discount || 0,
-        vat: 0,
-        delivery_charge: 0,
+        vat: order.vat || 0, // Use actual vat from database
+        delivery_charge: order.delivery_charge || 0, // Use actual delivery_charge from database instead of hardcoded 0
         created_at: order.created_at,
         items: (order.order_items || []).map((item: any) => ({
           id: item.item_id,

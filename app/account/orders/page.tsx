@@ -332,7 +332,7 @@ export default function OrdersPage() {
                     })}
                   </div>
 
-                  <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs md:text-sm">
+                  <div className="mt-3 grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs md:text-sm">
                     <div className="flex justify-between">
                       <span className="text-gray-400">Subtotal</span>
                       <span>
@@ -350,15 +350,12 @@ export default function OrdersPage() {
                       <span className="text-gray-400">VAT</span>
                       <span>
                         {"৳"}
-                        {money(
-                          Math.max(
-                            0,
-                            (items.reduce((sum, it) => sum + (it.price || 0) * (it.quantity || 1), 0) -
-                              (o.discount || 0)) *
-                              0.05,
-                          ),
-                        )}
+                        {money(o.vat || 0)} {/* Use actual VAT from database */}
                       </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Delivery</span>
+                      <span>{o.delivery_charge === 0 ? "FREE" : `৳${money(o.delivery_charge)}`}</span>
                     </div>
                     <div className="flex justify-between font-semibold">
                       <span>Total</span>
