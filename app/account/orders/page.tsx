@@ -316,7 +316,7 @@ export default function OrdersPage() {
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between gap-3">
                               <p className="font-medium truncate">{name}</p>
-                              <p className="font-medium shrink-0 text-yellow-400">
+                              <p className="font-medium shrink-0 text-white">
                                 {"৳"}
                                 {money(line)}
                               </p>
