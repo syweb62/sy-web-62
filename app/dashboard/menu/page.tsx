@@ -20,7 +20,9 @@ interface MenuItem {
   price: number
   category: string
   available: boolean
+  image_url?: string
   created_at: string
+  updated_at?: string
 }
 
 export default function MenuManagementPage() {
@@ -32,24 +34,15 @@ export default function MenuManagementPage() {
   const [categories, setCategories] = useState<string[]>([])
   const [supabase] = useState(() => createClient())
 
-  console.log("[v0] Dashboard Menu Management - Component loaded")
-
   const fetchMenuItems = useCallback(async () => {
-    console.log("[v0] Fetching menu items from database...")
     try {
       const { data, error } = await supabase.from("menu_items").select("*").order("created_at", { ascending: false })
 
-      if (error) {
-        console.error("[v0] Error fetching menu items:", error)
-        throw error
-      }
+      if (error) throw error
 
-      console.log("[v0] Successfully fetched", data?.length || 0, "menu items")
       setMenuItems(data || [])
-
       const uniqueCategories = [...new Set(data?.map((item) => item.category).filter(Boolean) || [])]
       setCategories(uniqueCategories)
-      console.log("[v0] Categories found:", uniqueCategories)
     } catch (error) {
       console.error("Error fetching menu items:", error)
       toast({
@@ -65,7 +58,6 @@ export default function MenuManagementPage() {
   useEffect(() => {
     fetchMenuItems()
 
-    console.log("[v0] Setting up real-time menu subscription...")
     const channel = supabase
       .channel("dashboard_menu_items_changes")
       .on(
@@ -76,13 +68,10 @@ export default function MenuManagementPage() {
           table: "menu_items",
         },
         (payload) => {
-          console.log("[v0] Dashboard menu item change detected:", payload)
-
           if (payload.eventType === "INSERT") {
             const newItem = payload.new as MenuItem
             setMenuItems((prev) => [newItem, ...prev])
 
-            // Update categories if new category is added
             if (newItem.category) {
               setCategories((prev) => {
                 if (!prev.includes(newItem.category)) {
@@ -118,34 +107,18 @@ export default function MenuManagementPage() {
       .subscribe()
 
     return () => {
-      console.log("[v0] Cleaning up menu subscription...")
       supabase.removeChannel(channel)
     }
   }, [fetchMenuItems, supabase])
-
-  const handleCategoryCreated = useCallback((newCategory: string) => {
-    setCategories((prev) => {
-      if (!prev.includes(newCategory)) {
-        return [...prev, newCategory]
-      }
-      return prev
-    })
-  }, [])
 
   const deleteMenuItem = useCallback(
     async (menu_id: string, itemName: string) => {
       if (!confirm(`Are you sure you want to delete "${itemName}"?`)) return
 
-      console.log("[v0] Deleting menu item:", menu_id)
       try {
         const { error } = await supabase.from("menu_items").delete().eq("menu_id", menu_id)
+        if (error) throw error
 
-        if (error) {
-          console.error("[v0] Error deleting menu item:", error)
-          throw error
-        }
-
-        console.log("[v0] Menu item deleted successfully")
         toast({
           title: "Success",
           description: `${itemName} deleted successfully`,
@@ -164,16 +137,10 @@ export default function MenuManagementPage() {
 
   const toggleAvailability = useCallback(
     async (menu_id: string, currentStatus: boolean, itemName: string) => {
-      console.log("[v0] Toggling availability for:", menu_id, "from", currentStatus, "to", !currentStatus)
       try {
         const { error } = await supabase.from("menu_items").update({ available: !currentStatus }).eq("menu_id", menu_id)
+        if (error) throw error
 
-        if (error) {
-          console.error("[v0] Error updating availability:", error)
-          throw error
-        }
-
-        console.log("[v0] Availability updated successfully")
         toast({
           title: "Success",
           description: `${itemName} ${!currentStatus ? "enabled" : "disabled"} successfully`,
@@ -319,10 +286,17 @@ export default function MenuManagementPage() {
           <Card key={item.menu_id} className="bg-black/30 border-gray-800 overflow-hidden">
             <div className="relative h-48">
               <Image
-                src={`/abstract-geometric-shapes.png?height=200&width=300&query=${encodeURIComponent(item.name + " " + item.category)}`}
+                src={
+                  item.image_url ||
+                  `/placeholder.svg?height=200&width=300&query=${encodeURIComponent(item.name + " " + item.category) || "/placeholder.svg"}`
+                }
                 alt={item.name}
                 fill
                 className="object-cover"
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement
+                  target.src = `/placeholder.svg?height=200&width=300&query=${encodeURIComponent(item.name + " " + item.category)}`
+                }}
               />
               <div className="absolute top-2 right-2 flex gap-2">
                 <Button

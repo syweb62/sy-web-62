@@ -27,16 +27,11 @@ interface Order {
 export function useRealtimeOrders() {
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
-  const [connectionStatus, setConnectionStatus] = useState<"connected" | "connecting" | "disconnected">("connecting")
+  const [connectionStatus, setConnectionStatus] = useState<"connected" | "connecting" | "disconnected">("connected")
   const [error, setError] = useState<string | null>(null)
   const { notifyOrderStatusChange } = useNotificationSystem()
   const isInitializedRef = useRef(false)
   const lastFetchRef = useRef<number>(0)
-  const pollingIntervalRef = useRef<NodeJS.Timeout>()
-  const subscriptionRef = useRef<any>(null)
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout>()
-  const reconnectAttemptsRef = useRef(0)
-  const debounceTimeoutRef = useRef<NodeJS.Timeout>()
   const requestInProgressRef = useRef(false)
 
   const supabase = createBrowserClient(
@@ -49,19 +44,14 @@ export function useRealtimeOrders() {
       return
     }
 
-    const now = Date.now()
-    if (now - lastFetchRef.current < 3000) {
-      return
-    }
-
-    lastFetchRef.current = now
     requestInProgressRef.current = true
 
     try {
       setError(null)
+      setLoading(true)
 
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 3000)
+      const timeoutId = setTimeout(() => controller.abort(), 5000)
 
       const response = await fetch("/api/orders", {
         signal: controller.signal,
@@ -73,7 +63,6 @@ export function useRealtimeOrders() {
         const data = await response.json()
         setOrders(data.orders || [])
         setConnectionStatus("connected")
-        reconnectAttemptsRef.current = 0
       } else {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`)
       }
@@ -95,120 +84,16 @@ export function useRealtimeOrders() {
     }
   }, [])
 
-  const debouncedFetchOrders = useCallback(() => {
-    if (debounceTimeoutRef.current) {
-      clearTimeout(debounceTimeoutRef.current)
-    }
-
-    debounceTimeoutRef.current = setTimeout(() => {
-      fetchOrders()
-    }, 1000)
-  }, [fetchOrders])
-
-  const setupRealtimeSubscription = useCallback(() => {
-    setConnectionStatus("connecting")
-
-    // Clean up existing subscription
-    if (subscriptionRef.current) {
-      subscriptionRef.current.unsubscribe()
-      subscriptionRef.current = null
-    }
-
-    try {
-      const channel = supabase
-        .channel("orders-realtime-instant")
-        .on(
-          "postgres_changes",
-          {
-            event: "*",
-            schema: "public",
-            table: "orders",
-          },
-          (payload) => {
-            debouncedFetchOrders()
-          },
-        )
-        .subscribe((status) => {
-          if (status === "SUBSCRIBED") {
-            setConnectionStatus("connected")
-            reconnectAttemptsRef.current = 0
-          } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
-            setConnectionStatus("disconnected")
-            attemptReconnection()
-          }
-        })
-
-      subscriptionRef.current = channel
-
-      setTimeout(() => {
-        if (connectionStatus !== "connected") {
-          attemptReconnection()
-        }
-      }, 2000)
-    } catch (error) {
-      attemptReconnection()
-    }
-  }, [supabase, debouncedFetchOrders, connectionStatus])
-
-  const setupPollingFallback = useCallback(() => {
-    // Clear any existing polling
-    if (pollingIntervalRef.current) {
-      clearInterval(pollingIntervalRef.current)
-    }
-
-    pollingIntervalRef.current = setInterval(() => {
-      fetchOrders()
-    }, 60000)
-
-    setConnectionStatus("connected")
-  }, [fetchOrders])
-
-  const attemptReconnection = useCallback(() => {
-    if (reconnectAttemptsRef.current >= 3) {
-      setupPollingFallback()
-      return
-    }
-
-    const delay = Math.min(1000 * (reconnectAttemptsRef.current + 1), 3000)
-    reconnectAttemptsRef.current++
-
-    reconnectTimeoutRef.current = setTimeout(() => {
-      setupRealtimeSubscription()
-    }, delay)
-  }, [setupRealtimeSubscription, setupPollingFallback])
-
   useEffect(() => {
     if (isInitializedRef.current) return
     isInitializedRef.current = true
 
-    // Initial fetch
     fetchOrders()
-    setupRealtimeSubscription()
 
     return () => {
-      // Clean up subscription
-      if (subscriptionRef.current) {
-        subscriptionRef.current.unsubscribe()
-        subscriptionRef.current = null
-      }
-
-      // Clean up polling
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current)
-      }
-
-      // Clean up reconnection timeout
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current)
-      }
-
-      if (debounceTimeoutRef.current) {
-        clearTimeout(debounceTimeoutRef.current)
-      }
-
       isInitializedRef.current = false
     }
-  }, [fetchOrders, setupRealtimeSubscription])
+  }, [fetchOrders])
 
   return { orders, loading, connectionStatus, error, refetch: fetchOrders }
 }

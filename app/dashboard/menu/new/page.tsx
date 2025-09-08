@@ -1,8 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import type React from "react"
-import { useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -12,10 +11,11 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { ArrowLeft, Save, Plus, Upload } from "lucide-react"
+import { ArrowLeft, Save, Plus, Upload, X } from "lucide-react"
 import { createClient } from "@/lib/supabase"
 import { toast } from "@/hooks/use-toast"
 import Link from "next/link"
+import Image from "next/image"
 
 export default function NewMenuItemPage() {
   const router = useRouter()
@@ -24,6 +24,7 @@ export default function NewMenuItemPage() {
   const [imageUploading, setImageUploading] = useState(false)
   const [showNewCategoryDialog, setShowNewCategoryDialog] = useState(false)
   const [newCategoryName, setNewCategoryName] = useState("")
+  const [uploadedImageUrl, setUploadedImageUrl] = useState<string>("")
   const [supabase] = useState(() => createClient())
 
   const [formData, setFormData] = useState({
@@ -34,38 +35,17 @@ export default function NewMenuItemPage() {
     available: true,
   })
 
-  console.log("[v0] New Menu Item - Component loaded")
-
   useEffect(() => {
     fetchCategories()
-
-    const handleFocus = () => {
-      fetchCategories()
-    }
-
-    window.addEventListener("focus", handleFocus)
-    document.addEventListener("visibilitychange", () => {
-      if (!document.hidden) {
-        fetchCategories()
-      }
-    })
-
-    return () => {
-      window.removeEventListener("focus", handleFocus)
-      document.removeEventListener("visibilitychange", handleFocus)
-    }
   }, [])
 
   const fetchCategories = async () => {
-    console.log("[v0] Fetching categories...")
     try {
       const { data, error } = await supabase.from("menu_items").select("category").not("category", "is", null)
-
       if (error) throw error
 
       const uniqueCategories = [...new Set(data?.map((item) => item.category).filter(Boolean) || [])]
       setCategories(uniqueCategories)
-      console.log("[v0] Categories fetched:", uniqueCategories)
     } catch (error) {
       console.error("Error fetching categories:", error)
     }
@@ -90,7 +70,6 @@ export default function NewMenuItemPage() {
       return
     }
 
-    console.log("[v0] Creating new category:", newCategoryName)
     setCategories((prev) => [...prev, newCategoryName.trim()])
     setFormData((prev) => ({ ...prev, category: newCategoryName.trim() }))
     setNewCategoryName("")
@@ -127,7 +106,6 @@ export default function NewMenuItemPage() {
     }
 
     setImageUploading(true)
-    console.log("[v0] Uploading image:", file.name)
 
     try {
       const fileExt = file.name.split(".").pop()
@@ -136,24 +114,18 @@ export default function NewMenuItemPage() {
 
       const { error: uploadError } = await supabase.storage.from("menu-images").upload(filePath, file)
 
-      if (uploadError) {
-        console.error("[v0] Upload error:", uploadError)
-        throw uploadError
-      }
+      if (uploadError) throw uploadError
 
       const {
         data: { publicUrl },
       } = supabase.storage.from("menu-images").getPublicUrl(filePath)
 
-      console.log("[v0] Image uploaded successfully:", publicUrl)
+      setUploadedImageUrl(publicUrl)
 
       toast({
         title: "Success",
         description: "Image uploaded successfully",
       })
-
-      // For now, we'll store the image URL in a state variable since the database doesn't have image_url column
-      // This can be used for preview purposes
     } catch (error) {
       console.error("Error uploading image:", error)
       toast({
@@ -166,11 +138,13 @@ export default function NewMenuItemPage() {
     }
   }
 
+  const removeImage = () => {
+    setUploadedImageUrl("")
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
-
-    console.log("[v0] Creating new menu item:", formData)
 
     try {
       const { error } = await supabase.from("menu_items").insert([
@@ -179,16 +153,13 @@ export default function NewMenuItemPage() {
           description: formData.description,
           price: Number.parseFloat(formData.price),
           category: formData.category,
-          available: formData.available, // Fixed: using 'available' instead of 'is_available'
+          available: formData.available,
+          image_url: uploadedImageUrl || null,
         },
       ])
 
-      if (error) {
-        console.error("[v0] Error creating menu item:", error)
-        throw error
-      }
+      if (error) throw error
 
-      console.log("[v0] Menu item created successfully")
       toast({
         title: "Success",
         description: "Menu item created successfully",
@@ -354,31 +325,53 @@ export default function NewMenuItemPage() {
 
               <div className="space-y-2">
                 <Label className="text-white">Menu Item Image</Label>
-                <div className="flex items-center gap-2">
-                  <Input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageUpload}
-                    className="bg-gray-800/50 border-gray-700 text-white file:bg-gray-700 file:text-white file:border-0 file:rounded file:px-3 file:py-1"
-                    disabled={imageUploading}
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={imageUploading}
-                    className="border-gray-600 text-gray-300 hover:bg-gray-700 bg-transparent"
-                  >
-                    {imageUploading ? (
-                      <>Uploading...</>
-                    ) : (
-                      <>
-                        <Upload size={16} className="mr-1" />
-                        Upload
-                      </>
-                    )}
-                  </Button>
-                </div>
+                {uploadedImageUrl ? (
+                  <div className="relative">
+                    <div className="relative h-32 w-full rounded-lg overflow-hidden border border-gray-700">
+                      <Image
+                        src={uploadedImageUrl || "/placeholder.svg"}
+                        alt="Menu item preview"
+                        fill
+                        className="object-cover"
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="absolute top-2 right-2 h-8 w-8 p-0 bg-red-600 hover:bg-red-700 border-red-600"
+                      onClick={removeImage}
+                    >
+                      <X size={14} />
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageUpload}
+                      className="bg-gray-800/50 border-gray-700 text-white file:bg-gray-700 file:text-white file:border-0 file:rounded file:px-3 file:py-1"
+                      disabled={imageUploading}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={imageUploading}
+                      className="border-gray-600 text-gray-300 hover:bg-gray-700 bg-transparent"
+                    >
+                      {imageUploading ? (
+                        <>Uploading...</>
+                      ) : (
+                        <>
+                          <Upload size={16} className="mr-1" />
+                          Upload
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                )}
                 <p className="text-xs text-gray-400">Upload an image for your menu item (max 5MB, JPG/PNG)</p>
               </div>
             </div>
