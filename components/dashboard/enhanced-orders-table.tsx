@@ -4,7 +4,18 @@ import { useState, useEffect, useCallback, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
-import { Check, X, CheckCircle, Loader2, RefreshCw, AlertCircle, Wifi, ChevronDown, ChevronUp } from "lucide-react"
+import {
+  Check,
+  X,
+  CheckCircle,
+  Loader2,
+  RefreshCw,
+  AlertCircle,
+  Wifi,
+  ChevronDown,
+  ChevronUp,
+  Trash2,
+} from "lucide-react"
 import type { EnhancedOrdersTableProps, Order, ConfirmationModal } from "@/types" // Declare or import types here
 
 const EnhancedOrdersTable = ({
@@ -94,6 +105,62 @@ const EnhancedOrdersTable = ({
     }
   }
 
+  const deleteOrder = async (orderId: string): Promise<boolean> => {
+    if (!orderId) {
+      setError("Missing order information")
+      return false
+    }
+
+    try {
+      setError(null)
+
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 5000)
+
+      const response = await fetch(`/api/orders?orderId=${orderId}`, {
+        method: "DELETE",
+        signal: controller.signal,
+      })
+
+      clearTimeout(timeoutId)
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: "Unknown error" }))
+        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      const result = await response.json()
+
+      if (!result.success) {
+        throw new Error(result.error || "Delete failed")
+      }
+
+      setDisplayOrders((prev) => prev.filter((order) => getOrderId(order) !== orderId))
+
+      setTimeout(() => {
+        if (onRefresh) {
+          onRefresh()
+        }
+      }, 100)
+
+      return true
+    } catch (error) {
+      if (error instanceof Error) {
+        if (error.name === "AbortError") {
+          setError("Request timed out. Please try again.")
+        } else if (error.message.includes("fetch")) {
+          setError("Network error. Please check your connection.")
+        } else {
+          setError(error.message)
+        }
+      } else {
+        setError("An unexpected error occurred")
+      }
+
+      return false
+    }
+  }
+
   const showConfirmation = (orderId: string, action: string, actionLabel: string) => {
     if (!orderId || !action) {
       setError("Invalid order information")
@@ -118,7 +185,13 @@ const EnhancedOrdersTable = ({
     setConfirmationModal((prev) => ({ ...prev, isProcessing: true }))
 
     try {
-      const success = await updateOrderStatus(confirmationModal.orderId, confirmationModal.action)
+      let success = false
+
+      if (confirmationModal.action === "delete") {
+        success = await deleteOrder(confirmationModal.orderId)
+      } else {
+        success = await updateOrderStatus(confirmationModal.orderId, confirmationModal.action)
+      }
 
       if (success) {
         setConfirmationModal({ isOpen: false, orderId: "", action: "", actionLabel: "", isProcessing: false })
@@ -169,6 +242,15 @@ const EnhancedOrdersTable = ({
                 Cancel
               </Button>
             </div>
+            <Button
+              onClick={() => showConfirmation(validOrderId, "delete", "delete")}
+              size="sm"
+              variant="outline"
+              className="w-full text-red-400 hover:text-red-300 border-red-600 hover:bg-red-900/20"
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              Delete Order
+            </Button>
           </div>
         )
       }
@@ -184,6 +266,15 @@ const EnhancedOrdersTable = ({
               <CheckCircle className="w-4 h-4" />
               Complete
             </Button>
+            <Button
+              onClick={() => showConfirmation(validOrderId, "delete", "delete")}
+              size="sm"
+              variant="outline"
+              className="w-full text-red-400 hover:text-red-300 border-red-600 hover:bg-red-900/20"
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              Delete Order
+            </Button>
           </div>
         )
       }
@@ -195,6 +286,15 @@ const EnhancedOrdersTable = ({
               {order.status === "completed" ? "Completed" : "Cancelled"}
             </Badge>
           </div>
+          <Button
+            onClick={() => showConfirmation(validOrderId, "delete", "delete")}
+            size="sm"
+            variant="outline"
+            className="w-full text-red-400 hover:text-red-300 border-red-600 hover:bg-red-900/20"
+          >
+            <Trash2 className="w-4 h-4 mr-2" />
+            Delete Order
+          </Button>
         </div>
       )
     }
@@ -513,13 +613,30 @@ const EnhancedOrdersTable = ({
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm">
           <div className="bg-slate-800 rounded-xl p-6 max-w-md w-full mx-4 border border-slate-600 shadow-2xl">
             <div className="text-center">
+              <div className="mb-4">
+                {confirmationModal.actionLabel === "delete" ? (
+                  <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Trash2 className="w-8 h-8 text-red-600" />
+                  </div>
+                ) : (
+                  <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <CheckCircle className="w-8 h-8 text-blue-600" />
+                  </div>
+                )}
+              </div>
+
               <h3 className="text-xl font-bold text-white mb-3">
                 {confirmationModal.actionLabel === "confirm" && "Confirm Order"}
                 {confirmationModal.actionLabel === "cancel" && "Cancel Order"}
                 {confirmationModal.actionLabel === "complete" && "Complete Order"}
+                {confirmationModal.actionLabel === "delete" && "Delete Order"}
               </h3>
 
-              <p className="text-gray-300 mb-2">Are you sure you want to {confirmationModal.actionLabel} this order?</p>
+              <p className="text-gray-300 mb-2">
+                {confirmationModal.actionLabel === "delete"
+                  ? "Are you sure you want to permanently delete this order? This action cannot be undone."
+                  : `Are you sure you want to ${confirmationModal.actionLabel} this order?`}
+              </p>
               <p className="text-gray-400 text-sm mb-8">
                 Order ID:{" "}
                 <span className="font-mono font-semibold text-white">
@@ -540,15 +657,21 @@ const EnhancedOrdersTable = ({
                 <Button
                   onClick={handleConfirmation}
                   disabled={confirmationModal.isProcessing}
-                  className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                  className={`flex-1 ${
+                    confirmationModal.actionLabel === "delete"
+                      ? "bg-red-600 hover:bg-red-700"
+                      : "bg-green-600 hover:bg-green-700"
+                  } text-white`}
                 >
                   {confirmationModal.isProcessing ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                       Processing...
                     </>
+                  ) : confirmationModal.actionLabel === "delete" ? (
+                    "Delete Permanently"
                   ) : (
-                    "OK"
+                    "Confirm"
                   )}
                 </Button>
               </div>

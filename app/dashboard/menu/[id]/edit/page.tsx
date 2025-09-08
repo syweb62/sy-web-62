@@ -12,10 +12,11 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { ArrowLeft, Save, Upload, X } from "lucide-react"
-import { supabase } from "@/lib/supabase"
+import { createClient } from "@/lib/supabase"
 import { toast } from "@/hooks/use-toast"
 import { LoadingSpinner } from "@/components/loading-spinner"
 import Link from "next/link"
+import Image from "next/image"
 
 interface MenuItem {
   menu_id: string
@@ -36,6 +37,7 @@ export default function EditMenuItemPage() {
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [menuItem, setMenuItem] = useState<MenuItem | null>(null)
   const [categories, setCategories] = useState<string[]>([])
+  const [supabase] = useState(() => createClient())
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -73,10 +75,12 @@ export default function EditMenuItemPage() {
 
   const fetchMenuItem = async (id: string) => {
     try {
+      console.log("[v0] Fetching menu item with ID:", id)
       const { data, error } = await supabase.from("menu_items").select("*").eq("menu_id", id).single()
 
       if (error) throw error
 
+      console.log("[v0] Fetched menu item:", data)
       setMenuItem(data)
       setFormData({
         name: data.name,
@@ -87,6 +91,7 @@ export default function EditMenuItemPage() {
         available: data.available,
       })
     } catch (error) {
+      console.error("[v0] Error fetching menu item:", error)
       toast({
         title: "Error",
         description: "Failed to load menu item",
@@ -103,10 +108,11 @@ export default function EditMenuItemPage() {
     if (!file) return
 
     // Validate file type
-    if (!file.type.startsWith("image/")) {
+    const validTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif"]
+    if (!validTypes.includes(file.type)) {
       toast({
         title: "Error",
-        description: "Please select a valid image file",
+        description: "Please select a valid image file (JPEG, PNG, WebP, or GIF)",
         variant: "destructive",
       })
       return
@@ -125,19 +131,58 @@ export default function EditMenuItemPage() {
     setUploading(true)
 
     try {
+      const bucketName = "menu-images"
+
+      // Check if bucket exists
+      const { data: buckets, error: listError } = await supabase.storage.listBuckets()
+
+      if (listError) {
+        console.error("[v0] Error listing buckets:", listError)
+      }
+
+      const bucketExists = buckets?.some((bucket) => bucket.name === bucketName)
+
+      if (!bucketExists) {
+        console.log("[v0] Creating storage bucket:", bucketName)
+        const { error: createError } = await supabase.storage.createBucket(bucketName, {
+          public: true,
+          allowedMimeTypes: ["image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif"],
+          fileSizeLimit: 5242880, // 5MB
+        })
+
+        if (createError) {
+          console.error("[v0] Error creating bucket:", createError)
+          throw new Error(`Failed to create storage bucket: ${createError.message}`)
+        }
+
+        console.log("[v0] Storage bucket created successfully")
+      }
+
       // Create unique filename
       const fileExt = file.name.split(".").pop()
       const fileName = `menu-items/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`
 
-      // Upload to Supabase Storage
-      const { data, error } = await supabase.storage.from("menu-images").upload(fileName, file)
+      console.log("[v0] Uploading image:", fileName)
 
-      if (error) throw error
+      // Upload to Supabase Storage
+      const { data, error } = await supabase.storage.from(bucketName).upload(fileName, file, {
+        cacheControl: "3600",
+        upsert: false,
+      })
+
+      if (error) {
+        console.error("[v0] Upload error:", error)
+        throw error
+      }
+
+      console.log("[v0] Upload successful:", data)
 
       // Get public URL
       const {
         data: { publicUrl },
-      } = supabase.storage.from("menu-images").getPublicUrl(fileName)
+      } = supabase.storage.from(bucketName).getPublicUrl(fileName)
+
+      console.log("[v0] Public URL:", publicUrl)
 
       // Update form data with new image URL
       handleInputChange("image_url", publicUrl)
@@ -147,11 +192,11 @@ export default function EditMenuItemPage() {
         title: "Success",
         description: "Image uploaded successfully",
       })
-    } catch (error) {
-      console.error("Error uploading image:", error)
+    } catch (error: any) {
+      console.error("[v0] Error uploading image:", error)
       toast({
         title: "Error",
-        description: "Failed to upload image",
+        description: error.message || "Failed to upload image",
         variant: "destructive",
       })
     } finally {
@@ -169,6 +214,8 @@ export default function EditMenuItemPage() {
     setSaving(true)
 
     try {
+      console.log("[v0] Updating menu item with data:", formData)
+
       const { error } = await supabase
         .from("menu_items")
         .update({
@@ -188,10 +235,11 @@ export default function EditMenuItemPage() {
         description: "Menu item updated successfully",
       })
       router.push("/dashboard/menu")
-    } catch (error) {
+    } catch (error: any) {
+      console.error("[v0] Error updating menu item:", error)
       toast({
         title: "Error",
-        description: "Failed to update menu item",
+        description: error.message || "Failed to update menu item",
         variant: "destructive",
       })
     } finally {
@@ -312,10 +360,16 @@ export default function EditMenuItemPage() {
                 {/* Image Preview */}
                 {imagePreview && (
                   <div className="relative w-full h-32 bg-gray-800/50 border border-gray-700 rounded-md overflow-hidden">
-                    <img
+                    <Image
                       src={imagePreview || "/placeholder.svg"}
                       alt="Menu item preview"
-                      className="w-full h-full object-cover"
+                      fill
+                      className="object-cover"
+                      onError={(e) => {
+                        console.error("[v0] Image load error:", e)
+                        const target = e.target as HTMLImageElement
+                        target.src = `/placeholder.svg?height=128&width=200&query=${encodeURIComponent(formData.name || "menu item")}`
+                      }}
                     />
                     <button
                       type="button"
@@ -350,15 +404,26 @@ export default function EditMenuItemPage() {
                   <Input
                     placeholder="Or paste image URL"
                     value={formData.image_url}
-                    onChange={(e) => handleInputChange("image_url", e.target.value)}
-                    className="bg-gray-800/50 border-gray-700 flex-1"
+                    onChange={(e) => {
+                      handleInputChange("image_url", e.target.value)
+                      setImagePreview(e.target.value)
+                    }}
+                    className="bg-gray-800/50 border-gray-700 flex-1 text-white"
                   />
                 </div>
 
                 {/* Hidden file input */}
-                <input id="image-upload" type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+                <input
+                  id="image-upload"
+                  type="file"
+                  accept="image/jpeg,image/jpg,image/png,image/webp,image/gif"
+                  onChange={handleImageUpload}
+                  className="hidden"
+                />
 
-                <p className="text-xs text-gray-400">Upload an image or paste a URL. Max size: 5MB</p>
+                <p className="text-xs text-gray-400">
+                  Upload an image or paste a URL. Max size: 5MB (JPEG/PNG/WebP/GIF)
+                </p>
               </div>
             </div>
 

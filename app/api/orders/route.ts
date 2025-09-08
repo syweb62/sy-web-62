@@ -268,3 +268,67 @@ export async function POST(request: NextRequest) {
     )
   }
 }
+
+export async function DELETE(request: NextRequest) {
+  console.log("[v0] ========== API DELETE: Request received ==========")
+  console.log("[v0] API DELETE: Time:", new Date().toISOString())
+
+  try {
+    const supabase = createClient()
+    const { searchParams } = new URL(request.url)
+    const orderId = searchParams.get("orderId")
+
+    console.log("[v0] API DELETE: Received request for orderId:", orderId)
+
+    if (!orderId) {
+      console.error("[v0] API DELETE: Missing order ID")
+      return NextResponse.json({ error: "Order ID is required" }, { status: 400 })
+    }
+
+    // First delete order items
+    const { error: itemsError } = await supabase.from("order_items").delete().eq("order_id", orderId)
+
+    if (itemsError) {
+      console.error("[v0] API DELETE: Failed to delete order items:", itemsError)
+      return NextResponse.json({ error: "Failed to delete order items" }, { status: 500 })
+    }
+
+    // Then delete the order
+    const { data: deletedOrder, error: orderError } = await supabase
+      .from("orders")
+      .delete()
+      .eq("order_id", orderId)
+      .select()
+
+    if (orderError) {
+      console.error("[v0] API DELETE: Failed to delete order:", orderError)
+      return NextResponse.json({ error: "Failed to delete order" }, { status: 500 })
+    }
+
+    if (!deletedOrder || deletedOrder.length === 0) {
+      console.error("[v0] API DELETE: Order not found:", orderId)
+      return NextResponse.json({ error: `Order ${orderId} not found` }, { status: 404 })
+    }
+
+    console.log("[v0] API DELETE: Order deleted successfully:", orderId)
+
+    return NextResponse.json({
+      success: true,
+      message: "Order deleted successfully",
+      orderId,
+      deletedOrder: deletedOrder[0],
+      timestamp: new Date().toISOString(),
+    })
+  } catch (error) {
+    console.error("[v0] API DELETE: Delete failed:", error)
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Failed to delete order",
+        details: error instanceof Error ? error.message : "Unknown error",
+        orderId: null,
+      },
+      { status: 500 },
+    )
+  }
+}
