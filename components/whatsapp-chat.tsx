@@ -5,7 +5,7 @@ import { MessageCircle, X, Send, Facebook, Instagram } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import Image from "next/image"
 
-const RAW_PHONE = process.env.NEXT_PUBLIC_WHATSAPP_PHONE || ""
+const RAW_PHONE = process.env.NEXT_PUBLIC_WHATSAPP_PHONE || "+880 1756693766"
 const PHONE = RAW_PHONE.replace(/\D/g, "") // keep digits only: supports +880, spaces, etc.
 const WHATSAPP_MESSAGE_CODE = "J5JFSMILYBTQG1"
 

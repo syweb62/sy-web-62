@@ -1,6 +1,6 @@
 /** @type {import('next-sitemap').IConfig} */
 module.exports = {
-  siteUrl: process.env.SITE_URL || "https://sushiyakiresto.com",
+  siteUrl: process.env.SITE_URL || "https://www.sushiyakiresto.com",
   generateRobotsTxt: true,
   generateIndexSitemap: false,
   exclude: ["/api/*", "/dashboard/*", "/admin/*", "/account/*"],
@@ -12,7 +12,7 @@ module.exports = {
         disallow: ["/api/", "/dashboard/", "/admin/", "/account/"],
       },
     ],
-    additionalSitemaps: ["https://sushiyakiresto.com/sitemap.xml"],
+    additionalSitemaps: ["https://www.sushiyakiresto.com/sitemap.xml"],
   },
   transform: async (config, path) => {
     // Custom priority and changefreq for different pages

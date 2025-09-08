@@ -27,7 +27,8 @@ export const verifyPassword = async (password: string, hashedPassword: string): 
 
 // JWT token management
 export const createToken = (user: User): string => {
-  const secret = process.env.JWT_SECRET || "fallback-secret-key-change-in-production"
+  const secret =
+    process.env.JWT_SECRET || "ylbkDjam1BEzzNmYGfh2BoA5n6uDRBFC+FP2bYVJ3CuUDX0Z0L1C2q5wVZ2g30IYU1TIW8yPv9A0fmxJd7b74w=="
   return jwt.sign(
     {
       userId: user.id,
@@ -45,7 +46,9 @@ export const createToken = (user: User): string => {
 
 export const verifyToken = (token: string): { userId: string; email: string; role: string } | null => {
   try {
-    const secret = process.env.JWT_SECRET || "fallback-secret-key-change-in-production"
+    const secret =
+      process.env.JWT_SECRET ||
+      "ylbkDjam1BEzzNmYGfh2BoA5n6uDRBFC+FP2bYVJ3CuUDX0Z0L1C2q5wVZ2g30IYU1TIW8yPv9A0fmxJd7b74w=="
     const decoded = jwt.verify(token, secret) as any
     return {
       userId: decoded.userId,

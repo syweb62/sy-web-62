@@ -4,25 +4,29 @@ import { useState, useEffect, useCallback, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
-import { Check, X, CheckCircle, Loader2, RefreshCw, AlertCircle, Wifi } from "lucide-react"
+import { Check, X, CheckCircle, Loader2, RefreshCw, AlertCircle, Wifi, ChevronDown, ChevronUp } from "lucide-react"
 import { createClient } from "@/lib/supabase"
 
 interface Order {
   order_id: string
-  short_order_id?: string // Added short_order_id field
+  short_order_id?: string
   customer_name: string
-  phone_number: string // Updated to match database schema
+  phone_number: string
   address: string
   payment_method: string
-  total_amount: number // Updated from total_price to total_amount to match database
+  total_amount: number
+  subtotal?: number
+  discount?: number
+  vat?: number
+  delivery_charge?: number
   status: "confirmed" | "cancelled" | "pending" | "completed"
   created_at: string
   updated_at?: string
   special_instructions?: string
   order_items: Array<{
-    product_name: string // Updated from item_name to product_name
+    product_name: string
     quantity: number
-    price: number // Updated from price_at_purchase to price
+    price: number
   }>
 }
 
@@ -50,6 +54,7 @@ const EnhancedOrdersTable = ({
   loading = false,
 }: EnhancedOrdersTableProps) => {
   const [displayOrders, setDisplayOrders] = useState<Order[]>(orders)
+  const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set())
   const [confirmationModal, setConfirmationModal] = useState<ConfirmationModal>({
     isOpen: false,
     orderId: "",
@@ -339,6 +344,18 @@ const EnhancedOrdersTable = ({
     return <Badge className={`${config.color} px-3 py-1 font-medium rounded-full`}>{config.label}</Badge>
   }
 
+  const toggleOrderExpansion = (orderId: string) => {
+    setExpandedOrders((prev) => {
+      const newSet = new Set(prev)
+      if (newSet.has(orderId)) {
+        newSet.delete(orderId)
+      } else {
+        newSet.add(orderId)
+      }
+      return newSet
+    })
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -404,6 +421,7 @@ const EnhancedOrdersTable = ({
       <div className="space-y-4">
         {displayOrders.map((order) => {
           const validOrderId = getOrderId(order)
+          const isExpanded = expandedOrders.has(validOrderId)
 
           return (
             <Card
@@ -411,7 +429,7 @@ const EnhancedOrdersTable = ({
               className="bg-gray-900/50 border-gray-700/30 hover:bg-gray-900/70 transition-all duration-200"
             >
               <CardContent className="p-6">
-                <div className="grid grid-cols-12 gap-6 items-center">
+                <div className="grid grid-cols-12 gap-6 items-start">
                   <div className="col-span-3">
                     <div className="space-y-2">
                       <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">ORDER</p>
@@ -419,6 +437,16 @@ const EnhancedOrdersTable = ({
                         {order.short_order_id || order.order_id?.slice(-8).toUpperCase() || "N/A"}
                       </p>
                       {getStatusBadge(order.status)}
+                      <p className="text-xs text-gray-400">
+                        {new Date(order.created_at).toLocaleString("en-BD", {
+                          timeZone: "Asia/Dhaka",
+                          month: "short",
+                          day: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          hour12: true,
+                        })}
+                      </p>
                     </div>
                   </div>
 
@@ -427,28 +455,99 @@ const EnhancedOrdersTable = ({
                       <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">CUSTOMER</p>
                       <div className="space-y-1">
                         <p className="text-white font-semibold">{order.customer_name}</p>
-                        <p className="text-gray-300 text-sm">• {order.phone_number}</p> {/* Updated field name */}
+                        <p className="text-gray-300 text-sm">📞 {order.phone_number}</p>
                         <p className="text-gray-400 text-sm truncate" title={order.address}>
                           📍 {order.address}
                         </p>
+                        {order.payment_method && (
+                          <p className="text-gray-400 text-sm">
+                            💳 {order.payment_method === "bkash" ? "bKash" : order.payment_method}
+                          </p>
+                        )}
                       </div>
                     </div>
                   </div>
 
                   <div className="col-span-2">
                     <div className="space-y-2">
-                      <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">TOTAL</p>
-                      <p className="text-xl font-bold text-white">
-                        ৳{(order.total_amount || 0).toFixed(2)} {/* Added null check and updated field name */}
-                      </p>
-                      <p className="text-xs text-gray-400">
-                        {order.order_items?.length || 0} item{(order.order_items?.length || 0) !== 1 ? "s" : ""}
-                      </p>
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">ORDER SUMMARY</p>
+                        <button
+                          onClick={() => toggleOrderExpansion(validOrderId)}
+                          className="text-gray-400 hover:text-white transition-colors"
+                        >
+                          {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                        </button>
+                      </div>
+
+                      {isExpanded ? (
+                        <div className="space-y-1 text-sm">
+                          <div className="flex justify-between">
+                            <span className="text-gray-400">Subtotal:</span>
+                            <span className="text-white">৳{(order.subtotal || 0).toFixed(2)}</span>
+                          </div>
+                          {order.discount && order.discount > 0 && (
+                            <div className="flex justify-between">
+                              <span className="text-gray-400">Discount:</span>
+                              <span className="text-green-400">-৳{order.discount.toFixed(2)}</span>
+                            </div>
+                          )}
+                          {order.vat && order.vat > 0 && (
+                            <div className="flex justify-between">
+                              <span className="text-gray-400">VAT:</span>
+                              <span className="text-white">৳{order.vat.toFixed(2)}</span>
+                            </div>
+                          )}
+                          {order.delivery_charge !== undefined && (
+                            <div className="flex justify-between">
+                              <span className="text-gray-400">Delivery:</span>
+                              <span className="text-white">
+                                {order.delivery_charge === 0 ? "FREE" : `৳${order.delivery_charge.toFixed(2)}`}
+                              </span>
+                            </div>
+                          )}
+                          <div className="border-t border-gray-600 pt-1 mt-2">
+                            <div className="flex justify-between font-bold">
+                              <span className="text-white">Total:</span>
+                              <span className="text-yellow-400">৳{(order.total_amount || 0).toFixed(2)}</span>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div>
+                          <p className="text-xl font-bold text-yellow-400">৳{(order.total_amount || 0).toFixed(2)}</p>
+                          <p className="text-xs text-gray-400">
+                            {order.order_items?.length || 0} item{(order.order_items?.length || 0) !== 1 ? "s" : ""}
+                          </p>
+                          {order.delivery_charge !== undefined && (
+                            <p className="text-xs text-gray-400">
+                              Delivery: {order.delivery_charge === 0 ? "FREE" : `৳${order.delivery_charge.toFixed(2)}`}
+                            </p>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
 
                   <div className="col-span-3">{getActionButtons(order)}</div>
                 </div>
+
+                {isExpanded && order.order_items && order.order_items.length > 0 && (
+                  <div className="mt-4 pt-4 border-t border-gray-700">
+                    <p className="text-xs text-gray-400 uppercase tracking-wide font-medium mb-3">ORDER ITEMS</p>
+                    <div className="space-y-2">
+                      {order.order_items.map((item, index) => (
+                        <div key={index} className="flex justify-between items-center text-sm">
+                          <div className="flex-1">
+                            <span className="text-white">{item.product_name}</span>
+                            <span className="text-gray-400 ml-2">x{item.quantity}</span>
+                          </div>
+                          <span className="text-gray-300">৳{(item.price * item.quantity).toFixed(2)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           )

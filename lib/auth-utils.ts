@@ -6,7 +6,7 @@ const getJWTSecret = (): string => {
   const secret = process.env.JWT_SECRET
   if (!secret || secret.length < 32) {
     console.warn("JWT_SECRET not set or too short. Using fallback for development.")
-    return "development-fallback-secret-key-minimum-32-characters-long"
+    return "ylbkDjam1BEzzNmYGfh2BoA5n6uDRBFC+FP2bYVJ3CuUDX0Z0L1C2q5wVZ2g30IYU1TIW8yPv9A0fmxJd7b74w=="
   }
   return secret
 }
@@ -56,8 +56,6 @@ export const sanitizeInput = (input: string): string => {
 export const getDemoUsers = () => {
   const adminEmail = process.env.DEMO_ADMIN_EMAIL || "admin@sushiyaki.com"
   const adminPassword = process.env.DEMO_ADMIN_PASSWORD || "Admin123!"
-  const userEmail = process.env.DEMO_USER_EMAIL || "demo@example.com"
-  const userPassword = process.env.DEMO_USER_PASSWORD || "Password123!"
 
   return {
     [adminEmail]: {
@@ -67,14 +65,6 @@ export const getDemoUsers = () => {
       password: adminPassword,
       avatar: "",
       role: "admin" as const,
-    },
-    [userEmail]: {
-      id: "demo",
-      name: "Demo User",
-      email: userEmail,
-      password: userPassword,
-      avatar: "",
-      role: "user" as const,
     },
   }
 }

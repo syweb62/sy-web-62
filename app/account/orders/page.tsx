@@ -316,7 +316,7 @@ export default function OrdersPage() {
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between gap-3">
                               <p className="font-medium truncate">{name}</p>
-                              <p className="font-medium shrink-0">
+                              <p className="font-medium shrink-0 text-yellow-400">
                                 {"৳"}
                                 {money(line)}
                               </p>
@@ -325,6 +325,7 @@ export default function OrdersPage() {
                               Qty {qty} • {"৳"}
                               {money(unit)} each
                             </p>
+                            {unit === 0 && <p className="text-xs text-red-400 mt-1">⚠️ Price data missing</p>}
                           </div>
                         </div>
                       )
@@ -336,21 +337,27 @@ export default function OrdersPage() {
                       <span className="text-gray-400">Subtotal</span>
                       <span>
                         {"৳"}
-                        {money(o.subtotal || o.total_amount - (o.discount || 0))}
+                        {money(items.reduce((sum, it) => sum + (it.price || 0) * (it.quantity || 1), 0))}
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-400">Discount</span>
-                      <span>
-                        {"৳"}
-                        {money(o.discount)}
+                      <span className="text-green-400">
+                        {o.discount && o.discount > 0 ? "-" : ""}৳{money(o.discount)}
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-400">VAT</span>
                       <span>
                         {"৳"}
-                        {money(o.vat || 0)}
+                        {money(
+                          Math.max(
+                            0,
+                            (items.reduce((sum, it) => sum + (it.price || 0) * (it.quantity || 1), 0) -
+                              (o.discount || 0)) *
+                              0.05,
+                          ),
+                        )}
                       </span>
                     </div>
                     <div className="flex justify-between font-semibold">

@@ -518,7 +518,7 @@ const Navbar = () => {
                 href={href}
                 className={`nav-link relative transition-all duration-300 py-2 px-3 rounded-md ${
                   isActive
-                    ? "text-gold bg-gold/10 shadow-lg shadow-gold/20 border border-gold/30"
+                    ? "text-gold bg-black/40 shadow-lg shadow-gold/20 border border-gold/50"
                     : "text-white hover:text-gold hover:bg-white/5 hover:shadow-md"
                 }`}
                 aria-current={isActive ? "page" : undefined}
@@ -795,7 +795,7 @@ const Navbar = () => {
                       onClick={() => handleNavigation(href)}
                       className={`text-[15px] font-medium transition-all duration-300 py-3.5 px-5 w-full text-center border rounded-lg touch-manipulation disabled:opacity-50 relative ${
                         isActive
-                          ? "text-gold bg-gold/15 border-gold/40 shadow-lg shadow-gold/25"
+                          ? "text-gold bg-black/40 border-gold/50 shadow-lg shadow-gold/25"
                           : "text-white hover:text-gold hover:bg-white/5 border-white/10 hover:border-white/20"
                       }`}
                       disabled={isNavigating}

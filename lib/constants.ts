@@ -2,7 +2,7 @@
 export const APP_CONFIG = {
   name: "Sushi Yaki",
   description: "Authentic Japanese Restaurant",
-  url: process.env.NEXT_PUBLIC_BASE_URL || "https://sushiyaki.com",
+  url: process.env.NEXT_PUBLIC_BASE_URL || "https://www.sushiyakiresto.com",
   supportEmail: "support@sushiyaki.com",
 
   // File upload limits

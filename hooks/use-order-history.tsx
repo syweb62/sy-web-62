@@ -15,6 +15,7 @@ export interface OrderHistoryItem {
   payment_method: string
   status: "pending" | "processing" | "completed" | "cancelled"
   total_price: number
+  total_amount: number
   subtotal?: number
   discount?: number
   vat?: number
@@ -26,6 +27,8 @@ export interface OrderHistoryItem {
     menu_item_id?: string | null
     quantity: number
     price_at_purchase: number
+    price: number
+    product_name?: string | null
     item_name?: string | null
     item_description?: string | null
     item_image?: string | null
@@ -122,6 +125,7 @@ export function useOrderHistory() {
         payment_method: order.payment_method || "cash",
         status: order.status,
         total_price: order.total_amount || 0,
+        total_amount: order.total_amount || 0,
         subtotal: order.total_amount ? order.total_amount - (order.discount || 0) : 0,
         discount: order.discount || 0,
         vat: 0,
@@ -131,7 +135,9 @@ export function useOrderHistory() {
           id: item.item_id,
           menu_item_id: item.item_id,
           quantity: item.quantity,
-          price_at_purchase: item.price,
+          price_at_purchase: item.price || 0,
+          price: item.price || 0,
+          product_name: item.product_name || "Item",
           item_name: item.product_name,
           item_description: null,
           item_image: null,
