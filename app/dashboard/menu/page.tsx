@@ -114,18 +114,30 @@ export default function MenuManagementPage() {
   const deleteMenuItem = useCallback(
     async (menu_id: string, itemName: string) => {
       // Changed id parameter to menu_id
-      if (!confirm(`Are you sure you want to delete "${itemName}"?`)) return
+      console.log("[v0] Delete button clicked for item:", itemName, "with menu_id:", menu_id)
+
+      if (!confirm(`Are you sure you want to delete "${itemName}"?`)) {
+        console.log("[v0] Delete cancelled by user")
+        return
+      }
+
+      console.log("[v0] Delete confirmed, proceeding with deletion...")
 
       try {
+        console.log("[v0] Calling Supabase delete for menu_id:", menu_id)
         const { error } = await supabase.from("menu_items").delete().eq("menu_id", menu_id) // Changed id to menu_id
-        if (error) throw error
+        if (error) {
+          console.log("[v0] Supabase delete error:", error)
+          throw error
+        }
 
+        console.log("[v0] Delete successful for:", itemName)
         toast({
           title: "Success",
           description: `${itemName} deleted successfully`,
         })
       } catch (error) {
-        console.error("Error deleting menu item:", error)
+        console.error("[v0] Error deleting menu item:", error)
         toast({
           title: "Error",
           description: "Failed to delete menu item",
@@ -357,7 +369,10 @@ export default function MenuManagementPage() {
                     variant="outline"
                     size="sm"
                     className="text-red-400 hover:text-red-300 bg-red-900/20 border-red-600"
-                    onClick={() => deleteMenuItem(item.menu_id, item.name)}
+                    onClick={() => {
+                      console.log("[v0] Delete button clicked for:", item.name, item.menu_id)
+                      deleteMenuItem(item.menu_id, item.name)
+                    }}
                   >
                     <Trash2 size={14} />
                   </Button>

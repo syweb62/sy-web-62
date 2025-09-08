@@ -181,8 +181,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const { data: sessionData } = await withTimeout(supabase.auth.getSession(), 10000)
           currentSession = sessionData?.session ?? null
         } catch (err) {
-          if (err instanceof Error && err.message.includes("Invalid Refresh Token")) {
-            console.log("[v0] Invalid refresh token detected, clearing session")
+          if (
+            err instanceof Error &&
+            (err.message.includes("Invalid Refresh Token") ||
+              err.message.includes("refresh_token_not_found") ||
+              err.message.includes("Refresh Token Not Found"))
+          ) {
+            console.log("[v0] Invalid refresh token detected, clearing session and storage")
+            // Clear all auth-related storage
+            localStorage.removeItem("supabase.auth.token")
+            sessionStorage.removeItem("supabase.auth.token")
+            // Clear any other supabase auth keys
+            Object.keys(localStorage).forEach((key) => {
+              if (key.startsWith("sb-") && key.includes("auth-token")) {
+                localStorage.removeItem(key)
+              }
+            })
             await supabase.auth.signOut().catch(() => {})
             currentSession = null
           } else {
@@ -212,8 +226,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 setUser(null)
               }
             } catch (err) {
-              if (err instanceof Error && err.message.includes("Invalid Refresh Token")) {
-                console.log("[v0] Invalid refresh token in auth state change, clearing session")
+              if (
+                err instanceof Error &&
+                (err.message.includes("Invalid Refresh Token") ||
+                  err.message.includes("refresh_token_not_found") ||
+                  err.message.includes("Refresh Token Not Found"))
+              ) {
+                console.log("[v0] Invalid refresh token in auth state change, clearing session and storage")
+                // Clear all auth-related storage
+                localStorage.removeItem("supabase.auth.token")
+                sessionStorage.removeItem("supabase.auth.token")
+                Object.keys(localStorage).forEach((key) => {
+                  if (key.startsWith("sb-") && key.includes("auth-token")) {
+                    localStorage.removeItem(key)
+                  }
+                })
                 setSession(null)
                 setUser(null)
               } else {
@@ -227,8 +254,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       } catch (err) {
         console.error("[v0] Auth initialization error:", err)
-        if (err instanceof Error && err.message.includes("Invalid Refresh Token")) {
+        if (
+          err instanceof Error &&
+          (err.message.includes("Invalid Refresh Token") ||
+            err.message.includes("refresh_token_not_found") ||
+            err.message.includes("Refresh Token Not Found"))
+        ) {
           console.log("[v0] Clearing invalid session during initialization")
+          localStorage.removeItem("supabase.auth.token")
+          sessionStorage.removeItem("supabase.auth.token")
+          Object.keys(localStorage).forEach((key) => {
+            if (key.startsWith("sb-") && key.includes("auth-token")) {
+              localStorage.removeItem(key)
+            }
+          })
           setSession(null)
           setUser(null)
         }

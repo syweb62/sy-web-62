@@ -1,13 +1,13 @@
 import { createClient as createSupabaseClient, type User } from "@supabase/supabase-js"
 
 // Environment variables with fallbacks
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://pjoelkxkcwtzmbyswfhu.supabase.co"
-const supabaseAnonKey =
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBqb2Vsa3hrY3d0em1ieXN3Zmh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ1NTMwMTksImV4cCI6MjA3MDEyOTAxOX0.xY2bVHrv_gl4iEHY79f_PC1OJxjHbHWYoqiSkrpi5n8"
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error("Missing required Supabase environment variables")
+  throw new Error(
+    "Missing required Supabase environment variables: NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY",
+  )
 }
 
 export function createClient() {
@@ -16,6 +16,13 @@ export function createClient() {
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: true,
+      onAuthStateChange: (event, session) => {
+        if (event === "TOKEN_REFRESHED" && !session) {
+          // Clear invalid session data
+          localStorage.removeItem("supabase.auth.token")
+          sessionStorage.removeItem("supabase.auth.token")
+        }
+      },
     },
     db: {
       schema: "public",
@@ -28,12 +35,19 @@ export function createClient() {
   })
 }
 
-// Create a single supabase client for interacting with your database
 export const supabase = createSupabaseClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
+    // Handle auth state changes and clear invalid tokens
+    onAuthStateChange: (event, session) => {
+      if (event === "TOKEN_REFRESHED" && !session) {
+        // Clear invalid session data
+        localStorage.removeItem("supabase.auth.token")
+        sessionStorage.removeItem("supabase.auth.token")
+      }
+    },
   },
   db: {
     schema: "public",
@@ -144,7 +158,6 @@ export async function createOrderWithItems(orderData: any, orderItems: any[]) {
   }
 }
 
-// Test supabase connection
 export async function testSupabaseConnection() {
   try {
     console.log("[v0] Testing Supabase connection...")
@@ -160,6 +173,13 @@ export async function testSupabaseConnection() {
     const { data, error } = (await Promise.race([queryPromise, timeoutPromise])) as any
 
     if (error) {
+      // Handle specific auth errors
+      if (error.message?.includes("Invalid Refresh Token") || error.message?.includes("refresh_token_not_found")) {
+        console.log("[v0] Invalid refresh token detected, clearing session")
+        await supabase.auth.signOut().catch(() => {})
+        return { status: "connected", warning: "Session cleared due to invalid refresh token" }
+      }
+
       console.error("[v0] Supabase connection test failed:", error.message)
       return { status: "connected", error: error.message }
     }
@@ -171,6 +191,16 @@ export async function testSupabaseConnection() {
       data,
     }
   } catch (error) {
+    // Handle auth errors gracefully
+    if (
+      error instanceof Error &&
+      (error.message.includes("Invalid Refresh Token") || error.message.includes("refresh_token_not_found"))
+    ) {
+      console.log("[v0] Invalid refresh token in connection test, clearing session")
+      await supabase.auth.signOut().catch(() => {})
+      return { status: "connected", warning: "Session cleared due to invalid refresh token" }
+    }
+
     console.error("[v0] Supabase connection test error:", error)
     return { status: "connected", error: String(error) }
   }
