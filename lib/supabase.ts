@@ -1,14 +1,17 @@
 import { createClient as createSupabaseClient, type User } from "@supabase/supabase-js"
 
-// Environment variables with fallbacks
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+const supabaseUrl =
+  process.env.NEXT_PUBLIC_SUPABASE_URL ||
+  (typeof window !== "undefined" && (window as any).__PUBLIC_ENV?.NEXT_PUBLIC_SUPABASE_URL) ||
+  "https://pjoelkxkcwtzmbyswfhu.supabase.co"
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error(
-    "Missing required Supabase environment variables: NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY",
-  )
-}
+const supabaseAnonKey =
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+  (typeof window !== "undefined" && (window as any).__PUBLIC_ENV?.NEXT_PUBLIC_SUPABASE_ANON_KEY) ||
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBqb2Vsa3hrY3d0em1ieXN3Zmh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ1NTMwMTksImV4cCI6MjA3MDEyOTAxOX0.xY2bVHrv_gl4iEHY79f_PC1OJxjHbHWYoqiSkrpi5n8"
+
+console.log("[v0] Supabase URL configured:", !!supabaseUrl)
+console.log("[v0] Supabase key configured:", !!supabaseAnonKey)
 
 export function createClient() {
   return createSupabaseClient(supabaseUrl, supabaseAnonKey, {

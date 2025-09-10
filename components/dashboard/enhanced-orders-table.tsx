@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, useMemo } from "react"
+import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
@@ -41,6 +41,7 @@ const EnhancedOrdersTable = ({
   const [connectionStatus, setConnectionStatus] = useState<"connecting" | "connected" | "disconnected" | "error">(
     "connecting",
   )
+  const retryCountRef = useRef(0)
   const { notifyNewOrder, notifyOrderStatusChange } = useNotificationSystem()
   const { user } = useAuth()
 
@@ -55,6 +56,11 @@ const EnhancedOrdersTable = ({
     setConnectionStatus("connecting")
 
     const supabase = createClient()
+
+    const existingChannel = supabase.getChannels().find((ch) => ch.topic === "realtime:order-notifications")
+    if (existingChannel) {
+      supabase.removeChannel(existingChannel)
+    }
 
     const channel = supabase
       .channel("order-notifications", {
@@ -76,6 +82,14 @@ const EnhancedOrdersTable = ({
         (payload) => {
           console.log("[v0] New order detected:", payload.new)
 
+          try {
+            const audio = new Audio("/sounds/notification.mp3")
+            audio.volume = 0.7
+            audio.play().catch((e) => console.log("[v0] Audio play failed:", e))
+          } catch (error) {
+            console.log("[v0] Audio creation failed:", error)
+          }
+
           // Trigger notification for new order
           if (payload.new) {
             notifyNewOrder({
@@ -86,10 +100,7 @@ const EnhancedOrdersTable = ({
             })
           }
 
-          // Refresh orders list
-          if (onRefresh) {
-            setTimeout(() => onRefresh(), 500)
-          }
+          setDisplayOrders((prev) => [payload.new as Order, ...prev])
         },
       )
       .on(
@@ -108,6 +119,14 @@ const EnhancedOrdersTable = ({
             const newStatus = payload.new.status
 
             if (oldStatus !== newStatus) {
+              try {
+                const audio = new Audio("/sounds/notification.mp3")
+                audio.volume = 0.5
+                audio.play().catch((e) => console.log("[v0] Audio play failed:", e))
+              } catch (error) {
+                console.log("[v0] Audio creation failed:", error)
+              }
+
               notifyOrderStatusChange(
                 payload.new.short_order_id || payload.new.order_id,
                 newStatus,
@@ -116,10 +135,13 @@ const EnhancedOrdersTable = ({
             }
           }
 
-          // Refresh orders list
-          if (onRefresh) {
-            setTimeout(() => onRefresh(), 500)
-          }
+          setDisplayOrders((prev) =>
+            prev.map((order) =>
+              order.order_id === payload.new.order_id || order.short_order_id === payload.new.short_order_id
+                ? ({ ...order, ...payload.new } as Order)
+                : order,
+            ),
+          )
         },
       )
       .subscribe((status, err) => {
@@ -144,15 +166,11 @@ const EnhancedOrdersTable = ({
             case "TIMED_OUT":
               setConnectionStatus("error")
               setError("Real-time connection timed_out")
-              console.error("[v0] Connection timed out - retrying...")
-              setTimeout(() => {
-                if (onRefresh) onRefresh()
-              }, 2000)
+              console.error("[v0] Connection timed out")
               break
             case "CLOSED":
-              setConnectionStatus("error")
-              setError("Real-time connection closed")
-              console.error("[v0] Connection closed - attempting reconnection")
+              console.log("[v0] Connection closed")
+              setConnectionStatus("disconnected")
               break
             default:
               setConnectionStatus("connecting")
@@ -161,20 +179,11 @@ const EnhancedOrdersTable = ({
         }
       })
 
-    const healthCheck = setInterval(() => {
-      if (channel.state === "closed" || channel.state === "errored") {
-        console.log("[v0] Connection unhealthy, attempting to reconnect...")
-        setConnectionStatus("connecting")
-      }
-    }, 10000)
-
     return () => {
       console.log("[v0] Cleaning up real-time subscription")
-      clearInterval(healthCheck)
       supabase.removeChannel(channel)
-      setConnectionStatus("disconnected")
     }
-  }, [notifyNewOrder, notifyOrderStatusChange, onRefresh, user])
+  }, [user])
 
   useEffect(() => {
     setDisplayOrders(orders)
@@ -194,7 +203,7 @@ const EnhancedOrdersTable = ({
       setError(null)
 
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 5000) // Reduced timeout from 10s to 5s
+      const timeoutId = setTimeout(() => controller.abort(), 5000)
 
       const response = await fetch("/api/orders", {
         method: "PATCH",
@@ -691,10 +700,10 @@ const EnhancedOrdersTable = ({
                               {order.delivery_charge === 0 ? "FREE" : `Tk${Number(order.delivery_charge).toFixed(2)}`}
                               <span
                                 className={`ml-1 ${
-                                  order.payment_method === "bkash"
-                                    ? "text-pink-400"
-                                    : order.payment_method === "pickup"
-                                      ? "text-blue-400"
+                                  order.payment_method === "pickup"
+                                    ? "text-blue-400"
+                                    : order.payment_method === "bkash"
+                                      ? "text-pink-400"
                                       : "text-green-400"
                                 }`}
                               >
