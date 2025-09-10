@@ -1,6 +1,6 @@
 "use client"
 
-import { Bell, Settings, User, Wifi, WifiOff } from "lucide-react"
+import { Bell, Settings, User, Wifi, WifiOff, Volume2, VolumeX } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -26,6 +26,8 @@ export function DashboardHeader({ connectionStatus = "connected" }: DashboardHea
     markAsRead,
     markAllAsRead,
     connectionStatus: notificationStatus,
+    soundEnabled,
+    setSoundEnabled,
   } = useNotifications()
   const { user } = useAuth()
 
@@ -88,6 +90,20 @@ export function DashboardHeader({ connectionStatus = "connected" }: DashboardHea
             {getConnectionStatusText()}
           </span>
         </div>
+
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setSoundEnabled(!soundEnabled)}
+          className="relative"
+          title={soundEnabled ? "Disable notification sounds" : "Enable notification sounds"}
+        >
+          {soundEnabled ? (
+            <Volume2 size={20} className="text-green-400" />
+          ) : (
+            <VolumeX size={20} className="text-gray-400" />
+          )}
+        </Button>
 
         {/* Notifications */}
         <DropdownMenu>

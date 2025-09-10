@@ -9,24 +9,55 @@ export function useNotificationSystem() {
   const notifyOrderStatusChange = useCallback(
     (orderId: string, status: string, customerName: string) => {
       const statusMessages = {
-        pending: "New order received",
-        confirmed: "Order confirmed",
-        preparing: "Order is being prepared",
-        ready: "Order is ready for pickup",
-        delivered: "Order delivered",
-        cancelled: "Order cancelled",
-        completed: "Order completed",
+        pending: "🔔 New Order Received!",
+        confirmed: "✅ Order Confirmed",
+        preparing: "👨‍🍳 Order Being Prepared",
+        ready: "🍱 Order Ready for Pickup",
+        delivered: "🚚 Order Delivered",
+        cancelled: "❌ Order Cancelled",
+        completed: "✨ Order Completed",
       }
 
       const message = statusMessages[status as keyof typeof statusMessages] || "Order status updated"
       const priority = status === "pending" ? "high" : "medium"
 
+      const shortOrderId = orderId.length > 8 ? orderId.slice(-8).toUpperCase() : orderId.toUpperCase()
+
       addNotification({
         type: "order",
         title: message,
-        message: `Order #${orderId} for ${customerName}`,
+        message: `Order #${shortOrderId} • ${customerName}`,
         priority: priority as "low" | "medium" | "high",
-        data: { orderId, status, customerName },
+        data: { orderId, shortOrderId, status, customerName },
+      })
+
+      console.log("[v0] Order notification triggered:", { orderId: shortOrderId, status, customerName })
+    },
+    [addNotification],
+  )
+
+  const notifyNewOrder = useCallback(
+    (order: { order_id: string; short_order_id?: string; customer_name: string; total_amount: number }) => {
+      const shortOrderId = order.short_order_id || order.order_id.slice(-8).toUpperCase()
+
+      addNotification({
+        type: "order",
+        title: "🔔 New Order Received!",
+        message: `Order #${shortOrderId} • ${order.customer_name} • Tk${order.total_amount.toFixed(2)}`,
+        priority: "high",
+        data: {
+          orderId: order.order_id,
+          shortOrderId,
+          customerName: order.customer_name,
+          totalAmount: order.total_amount,
+          status: "pending",
+        },
+      })
+
+      console.log("[v0] New order notification:", {
+        shortOrderId,
+        customer: order.customer_name,
+        amount: order.total_amount,
       })
     },
     [addNotification],
@@ -90,6 +121,7 @@ export function useNotificationSystem() {
 
   return {
     notifyOrderStatusChange,
+    notifyNewOrder,
     notifyReservationChange,
     notifyMenuChange,
     notifySystemEvent,

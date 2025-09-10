@@ -16,7 +16,11 @@ import {
   ChevronUp,
   Trash2,
 } from "lucide-react"
-import type { EnhancedOrdersTableProps, Order, ConfirmationModal } from "@/types" // Declare or import types here
+import { createClient } from "@/lib/supabase/client"
+import { useNotificationSystem } from "@/hooks/use-notification-system"
+import type { EnhancedOrdersTableProps, Order, ConfirmationModal } from "@/types"
+
+const supabase = createClient()
 
 const EnhancedOrdersTable = ({
   orders = [],
@@ -35,6 +39,78 @@ const EnhancedOrdersTable = ({
     isProcessing: false,
   })
   const [error, setError] = useState<string | null>(null)
+  const { notifyNewOrder, notifyOrderStatusChange } = useNotificationSystem()
+
+  useEffect(() => {
+    console.log("[v0] Setting up real-time order notifications...")
+
+    const channel = supabase
+      .channel("order-notifications")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "orders",
+        },
+        (payload) => {
+          console.log("[v0] New order detected:", payload.new)
+
+          // Trigger notification for new order
+          if (payload.new) {
+            notifyNewOrder({
+              order_id: payload.new.order_id,
+              short_order_id: payload.new.short_order_id,
+              customer_name: payload.new.customer_name || "Guest",
+              total_amount: payload.new.total_amount || 0,
+            })
+          }
+
+          // Refresh orders list
+          if (onRefresh) {
+            setTimeout(() => onRefresh(), 500)
+          }
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "orders",
+        },
+        (payload) => {
+          console.log("[v0] Order status updated:", payload.new)
+
+          // Trigger notification for status change
+          if (payload.new && payload.old) {
+            const oldStatus = payload.old.status
+            const newStatus = payload.new.status
+
+            if (oldStatus !== newStatus) {
+              notifyOrderStatusChange(
+                payload.new.short_order_id || payload.new.order_id,
+                newStatus,
+                payload.new.customer_name || "Guest",
+              )
+            }
+          }
+
+          // Refresh orders list
+          if (onRefresh) {
+            setTimeout(() => onRefresh(), 500)
+          }
+        },
+      )
+      .subscribe((status) => {
+        console.log("[v0] Real-time subscription status:", status)
+      })
+
+    return () => {
+      console.log("[v0] Cleaning up real-time subscription")
+      supabase.removeChannel(channel)
+    }
+  }, [notifyNewOrder, notifyOrderStatusChange, onRefresh])
 
   useEffect(() => {
     setDisplayOrders(orders)
