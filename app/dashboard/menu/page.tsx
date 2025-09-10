@@ -12,6 +12,7 @@ import { createClient } from "@/lib/supabase/client"
 import { toast } from "@/hooks/use-toast"
 import { LoadingSpinner } from "@/components/loading-spinner"
 import Link from "next/link"
+import { useAuth } from "@/hooks/use-auth"
 
 interface MenuItem {
   menu_id: string // Changed from id to menu_id to match database schema
@@ -51,16 +52,17 @@ export default function MenuManagementPage() {
   const [statusFilter, setStatusFilter] = useState("all")
   const [categories, setCategories] = useState<string[]>([])
   const [supabase] = useState(() => createClient())
+  const { user, session } = useAuth()
 
   const fetchMenuItems = useCallback(async () => {
     try {
       console.log("[v0] Fetching menu items...")
 
-      const {
-        data: { user },
-        error: authError,
-      } = await supabase.auth.getUser()
-      console.log("[v0] Current user:", user?.id, "Auth error:", authError)
+      if (user) {
+        console.log("[v0] Current user:", user.email, "Role:", user.role)
+      } else {
+        console.log("[v0] No authenticated user found")
+      }
 
       const { data, error } = await supabase.from("menu_items").select("*").order("created_at", { ascending: false })
 
@@ -82,10 +84,12 @@ export default function MenuManagementPage() {
     } finally {
       setLoading(false)
     }
-  }, [supabase])
+  }, [supabase, user])
 
   useEffect(() => {
-    fetchMenuItems()
+    if (user) {
+      fetchMenuItems()
+    }
 
     const channel = supabase
       .channel("dashboard_menu_items_changes")
@@ -138,7 +142,7 @@ export default function MenuManagementPage() {
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [fetchMenuItems, supabase])
+  }, [fetchMenuItems, supabase, user])
 
   const deleteMenuItem = useCallback(
     async (menu_id: string, itemName: string) => {
