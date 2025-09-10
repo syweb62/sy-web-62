@@ -1,17 +1,28 @@
-import { createClient } from "@supabase/supabase-js"
+import { createServerClient } from "@supabase/ssr"
 import { type NextRequest, NextResponse } from "next/server"
 
 export async function POST(request: NextRequest) {
   try {
     console.log("[v0] Upload API: Starting request processing")
 
-    // Use service role key for admin operations
-    const supabaseAdmin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
+    const supabaseAdmin = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return []
+          },
+          setAll() {
+            // No-op for service role client
+          },
+        },
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false,
+        },
       },
-    })
+    )
 
     console.log("[v0] Upload API: Parsing FormData")
     const formData = await request.formData()
@@ -37,18 +48,37 @@ export async function POST(request: NextRequest) {
 
     console.log("[v0] Upload API: Buffer created, size:", buffer.length)
 
-    // Upload to storage using service role
-    const { data, error } = await supabaseAdmin.storage.from("menu-images").upload(fileName, buffer, {
-      cacheControl: "3600",
-      upsert: false,
-      contentType: file.type,
-    })
+    let uploadResult
+    try {
+      console.log("[v0] Upload API: Starting Supabase upload operation")
+      uploadResult = await supabaseAdmin.storage.from("menu-images").upload(fileName, buffer, {
+        cacheControl: "3600",
+        upsert: false,
+        contentType: file.type,
+      })
+      console.log("[v0] Upload API: Supabase upload completed")
+    } catch (uploadError) {
+      console.log("[v0] Upload API: Supabase upload failed with exception")
+      return NextResponse.json({ error: "Storage upload failed" }, { status: 500 })
+    }
+
+    const { data, error } = uploadResult
 
     if (error) {
-      const errorMessage = error.message || error.error || "Upload failed"
-      console.log("[v0] Upload error:", errorMessage)
-      return NextResponse.json({ error: errorMessage }, { status: 500 })
+      console.log("[v0] Upload API: Supabase error details:")
+      console.log("[v0] Upload API: Error message:", error.message)
+      console.log("[v0] Upload API: Error name:", error.name)
+      console.log("[v0] Upload API: Error statusCode:", error.statusCode)
+      return NextResponse.json(
+        {
+          error: "Storage upload error",
+          details: error.message || "Unknown storage error",
+        },
+        { status: 500 },
+      )
     }
+
+    console.log("[v0] Upload API: Upload successful, data:", data)
 
     // Get public URL
     const { data: urlData } = supabaseAdmin.storage.from("menu-images").getPublicUrl(fileName)
@@ -61,10 +91,7 @@ export async function POST(request: NextRequest) {
       path: data.path,
     })
   } catch (error: any) {
-    console.log("[v0] Upload API: Unexpected error type:", typeof error)
-    console.log("[v0] Upload API: Unexpected error constructor:", error?.constructor?.name)
-    const errorMessage = error?.message || error?.error || String(error) || "Internal server error"
-    console.log("[v0] Unexpected error:", errorMessage)
-    return NextResponse.json({ error: errorMessage }, { status: 500 })
+    console.log("[v0] Upload API: Caught unexpected error")
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

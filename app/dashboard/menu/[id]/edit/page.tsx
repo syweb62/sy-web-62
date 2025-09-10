@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch"
 import { ArrowLeft, Save, Upload, X } from "lucide-react"
 import { createClient } from "@/lib/supabase"
+import { useAuth } from "@/hooks/use-auth"
 import { toast } from "@/hooks/use-toast"
 import { LoadingSpinner } from "@/components/loading-spinner"
 import Link from "next/link"
@@ -31,13 +32,17 @@ interface MenuItem {
 export default function EditMenuItemPage() {
   const router = useRouter()
   const params = useParams()
+  const { user, session } = useAuth()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [menuItem, setMenuItem] = useState<MenuItem | null>(null)
   const [categories, setCategories] = useState<string[]>([])
-  const [supabase] = useState(() => createClient())
+  const [supabase] = useState(() => {
+    const client = createClient()
+    return client
+  })
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -46,6 +51,12 @@ export default function EditMenuItemPage() {
     image_url: "",
     available: true,
   })
+
+  useEffect(() => {
+    if (session && supabase) {
+      supabase.auth.setSession(session)
+    }
+  }, [session, supabase])
 
   useEffect(() => {
     if (params.id) {
@@ -59,6 +70,14 @@ export default function EditMenuItemPage() {
       setImagePreview(formData.image_url)
     }
   }, [formData.image_url])
+
+  useEffect(() => {
+    if (user) {
+      console.log("[v0] Current user:", user.email, "Auth error: Auth session missing!")
+    } else {
+      console.log("[v0] Current user: undefined Auth error: Auth session missing!")
+    }
+  }, [user])
 
   const fetchCategories = async () => {
     try {
@@ -107,7 +126,15 @@ export default function EditMenuItemPage() {
     const file = event.target.files?.[0]
     if (!file) return
 
-    // Validate file type
+    if (!user || !session) {
+      toast({
+        title: "Error",
+        description: "You must be logged in to upload images",
+        variant: "destructive",
+      })
+      return
+    }
+
     const validTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif"]
     if (!validTypes.includes(file.type)) {
       toast({
@@ -118,7 +145,6 @@ export default function EditMenuItemPage() {
       return
     }
 
-    // Validate file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
       toast({
         title: "Error",
@@ -131,58 +157,46 @@ export default function EditMenuItemPage() {
     setUploading(true)
 
     try {
-      console.log("[v0] Ensuring storage bucket exists...")
-      const bucketResponse = await fetch("/api/storage/create-bucket", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      })
+      console.log("[v0] Starting authenticated image upload for user:", user.email)
 
-      if (!bucketResponse.ok) {
-        const bucketError = await bucketResponse.json()
-        throw new Error(bucketError.error || "Failed to create storage bucket")
+      if (session) {
+        await supabase.auth.setSession(session)
       }
-
-      console.log("[v0] Storage bucket ready")
 
       const fileExt = file.name.split(".").pop()
       const fileName = `menu-items/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`
 
-      console.log("[v0] Uploading image via server API:", fileName)
+      console.log("[v0] Uploading to:", fileName)
 
-      // Create FormData for server upload
-      const formData = new FormData()
-      formData.append("file", file)
-      formData.append("fileName", fileName)
-
-      // Upload via server API
-      const uploadResponse = await fetch("/api/storage/upload-image", {
-        method: "POST",
-        body: formData,
+      const { data, error } = await supabase.storage.from("menu-images").upload(fileName, file, {
+        cacheControl: "3600",
+        upsert: false,
       })
 
-      if (!uploadResponse.ok) {
-        const uploadError = await uploadResponse.json()
-        throw new Error(uploadError.error || "Failed to upload image")
+      if (error) {
+        console.error("[v0] Upload error:", error.message)
+        throw new Error(error.message || "Failed to upload image")
       }
 
-      const uploadResult = await uploadResponse.json()
-      console.log("[v0] Upload successful:", uploadResult.url)
+      console.log("[v0] Upload successful:", data)
 
-      // Update form data with new image URL
-      handleInputChange("image_url", uploadResult.url)
-      setImagePreview(uploadResult.url)
+      const { data: urlData } = supabase.storage.from("menu-images").getPublicUrl(fileName)
+
+      const imageUrl = urlData.publicUrl
+      console.log("[v0] Public URL:", imageUrl)
+
+      handleInputChange("image_url", imageUrl)
+      setImagePreview(imageUrl)
 
       toast({
         title: "Success",
         description: "Image uploaded successfully",
       })
     } catch (error: any) {
-      console.error("[v0] Error uploading image:", error)
+      console.error("[v0] Error uploading image:", error.message)
       toast({
         title: "Error",
-        description: error.message || "Failed to upload image",
+        description: error.message || "Failed to upload image. Please try again.",
         variant: "destructive",
       })
     } finally {
