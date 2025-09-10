@@ -1,5 +1,6 @@
-import { createClient } from "@supabase/supabase-js"
+import { createServerClient } from "@supabase/ssr"
 import { type NextRequest, NextResponse } from "next/server"
+import { cookies } from "next/headers"
 
 const isValidSupabaseUrl = (url: string): boolean => {
   try {
@@ -20,12 +21,29 @@ export async function POST(request: NextRequest) {
   try {
     console.log("[v0] Upload API: Starting image upload with service role")
 
-    const supabaseAdmin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
+    const cookieStore = await cookies()
+    const supabaseAdmin = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return cookieStore.getAll()
+          },
+          setAll(cookiesToSet) {
+            try {
+              cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options))
+            } catch {
+              // Ignore cookie errors in server context
+            }
+          },
+        },
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false,
+        },
       },
-    })
+    )
 
     const formData = await request.formData()
     const file = formData.get("file") as File
