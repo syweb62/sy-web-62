@@ -1,28 +1,16 @@
-import { createServerClient } from "@supabase/ssr"
+import { createClient } from "@supabase/supabase-js"
 import { type NextRequest, NextResponse } from "next/server"
 
 export async function POST(request: NextRequest) {
   try {
     console.log("[v0] Upload API: Starting image upload with service role")
 
-    const supabaseAdmin = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      {
-        cookies: {
-          getAll() {
-            return []
-          },
-          setAll() {
-            // No-op for service role client
-          },
-        },
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false,
-        },
+    const supabaseAdmin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
       },
-    )
+    })
 
     const formData = await request.formData()
     const file = formData.get("file") as File
@@ -71,12 +59,29 @@ export async function POST(request: NextRequest) {
 
     const { data: urlData } = supabaseAdmin.storage.from("menu-images").getPublicUrl(data.path)
 
-    console.log("[v0] Upload API: Public URL generated:", urlData.publicUrl)
+    // Validate the generated URL
+    const publicUrl = urlData.publicUrl
+    console.log("[v0] Upload API: Generated URL:", publicUrl)
+
+    // Ensure URL is properly formatted
+    if (!publicUrl || !publicUrl.includes("supabase.co")) {
+      console.log("[v0] Upload API: Invalid URL generated, using fallback")
+      const fallbackUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/menu-images/${data.path}`
+      console.log("[v0] Upload API: Fallback URL:", fallbackUrl)
+
+      return NextResponse.json({
+        success: true,
+        path: data.path,
+        url: fallbackUrl,
+      })
+    }
+
+    console.log("[v0] Upload API: Valid URL generated:", publicUrl)
 
     return NextResponse.json({
       success: true,
       path: data.path,
-      url: urlData.publicUrl,
+      url: publicUrl,
     })
   } catch (error) {
     console.log("[v0] Upload API: Unexpected error:", error)

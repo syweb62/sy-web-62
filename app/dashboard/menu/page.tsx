@@ -332,8 +332,9 @@ export default function MenuManagementPage() {
             <div className="relative h-48">
               <Image
                 src={
-                  item.image_url ||
-                  `/placeholder.svg?height=200&width=300&query=${encodeURIComponent(item.name + " " + item.category) || "/placeholder.svg"}`
+                  item.image_url && item.image_url.includes("supabase.co")
+                    ? item.image_url
+                    : `/placeholder.svg?height=200&width=300&query=${encodeURIComponent(item.name + " " + item.category)}`
                 }
                 alt={item.name}
                 fill
