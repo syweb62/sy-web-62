@@ -66,143 +66,145 @@ const EnhancedOrdersTable = ({
     const existingChannels = supabase.getChannels()
     existingChannels.forEach((ch) => {
       if (ch.topic.includes("order-notifications")) {
+        console.log("[v0] Removing existing channel:", ch.topic)
         supabase.removeChannel(ch)
       }
     })
 
-    const channel = supabase
-      .channel(`order-notifications-${Date.now()}`, {
-        config: {
-          presence: {
-            key: user.id,
+    const setupTimeout = setTimeout(() => {
+      const channel = supabase
+        .channel(`order-notifications-${user.id}-${Date.now()}`, {
+          config: {
+            presence: {
+              key: user.id,
+            },
+            broadcast: { self: false },
+            private: false,
           },
-          broadcast: { self: false }, // Prevent self-broadcast loops
-          private: false,
-        },
-      })
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "orders",
-        },
-        (payload) => {
-          console.log("[v0] New order detected:", payload.new)
+        })
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "orders",
+          },
+          (payload) => {
+            console.log("[v0] New order detected:", payload.new)
 
-          try {
-            const audio = new Audio("/sounds/notification.mp3")
-            audio.volume = 0.7
-            audio.play().catch((e) => console.log("[v0] Audio play failed:", e))
-          } catch (error) {
-            console.log("[v0] Audio creation failed:", error)
-          }
+            try {
+              const audio = new Audio("/sounds/notification.mp3")
+              audio.volume = 0.7
+              audio.play().catch((e) => console.log("[v0] Audio play failed:", e))
+            } catch (error) {
+              console.log("[v0] Audio creation failed:", error)
+            }
 
-          // Trigger notification for new order
-          if (payload.new) {
-            notifyNewOrder({
-              order_id: payload.new.order_id,
-              short_order_id: payload.new.short_order_id,
-              customer_name: payload.new.customer_name || "Guest",
-              total_amount: payload.new.total_amount || 0,
-            })
-          }
+            if (payload.new) {
+              notifyNewOrder({
+                order_id: payload.new.order_id,
+                short_order_id: payload.new.short_order_id,
+                customer_name: payload.new.customer_name || "Guest",
+                total_amount: payload.new.total_amount || 0,
+              })
+            }
 
-          setDisplayOrders((prev) => [payload.new as Order, ...prev])
-        },
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "orders",
-        },
-        (payload) => {
-          console.log("[v0] Order status updated:", payload.new)
+            setDisplayOrders((prev) => [payload.new as Order, ...prev])
+          },
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "orders",
+          },
+          (payload) => {
+            console.log("[v0] Order status updated:", payload.new)
 
-          // Trigger notification for status change
-          if (payload.new && payload.old) {
-            const oldStatus = payload.old.status
-            const newStatus = payload.new.status
+            if (payload.new && payload.old) {
+              const oldStatus = payload.old.status
+              const newStatus = payload.new.status
 
-            if (oldStatus !== newStatus) {
-              try {
-                const audio = new Audio("/sounds/notification.mp3")
-                audio.volume = 0.5
-                audio.play().catch((e) => console.log("[v0] Audio play failed:", e))
-              } catch (error) {
-                console.log("[v0] Audio creation failed:", error)
+              if (oldStatus !== newStatus) {
+                try {
+                  const audio = new Audio("/sounds/notification.mp3")
+                  audio.volume = 0.5
+                  audio.play().catch((e) => console.log("[v0] Audio play failed:", e))
+                } catch (error) {
+                  console.log("[v0] Audio creation failed:", error)
+                }
+
+                notifyOrderStatusChange(
+                  payload.new.short_order_id || payload.new.order_id,
+                  newStatus,
+                  payload.new.customer_name || "Guest",
+                )
               }
+            }
 
-              notifyOrderStatusChange(
-                payload.new.short_order_id || payload.new.order_id,
-                newStatus,
-                payload.new.customer_name || "Guest",
-              )
+            setDisplayOrders((prev) =>
+              prev.map((order) =>
+                order.order_id === payload.new.order_id || order.short_order_id === payload.new.short_order_id
+                  ? ({ ...order, ...payload.new } as Order)
+                  : order,
+              ),
+            )
+          },
+        )
+        .subscribe((status, err) => {
+          console.log("[v0] Real-time subscription status:", status)
+
+          if (err) {
+            console.error("[v0] Real-time subscription error:", err)
+            setConnectionStatus("error")
+            setError(`Real-time connection failed: ${err.message}`)
+            isSubscribedRef.current = false
+          } else {
+            switch (status) {
+              case "SUBSCRIBED":
+                setConnectionStatus("connected")
+                setError(null)
+                isSubscribedRef.current = true
+                console.log("[v0] Real-time connection established successfully")
+                break
+              case "CHANNEL_ERROR":
+                setConnectionStatus("error")
+                setError("Real-time connection channel_error")
+                isSubscribedRef.current = false
+                console.error("[v0] Channel error - checking authentication and permissions")
+                break
+              case "TIMED_OUT":
+                setConnectionStatus("error")
+                setError("Real-time connection timed_out")
+                isSubscribedRef.current = false
+                console.error("[v0] Connection timed out")
+                break
+              case "CLOSED":
+                console.log("[v0] Connection closed")
+                setConnectionStatus("disconnected")
+                isSubscribedRef.current = false
+                break
+              default:
+                setConnectionStatus("connecting")
+                console.log("[v0] Connection status:", status)
             }
           }
+        })
 
-          setDisplayOrders((prev) =>
-            prev.map((order) =>
-              order.order_id === payload.new.order_id || order.short_order_id === payload.new.short_order_id
-                ? ({ ...order, ...payload.new } as Order)
-                : order,
-            ),
-          )
-        },
-      )
-      .subscribe((status, err) => {
-        console.log("[v0] Real-time subscription status:", status)
-
-        if (err) {
-          console.error("[v0] Real-time subscription error:", err)
-          setConnectionStatus("error")
-          setError(`Real-time connection failed: ${err.message}`)
-          isSubscribedRef.current = false
-        } else {
-          switch (status) {
-            case "SUBSCRIBED":
-              setConnectionStatus("connected")
-              setError(null)
-              isSubscribedRef.current = true
-              console.log("[v0] Real-time connection established successfully")
-              break
-            case "CHANNEL_ERROR":
-              setConnectionStatus("error")
-              setError("Real-time connection channel_error")
-              isSubscribedRef.current = false
-              console.error("[v0] Channel error - checking authentication and permissions")
-              break
-            case "TIMED_OUT":
-              setConnectionStatus("error")
-              setError("Real-time connection timed_out")
-              isSubscribedRef.current = false
-              console.error("[v0] Connection timed out")
-              break
-            case "CLOSED":
-              console.log("[v0] Connection closed")
-              setConnectionStatus("disconnected")
-              isSubscribedRef.current = false
-              break
-            default:
-              setConnectionStatus("connecting")
-              console.log("[v0] Connection status:", status)
-          }
-        }
-      })
-
-    subscriptionRef.current = channel
+      subscriptionRef.current = channel
+    }, 500) // Add 500ms delay to ensure proper cleanup
 
     return () => {
       console.log("[v0] Cleaning up real-time subscription")
+      clearTimeout(setupTimeout) // Clear timeout on cleanup
       if (subscriptionRef.current) {
         supabase.removeChannel(subscriptionRef.current)
         subscriptionRef.current = null
       }
       isSubscribedRef.current = false
     }
-  }, [user]) // Updated to depend on user object instead of user?.id
+  }, [user, notifyNewOrder, notifyOrderStatusChange]) // Updated dependency to user
 
   useEffect(() => {
     setDisplayOrders(orders)

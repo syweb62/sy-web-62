@@ -7,36 +7,49 @@ export function createClient() {
     return supabaseClient
   }
 
-  supabaseClient = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      realtime: {
-        params: {
-          eventsPerSecond: 5, // Reduced for production stability
-        },
-        heartbeatIntervalMs: 30000, // Increased for production
-        reconnectAfterMs: (tries: number) => Math.min(tries * 1000, 10000), // More conservative reconnection
-        timeout: 20000, // Increased timeout for production
+  const supabaseUrl =
+    process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    (typeof window !== "undefined" && (window as any).__PUBLIC_ENV?.NEXT_PUBLIC_SUPABASE_URL) ||
+    "https://pjoelkxkcwtzmbyswfhu.supabase.co"
+
+  const supabaseAnonKey =
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    (typeof window !== "undefined" && (window as any).__PUBLIC_ENV?.NEXT_PUBLIC_SUPABASE_ANON_KEY) ||
+    ""
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    console.error("[v0] Missing Supabase environment variables")
+    throw new Error("Missing Supabase configuration")
+  }
+
+  console.log("[v0] Creating Supabase client with URL:", supabaseUrl)
+
+  supabaseClient = createBrowserClient(supabaseUrl, supabaseAnonKey, {
+    realtime: {
+      params: {
+        eventsPerSecond: 2, // Further reduced for production stability
       },
-      auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-        detectSessionInUrl: true,
-        storageKey: "supabase-auth-token",
-        flowType: "pkce",
-      },
-      global: {
-        headers: {
-          "X-Client-Info": "supabase-js-web",
-          apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        },
-      },
-      db: {
-        schema: "public",
+      heartbeatIntervalMs: 45000, // Increased for better production stability
+      reconnectAfterMs: (tries: number) => Math.min(tries * 2000, 30000), // More conservative reconnection
+      timeout: 30000, // Increased timeout for production
+    },
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+      storageKey: "supabase-auth-token",
+      flowType: "pkce",
+    },
+    global: {
+      headers: {
+        "X-Client-Info": "supabase-js-web",
+        apikey: supabaseAnonKey,
       },
     },
-  )
+    db: {
+      schema: "public",
+    },
+  })
 
   return supabaseClient
 }
