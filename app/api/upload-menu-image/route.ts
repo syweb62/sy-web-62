@@ -1,32 +1,16 @@
-import { createServerClient } from "@supabase/ssr"
+import { createClient } from "@supabase/supabase-js"
 import { type NextRequest, NextResponse } from "next/server"
-import { cookies } from "next/headers"
 
 export async function POST(request: NextRequest) {
   try {
     console.log("[v0] Upload API: Starting image upload with service role")
 
-    const cookieStore = cookies()
-    const supabaseAdmin = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      {
-        cookies: {
-          getAll() {
-            return cookieStore.getAll()
-          },
-          setAll(cookiesToSet) {
-            try {
-              cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options))
-            } catch {
-              // The `setAll` method was called from a Server Component.
-              // This can be ignored if you have middleware refreshing
-              // user sessions.
-            }
-          },
-        },
+    const supabaseAdmin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
       },
-    )
+    })
 
     const formData = await request.formData()
     const file = formData.get("file") as File
@@ -43,6 +27,23 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(await file.arrayBuffer())
     console.log("[v0] Upload API: Buffer created, size:", buffer.length)
 
+    const { data: buckets } = await supabaseAdmin.storage.listBuckets()
+    const bucketExists = buckets?.some((bucket) => bucket.name === "menu-images")
+
+    if (!bucketExists) {
+      console.log("[v0] Upload API: Creating menu-images bucket")
+      const { error: createError } = await supabaseAdmin.storage.createBucket("menu-images", {
+        public: true,
+        allowedMimeTypes: ["image/jpeg", "image/png", "image/webp", "image/gif"],
+        fileSizeLimit: 5242880, // 5MB
+      })
+
+      if (createError) {
+        console.log("[v0] Upload API: Failed to create bucket:", createError.message)
+        return NextResponse.json({ error: "Failed to create storage bucket" }, { status: 500 })
+      }
+    }
+
     const { data, error } = await supabaseAdmin.storage.from("menu-images").upload(fileName, buffer, {
       contentType: file.type,
       cacheControl: "3600",
@@ -56,7 +57,6 @@ export async function POST(request: NextRequest) {
 
     console.log("[v0] Upload API: Upload successful:", data.path)
 
-    // Get public URL
     const { data: urlData } = supabaseAdmin.storage.from("menu-images").getPublicUrl(data.path)
 
     console.log("[v0] Upload API: Public URL generated:", urlData.publicUrl)
