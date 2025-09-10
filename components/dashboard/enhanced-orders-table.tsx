@@ -62,6 +62,8 @@ const EnhancedOrdersTable = ({
           presence: {
             key: user.id,
           },
+          broadcast: { self: true },
+          private: false,
         },
       })
       .on(
@@ -132,21 +134,43 @@ const EnhancedOrdersTable = ({
             case "SUBSCRIBED":
               setConnectionStatus("connected")
               setError(null)
+              console.log("[v0] Real-time connection established successfully")
               break
             case "CHANNEL_ERROR":
+              setConnectionStatus("error")
+              setError("Real-time connection channel_error")
+              console.error("[v0] Channel error - checking authentication and permissions")
+              break
             case "TIMED_OUT":
+              setConnectionStatus("error")
+              setError("Real-time connection timed_out")
+              console.error("[v0] Connection timed out - retrying...")
+              setTimeout(() => {
+                if (onRefresh) onRefresh()
+              }, 2000)
+              break
             case "CLOSED":
               setConnectionStatus("error")
-              setError(`Real-time connection ${status.toLowerCase()}`)
+              setError("Real-time connection closed")
+              console.error("[v0] Connection closed - attempting reconnection")
               break
             default:
               setConnectionStatus("connecting")
+              console.log("[v0] Connection status:", status)
           }
         }
       })
 
+    const healthCheck = setInterval(() => {
+      if (channel.state === "closed" || channel.state === "errored") {
+        console.log("[v0] Connection unhealthy, attempting to reconnect...")
+        setConnectionStatus("connecting")
+      }
+    }, 10000)
+
     return () => {
       console.log("[v0] Cleaning up real-time subscription")
+      clearInterval(healthCheck)
       supabase.removeChannel(channel)
       setConnectionStatus("disconnected")
     }

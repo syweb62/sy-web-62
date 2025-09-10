@@ -77,7 +77,7 @@ const nextConfig = {
             value: [
               "default-src 'self'",
               "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.google.com https://*.googleapis.com https://*.gstatic.com https://www.googletagmanager.com https://www.google-analytics.com",
-              "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.google.com https://*.googleapis.com https://*.gstatic.com",
+              "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.google.com https://*.googleapis.com https://*.gstatic.com https://pjoelkxkcwtzmbyswfhu.supabase.co wss://pjoelkxkcwtzmbyswfhu.supabase.co",
               "img-src 'self' data: blob: https: https://*.supabase.co https://*.gstatic.com https://*.googleusercontent.com https://*.ggpht.com",
               "frame-src 'self' https://*.google.com https://*.googleapis.com",
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
