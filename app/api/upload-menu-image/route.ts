@@ -3,15 +3,17 @@ import { type NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
 
 const isValidSupabaseUrl = (url: string): boolean => {
+  if (!url || url.length < 50) return false // Early validation for empty/short URLs
   try {
     const urlObj = new URL(url)
     return (
       urlObj.hostname.includes("supabase.co") &&
       urlObj.pathname.includes("/storage/v1/object/public/") &&
       !url.includes(".lic") && // Exclude malformed domains like pjoelkxkcwtzmb.lic
-      url.length > 50 && // Ensure URL is not truncated
-      urlObj.protocol === "https:"
-    ) // Ensure secure protocol
+      !url.includes("undefined") && // Exclude URLs with undefined values
+      !url.includes("null") && // Exclude URLs with null values
+      urlObj.protocol === "https:" // Ensure secure protocol
+    )
   } catch {
     return false
   }
@@ -111,25 +113,34 @@ export async function POST(request: NextRequest) {
 
     if (!isValidSupabaseUrl(publicUrl)) {
       console.log("[v0] Upload API: Invalid URL generated, creating fallback")
-      finalUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/menu-images/${data.path}`
-      console.log("[v0] Upload API: Fallback URL:", finalUrl)
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 
-      // Validate fallback URL too
-      if (!isValidSupabaseUrl(finalUrl)) {
-        console.log("[v0] Upload API: Fallback URL also invalid, trying direct construction")
-        // Try direct URL construction as last resort
-        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-        if (supabaseUrl && supabaseUrl.includes("supabase.co")) {
-          finalUrl = `${supabaseUrl}/storage/v1/object/public/menu-images/${data.path}`
+      if (!supabaseUrl || !supabaseUrl.includes("supabase.co")) {
+        console.log("[v0] Upload API: Invalid Supabase URL configuration")
+        return NextResponse.json({ error: "Invalid Supabase configuration" }, { status: 500 })
+      }
 
-          if (!isValidSupabaseUrl(finalUrl)) {
-            console.log("[v0] Upload API: All URL generation methods failed")
-            return NextResponse.json({ error: "Failed to generate valid image URL" }, { status: 500 })
-          }
-        } else {
-          return NextResponse.json({ error: "Invalid Supabase configuration" }, { status: 500 })
+      // Try multiple fallback URL constructions
+      const fallbackUrls = [
+        `${supabaseUrl}/storage/v1/object/public/menu-images/${data.path}`,
+        `${supabaseUrl.replace(/\/$/, "")}/storage/v1/object/public/menu-images/${data.path}`,
+      ]
+
+      let validUrl = null
+      for (const testUrl of fallbackUrls) {
+        if (isValidSupabaseUrl(testUrl)) {
+          validUrl = testUrl
+          break
         }
       }
+
+      if (!validUrl) {
+        console.log("[v0] Upload API: All URL generation methods failed")
+        return NextResponse.json({ error: "Failed to generate valid image URL" }, { status: 500 })
+      }
+
+      finalUrl = validUrl
+      console.log("[v0] Upload API: Using fallback URL:", finalUrl)
     }
 
     console.log("[v0] Upload API: Final valid URL:", finalUrl)

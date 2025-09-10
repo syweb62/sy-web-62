@@ -32,9 +32,12 @@ const isValidImageUrl = (url: string | null | undefined): boolean => {
     return (
       urlObj.hostname.includes("supabase.co") &&
       urlObj.pathname.includes("/storage/v1/object/public/") &&
-      !url.includes(".lic") && // Exclude malformed domains
-      url.length > 50
-    ) // Ensure URL is not truncated
+      !url.includes(".lic") && // Enhanced exclusion of malformed domains
+      !url.includes("undefined") &&
+      !url.includes("null") &&
+      url.length > 50 &&
+      urlObj.protocol === "https:"
+    )
   } catch {
     return false
   }
@@ -357,10 +360,12 @@ export default function MenuManagementPage() {
                 onError={(e) => {
                   const target = e.target as HTMLImageElement
                   const fallbackUrl = `/placeholder.svg?height=200&width=300&query=${encodeURIComponent(item.name + " " + item.category)}`
-                  if (target.src !== fallbackUrl) {
+                  if (target.src !== fallbackUrl && !target.src.includes("placeholder.svg")) {
+                    console.log("[v0] Image load failed for:", item.name, "URL:", target.src)
                     target.src = fallbackUrl
                   }
                 }}
+                unoptimized={!isValidImageUrl(item.image_url)}
               />
               <div className="absolute top-2 right-2 flex gap-2">
                 <Badge className={`${getStatusColor(item.available)} border-none text-xs px-2 py-1`}>
