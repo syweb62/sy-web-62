@@ -25,6 +25,16 @@ interface MenuItem {
   updated_at?: string
 }
 
+const isValidImageUrl = (url: string | null | undefined): boolean => {
+  if (!url) return false
+  try {
+    const urlObj = new URL(url)
+    return urlObj.hostname.includes("supabase.co") && urlObj.pathname.includes("/storage/v1/object/public/")
+  } catch {
+    return false
+  }
+}
+
 export default function MenuManagementPage() {
   const [menuItems, setMenuItems] = useState<MenuItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -332,8 +342,8 @@ export default function MenuManagementPage() {
             <div className="relative h-48">
               <Image
                 src={
-                  item.image_url && item.image_url.includes("supabase.co")
-                    ? item.image_url
+                  isValidImageUrl(item.image_url)
+                    ? item.image_url!
                     : `/placeholder.svg?height=200&width=300&query=${encodeURIComponent(item.name + " " + item.category)}`
                 }
                 alt={item.name}

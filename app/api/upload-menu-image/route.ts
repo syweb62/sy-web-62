@@ -1,6 +1,15 @@
 import { createClient } from "@supabase/supabase-js"
 import { type NextRequest, NextResponse } from "next/server"
 
+const isValidSupabaseUrl = (url: string): boolean => {
+  try {
+    const urlObj = new URL(url)
+    return urlObj.hostname.includes("supabase.co") && urlObj.pathname.includes("/storage/v1/object/public/")
+  } catch {
+    return false
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     console.log("[v0] Upload API: Starting image upload with service role")
@@ -21,6 +30,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing file or fileName" }, { status: 400 })
     }
 
+    const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif"]
+    if (!allowedTypes.includes(file.type)) {
+      console.log("[v0] Upload API: Invalid file type:", file.type)
+      return NextResponse.json({ error: "Invalid file type. Only images are allowed." }, { status: 400 })
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      // 5MB limit
+      console.log("[v0] Upload API: File too large:", file.size)
+      return NextResponse.json({ error: "File too large. Maximum size is 5MB." }, { status: 400 })
+    }
+
     console.log("[v0] Upload API: Processing file:", fileName, "Size:", file.size, "Type:", file.type)
 
     // Convert file to buffer
@@ -34,7 +55,7 @@ export async function POST(request: NextRequest) {
       console.log("[v0] Upload API: Creating menu-images bucket")
       const { error: createError } = await supabaseAdmin.storage.createBucket("menu-images", {
         public: true,
-        allowedMimeTypes: ["image/jpeg", "image/png", "image/webp", "image/gif"],
+        allowedMimeTypes: allowedTypes,
         fileSizeLimit: 5242880, // 5MB
       })
 
@@ -58,33 +79,33 @@ export async function POST(request: NextRequest) {
     console.log("[v0] Upload API: Upload successful:", data.path)
 
     const { data: urlData } = supabaseAdmin.storage.from("menu-images").getPublicUrl(data.path)
-
-    // Validate the generated URL
     const publicUrl = urlData.publicUrl
+
     console.log("[v0] Upload API: Generated URL:", publicUrl)
 
-    // Ensure URL is properly formatted
-    if (!publicUrl || !publicUrl.includes("supabase.co")) {
-      console.log("[v0] Upload API: Invalid URL generated, using fallback")
-      const fallbackUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/menu-images/${data.path}`
-      console.log("[v0] Upload API: Fallback URL:", fallbackUrl)
+    let finalUrl = publicUrl
 
-      return NextResponse.json({
-        success: true,
-        path: data.path,
-        url: fallbackUrl,
-      })
+    if (!isValidSupabaseUrl(publicUrl)) {
+      console.log("[v0] Upload API: Invalid URL generated, creating fallback")
+      finalUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/menu-images/${data.path}`
+      console.log("[v0] Upload API: Fallback URL:", finalUrl)
+
+      // Validate fallback URL too
+      if (!isValidSupabaseUrl(finalUrl)) {
+        console.log("[v0] Upload API: Fallback URL also invalid")
+        return NextResponse.json({ error: "Failed to generate valid image URL" }, { status: 500 })
+      }
     }
 
-    console.log("[v0] Upload API: Valid URL generated:", publicUrl)
+    console.log("[v0] Upload API: Final valid URL:", finalUrl)
 
     return NextResponse.json({
       success: true,
       path: data.path,
-      url: publicUrl,
+      url: finalUrl,
     })
-  } catch (error) {
-    console.log("[v0] Upload API: Unexpected error:", error)
+  } catch (error: any) {
+    console.log("[v0] Upload API: Unexpected error:", error?.message || "Unknown error")
     return NextResponse.json({ error: "Server error" }, { status: 500 })
   }
 }
