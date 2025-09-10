@@ -126,15 +126,6 @@ export default function EditMenuItemPage() {
     const file = event.target.files?.[0]
     if (!file) return
 
-    if (!user || !session) {
-      toast({
-        title: "Error",
-        description: "You must be logged in to upload images",
-        variant: "destructive",
-      })
-      return
-    }
-
     const validTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif"]
     if (!validTypes.includes(file.type)) {
       toast({
@@ -157,32 +148,31 @@ export default function EditMenuItemPage() {
     setUploading(true)
 
     try {
-      console.log("[v0] Starting authenticated image upload for user:", user.email)
-
-      if (session) {
-        await supabase.auth.setSession(session)
-      }
+      console.log("[v0] Starting server-side image upload")
 
       const fileExt = file.name.split(".").pop()
       const fileName = `menu-items/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`
 
       console.log("[v0] Uploading to:", fileName)
 
-      const { data, error } = await supabase.storage.from("menu-images").upload(fileName, file, {
-        cacheControl: "3600",
-        upsert: false,
+      const formData = new FormData()
+      formData.append("file", file)
+      formData.append("fileName", fileName)
+
+      const response = await fetch("/api/upload-menu-image", {
+        method: "POST",
+        body: formData,
       })
 
-      if (error) {
-        console.error("[v0] Upload error:", error.message)
-        throw new Error(error.message || "Failed to upload image")
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to upload image")
       }
 
-      console.log("[v0] Upload successful:", data)
+      console.log("[v0] Upload successful:", result)
 
-      const { data: urlData } = supabase.storage.from("menu-images").getPublicUrl(fileName)
-
-      const imageUrl = urlData.publicUrl
+      const imageUrl = result.url
       console.log("[v0] Public URL:", imageUrl)
 
       handleInputChange("image_url", imageUrl)

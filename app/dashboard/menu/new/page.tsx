@@ -109,30 +109,31 @@ export default function NewMenuItemPage() {
     setImageUploading(true)
 
     try {
-      console.log("[v0] Starting direct client-side image upload")
+      console.log("[v0] Starting server-side image upload")
 
       const fileExt = file.name.split(".").pop()
       const fileName = `menu-items/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`
 
       console.log("[v0] Uploading to:", fileName)
 
-      // Direct upload to Supabase storage
-      const { data, error } = await supabase.storage.from("menu-images").upload(fileName, file, {
-        cacheControl: "3600",
-        upsert: false,
+      const formData = new FormData()
+      formData.append("file", file)
+      formData.append("fileName", fileName)
+
+      const response = await fetch("/api/upload-menu-image", {
+        method: "POST",
+        body: formData,
       })
 
-      if (error) {
-        console.error("[v0] Upload error:", error)
-        throw new Error(error.message || "Failed to upload image")
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to upload image")
       }
 
-      console.log("[v0] Upload successful:", data)
+      console.log("[v0] Upload successful:", result)
 
-      // Get public URL
-      const { data: urlData } = supabase.storage.from("menu-images").getPublicUrl(fileName)
-
-      const imageUrl = urlData.publicUrl
+      const imageUrl = result.url
       console.log("[v0] Public URL:", imageUrl)
 
       setUploadedImageUrl(imageUrl)
@@ -145,7 +146,7 @@ export default function NewMenuItemPage() {
       console.error("[v0] Error uploading image:", error)
       toast({
         title: "Error",
-        description: error.message || "Failed to upload image. Please ensure the storage bucket exists.",
+        description: error.message || "Failed to upload image. Please try again.",
         variant: "destructive",
       })
     } finally {
