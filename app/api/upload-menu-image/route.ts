@@ -4,7 +4,13 @@ import { type NextRequest, NextResponse } from "next/server"
 const isValidSupabaseUrl = (url: string): boolean => {
   try {
     const urlObj = new URL(url)
-    return urlObj.hostname.includes("supabase.co") && urlObj.pathname.includes("/storage/v1/object/public/")
+    return (
+      urlObj.hostname.includes("supabase.co") &&
+      urlObj.pathname.includes("/storage/v1/object/public/") &&
+      !url.includes(".lic") && // Exclude malformed domains like pjoelkxkcwtzmb.lic
+      url.length > 50 && // Ensure URL is not truncated
+      urlObj.protocol === "https:"
+    ) // Ensure secure protocol
   } catch {
     return false
   }
@@ -92,8 +98,19 @@ export async function POST(request: NextRequest) {
 
       // Validate fallback URL too
       if (!isValidSupabaseUrl(finalUrl)) {
-        console.log("[v0] Upload API: Fallback URL also invalid")
-        return NextResponse.json({ error: "Failed to generate valid image URL" }, { status: 500 })
+        console.log("[v0] Upload API: Fallback URL also invalid, trying direct construction")
+        // Try direct URL construction as last resort
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+        if (supabaseUrl && supabaseUrl.includes("supabase.co")) {
+          finalUrl = `${supabaseUrl}/storage/v1/object/public/menu-images/${data.path}`
+
+          if (!isValidSupabaseUrl(finalUrl)) {
+            console.log("[v0] Upload API: All URL generation methods failed")
+            return NextResponse.json({ error: "Failed to generate valid image URL" }, { status: 500 })
+          }
+        } else {
+          return NextResponse.json({ error: "Invalid Supabase configuration" }, { status: 500 })
+        }
       }
     }
 

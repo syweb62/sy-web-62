@@ -29,7 +29,12 @@ const isValidImageUrl = (url: string | null | undefined): boolean => {
   if (!url) return false
   try {
     const urlObj = new URL(url)
-    return urlObj.hostname.includes("supabase.co") && urlObj.pathname.includes("/storage/v1/object/public/")
+    return (
+      urlObj.hostname.includes("supabase.co") &&
+      urlObj.pathname.includes("/storage/v1/object/public/") &&
+      !url.includes(".lic") && // Exclude malformed domains
+      url.length > 50
+    ) // Ensure URL is not truncated
   } catch {
     return false
   }
@@ -351,7 +356,10 @@ export default function MenuManagementPage() {
                 className="object-cover"
                 onError={(e) => {
                   const target = e.target as HTMLImageElement
-                  target.src = `/placeholder.svg?height=200&width=300&query=${encodeURIComponent(item.name + " " + item.category)}`
+                  const fallbackUrl = `/placeholder.svg?height=200&width=300&query=${encodeURIComponent(item.name + " " + item.category)}`
+                  if (target.src !== fallbackUrl) {
+                    target.src = fallbackUrl
+                  }
                 }}
               />
               <div className="absolute top-2 right-2 flex gap-2">
