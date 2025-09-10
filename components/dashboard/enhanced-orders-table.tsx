@@ -41,7 +41,8 @@ const EnhancedOrdersTable = ({
   const [connectionStatus, setConnectionStatus] = useState<"connecting" | "connected" | "disconnected" | "error">(
     "connecting",
   )
-  const retryCountRef = useRef(0)
+  const subscriptionRef = useRef<any>(null)
+  const isSubscribedRef = useRef(false)
   const { notifyNewOrder, notifyOrderStatusChange } = useNotificationSystem()
   const { user } = useAuth()
 
@@ -52,23 +53,30 @@ const EnhancedOrdersTable = ({
       return
     }
 
+    if (isSubscribedRef.current) {
+      console.log("[v0] Subscription already active, skipping setup")
+      return
+    }
+
     console.log("[v0] Setting up real-time order notifications...")
     setConnectionStatus("connecting")
 
     const supabase = createClient()
 
-    const existingChannel = supabase.getChannels().find((ch) => ch.topic === "realtime:order-notifications")
-    if (existingChannel) {
-      supabase.removeChannel(existingChannel)
-    }
+    const existingChannels = supabase.getChannels()
+    existingChannels.forEach((ch) => {
+      if (ch.topic.includes("order-notifications")) {
+        supabase.removeChannel(ch)
+      }
+    })
 
     const channel = supabase
-      .channel("order-notifications", {
+      .channel(`order-notifications-${Date.now()}`, {
         config: {
           presence: {
             key: user.id,
           },
-          broadcast: { self: true },
+          broadcast: { self: false }, // Prevent self-broadcast loops
           private: false,
         },
       })
@@ -151,26 +159,31 @@ const EnhancedOrdersTable = ({
           console.error("[v0] Real-time subscription error:", err)
           setConnectionStatus("error")
           setError(`Real-time connection failed: ${err.message}`)
+          isSubscribedRef.current = false
         } else {
           switch (status) {
             case "SUBSCRIBED":
               setConnectionStatus("connected")
               setError(null)
+              isSubscribedRef.current = true
               console.log("[v0] Real-time connection established successfully")
               break
             case "CHANNEL_ERROR":
               setConnectionStatus("error")
               setError("Real-time connection channel_error")
+              isSubscribedRef.current = false
               console.error("[v0] Channel error - checking authentication and permissions")
               break
             case "TIMED_OUT":
               setConnectionStatus("error")
               setError("Real-time connection timed_out")
+              isSubscribedRef.current = false
               console.error("[v0] Connection timed out")
               break
             case "CLOSED":
               console.log("[v0] Connection closed")
               setConnectionStatus("disconnected")
+              isSubscribedRef.current = false
               break
             default:
               setConnectionStatus("connecting")
@@ -179,11 +192,17 @@ const EnhancedOrdersTable = ({
         }
       })
 
+    subscriptionRef.current = channel
+
     return () => {
       console.log("[v0] Cleaning up real-time subscription")
-      supabase.removeChannel(channel)
+      if (subscriptionRef.current) {
+        supabase.removeChannel(subscriptionRef.current)
+        subscriptionRef.current = null
+      }
+      isSubscribedRef.current = false
     }
-  }, [user])
+  }, [user]) // Updated to depend on user object instead of user?.id
 
   useEffect(() => {
     setDisplayOrders(orders)
