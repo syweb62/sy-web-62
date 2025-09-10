@@ -18,9 +18,8 @@ import {
 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { useNotificationSystem } from "@/hooks/use-notification-system"
+import { useAuth } from "@/hooks/use-auth"
 import type { EnhancedOrdersTableProps, Order, ConfirmationModal } from "@/types"
-
-const supabase = createClient()
 
 const EnhancedOrdersTable = ({
   orders = [],
@@ -39,13 +38,32 @@ const EnhancedOrdersTable = ({
     isProcessing: false,
   })
   const [error, setError] = useState<string | null>(null)
+  const [connectionStatus, setConnectionStatus] = useState<"connecting" | "connected" | "disconnected" | "error">(
+    "connecting",
+  )
   const { notifyNewOrder, notifyOrderStatusChange } = useNotificationSystem()
+  const { user } = useAuth()
 
   useEffect(() => {
+    if (!user) {
+      console.log("[v0] User not authenticated, skipping real-time setup")
+      setConnectionStatus("disconnected")
+      return
+    }
+
     console.log("[v0] Setting up real-time order notifications...")
+    setConnectionStatus("connecting")
+
+    const supabase = createClient()
 
     const channel = supabase
-      .channel("order-notifications")
+      .channel("order-notifications", {
+        config: {
+          presence: {
+            key: user.id,
+          },
+        },
+      })
       .on(
         "postgres_changes",
         {
@@ -102,15 +120,37 @@ const EnhancedOrdersTable = ({
           }
         },
       )
-      .subscribe((status) => {
+      .subscribe((status, err) => {
         console.log("[v0] Real-time subscription status:", status)
+
+        if (err) {
+          console.error("[v0] Real-time subscription error:", err)
+          setConnectionStatus("error")
+          setError(`Real-time connection failed: ${err.message}`)
+        } else {
+          switch (status) {
+            case "SUBSCRIBED":
+              setConnectionStatus("connected")
+              setError(null)
+              break
+            case "CHANNEL_ERROR":
+            case "TIMED_OUT":
+            case "CLOSED":
+              setConnectionStatus("error")
+              setError(`Real-time connection ${status.toLowerCase()}`)
+              break
+            default:
+              setConnectionStatus("connecting")
+          }
+        }
       })
 
     return () => {
       console.log("[v0] Cleaning up real-time subscription")
       supabase.removeChannel(channel)
+      setConnectionStatus("disconnected")
     }
-  }, [notifyNewOrder, notifyOrderStatusChange, onRefresh])
+  }, [notifyNewOrder, notifyOrderStatusChange, onRefresh, user])
 
   useEffect(() => {
     setDisplayOrders(orders)
@@ -424,8 +464,36 @@ const EnhancedOrdersTable = ({
             Refresh
           </Button>
           <div className="flex items-center gap-2">
-            <Wifi className="w-4 h-4 text-green-400" />
-            <span className="text-green-400 font-medium text-sm">LIVE</span>
+            <Wifi
+              className={`w-4 h-4 ${
+                connectionStatus === "connected"
+                  ? "text-green-400"
+                  : connectionStatus === "connecting"
+                    ? "text-yellow-400"
+                    : connectionStatus === "error"
+                      ? "text-red-400"
+                      : "text-gray-400"
+              }`}
+            />
+            <span
+              className={`font-medium text-sm ${
+                connectionStatus === "connected"
+                  ? "text-green-400"
+                  : connectionStatus === "connecting"
+                    ? "text-yellow-400"
+                    : connectionStatus === "error"
+                      ? "text-red-400"
+                      : "text-gray-400"
+              }`}
+            >
+              {connectionStatus === "connected"
+                ? "LIVE"
+                : connectionStatus === "connecting"
+                  ? "CONNECTING"
+                  : connectionStatus === "error"
+                    ? "ERROR"
+                    : "OFFLINE"}
+            </span>
           </div>
         </div>
       </div>
@@ -435,7 +503,7 @@ const EnhancedOrdersTable = ({
           <div className="flex items-center gap-3">
             <AlertCircle className="w-5 h-5 text-red-400" />
             <div>
-              <p className="text-red-300 font-medium">Error</p>
+              <p className="text-red-300 font-medium">Real-time Connection Error</p>
               <p className="text-red-400 text-sm">{error}</p>
             </div>
           </div>
