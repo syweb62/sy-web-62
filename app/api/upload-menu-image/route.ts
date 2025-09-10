@@ -1,16 +1,28 @@
-import { createClient } from "@supabase/supabase-js"
+import { createServerClient } from "@supabase/ssr"
 import { type NextRequest, NextResponse } from "next/server"
 
 export async function POST(request: NextRequest) {
   try {
     console.log("[v0] Upload API: Starting image upload with service role")
 
-    const supabaseAdmin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
+    const supabaseAdmin = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return []
+          },
+          setAll() {
+            // No-op for service role client
+          },
+        },
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false,
+        },
       },
-    })
+    )
 
     const formData = await request.formData()
     const file = formData.get("file") as File
