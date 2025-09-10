@@ -109,33 +109,46 @@ export default function NewMenuItemPage() {
     setImageUploading(true)
 
     try {
-      // Create unique filename
+      console.log("[v0] Ensuring storage bucket exists...")
+      const bucketResponse = await fetch("/api/storage/create-bucket", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      })
+
+      if (!bucketResponse.ok) {
+        const bucketError = await bucketResponse.json()
+        throw new Error(bucketError.error || "Failed to create storage bucket")
+      }
+
+      console.log("[v0] Storage bucket ready")
+
       const fileExt = file.name.split(".").pop()
       const fileName = `menu-items/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`
 
-      console.log("[v0] Uploading image:", fileName)
+      console.log("[v0] Uploading image via server API:", fileName)
 
-      // Upload to Supabase Storage
-      const { data, error: uploadError } = await supabase.storage.from("menu-images").upload(fileName, file, {
-        cacheControl: "3600",
-        upsert: false,
+      // Create FormData for server upload
+      const formData = new FormData()
+      formData.append("file", file)
+      formData.append("fileName", fileName)
+
+      // Upload via server API
+      const uploadResponse = await fetch("/api/storage/upload-image", {
+        method: "POST",
+        body: formData,
       })
 
-      if (uploadError) {
-        console.error("[v0] Upload error:", uploadError)
-        throw uploadError
+      if (!uploadResponse.ok) {
+        const uploadError = await uploadResponse.json()
+        throw new Error(uploadError.error || "Failed to upload image")
       }
 
-      console.log("[v0] Upload successful:", data)
+      const uploadResult = await uploadResponse.json()
+      console.log("[v0] Upload successful:", uploadResult.url)
 
-      // Get public URL
-      const {
-        data: { publicUrl },
-      } = supabase.storage.from("menu-images").getPublicUrl(fileName)
-
-      console.log("[v0] Public URL:", publicUrl)
-
-      setUploadedImageUrl(publicUrl)
+      setUploadedImageUrl(uploadResult.url)
 
       toast({
         title: "Success",

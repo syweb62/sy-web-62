@@ -131,62 +131,48 @@ export default function EditMenuItemPage() {
     setUploading(true)
 
     try {
-      const bucketName = "menu-images"
+      console.log("[v0] Ensuring storage bucket exists...")
+      const bucketResponse = await fetch("/api/storage/create-bucket", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      })
 
-      // Check if bucket exists
-      const { data: buckets, error: listError } = await supabase.storage.listBuckets()
-
-      if (listError) {
-        console.error("[v0] Error listing buckets:", listError)
+      if (!bucketResponse.ok) {
+        const bucketError = await bucketResponse.json()
+        throw new Error(bucketError.error || "Failed to create storage bucket")
       }
 
-      const bucketExists = buckets?.some((bucket) => bucket.name === bucketName)
+      console.log("[v0] Storage bucket ready")
 
-      if (!bucketExists) {
-        console.log("[v0] Creating storage bucket:", bucketName)
-        const { error: createError } = await supabase.storage.createBucket(bucketName, {
-          public: true,
-          allowedMimeTypes: ["image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif"],
-          fileSizeLimit: 5242880, // 5MB
-        })
-
-        if (createError) {
-          console.error("[v0] Error creating bucket:", createError)
-          throw new Error(`Failed to create storage bucket: ${createError.message}`)
-        }
-
-        console.log("[v0] Storage bucket created successfully")
-      }
-
-      // Create unique filename
       const fileExt = file.name.split(".").pop()
       const fileName = `menu-items/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`
 
-      console.log("[v0] Uploading image:", fileName)
+      console.log("[v0] Uploading image via server API:", fileName)
 
-      // Upload to Supabase Storage
-      const { data, error } = await supabase.storage.from(bucketName).upload(fileName, file, {
-        cacheControl: "3600",
-        upsert: false,
+      // Create FormData for server upload
+      const formData = new FormData()
+      formData.append("file", file)
+      formData.append("fileName", fileName)
+
+      // Upload via server API
+      const uploadResponse = await fetch("/api/storage/upload-image", {
+        method: "POST",
+        body: formData,
       })
 
-      if (error) {
-        console.error("[v0] Upload error:", error)
-        throw error
+      if (!uploadResponse.ok) {
+        const uploadError = await uploadResponse.json()
+        throw new Error(uploadError.error || "Failed to upload image")
       }
 
-      console.log("[v0] Upload successful:", data)
-
-      // Get public URL
-      const {
-        data: { publicUrl },
-      } = supabase.storage.from(bucketName).getPublicUrl(fileName)
-
-      console.log("[v0] Public URL:", publicUrl)
+      const uploadResult = await uploadResponse.json()
+      console.log("[v0] Upload successful:", uploadResult.url)
 
       // Update form data with new image URL
-      handleInputChange("image_url", publicUrl)
-      setImagePreview(publicUrl)
+      handleInputChange("image_url", uploadResult.url)
+      setImagePreview(uploadResult.url)
 
       toast({
         title: "Success",
